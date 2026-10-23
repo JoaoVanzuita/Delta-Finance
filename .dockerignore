@@ -1,0 +1,20 @@
+# Contexto de build do cliente (raiz do repositório).
+.git
+.gitignore
+.editorconfig
+**/node_modules
+client/dist
+client/coverage
+client/playwright-report
+client/test-results
+client/.env*
+server
+specs
+docs
+.env
+.env.*
+secrets
+backups
+*.log
+*.dump
+*.age

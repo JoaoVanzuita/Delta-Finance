@@ -1,0 +1,2706 @@
+openapi: 3.1.0
+info:
+  title: Delta Finance API
+  version: 1.0.0
+  description: 'Contrato do MVP de finanças pessoais familiares. A API é same-origin em
+
+    produção, usa sessão por cookie e CSRF por cookie + header. Valores
+
+    monetários trafegam como strings decimais para evitar ponto flutuante. O
+
+    contrato cobre 37 caminhos do MVP e 2 caminhos de investimentos da fase
+
+    secundária (US8).
+
+    '
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+- url: /api/v1
+tags:
+- name: Auth
+  description: Cadastro, login, sessão, senha e CSRF.
+- name: Integrations
+  description: Credenciais pessoais e estado da integração Meu Pluggy.
+- name: Connections
+  description: Itens/conexões, itemIds e sincronização disponível.
+- name: Accounts
+  description: Contas bancárias, cartões, perfis e saldos.
+- name: Transactions
+  description: Importação, listagem, criação manual e correções.
+- name: Categories
+  description: Categorias predefinidas e personalizadas.
+- name: Invoices
+  description: Ciclos, faturas, itens, pagamentos e encargos.
+- name: Reconciliation
+  description: Sugestões de transferência e pagamento de fatura.
+- name: Dashboard
+  description: Resumo, categorias, série temporal e drill-down.
+- name: Sync
+  description: Estado e histórico de sincronizações.
+- name: Privacy
+  description: Exportação, desconexão e exclusão de conta.
+- name: Investments
+  description: Posições manuais de investimentos (fase secundária pós-MVP).
+- name: Webhooks
+  description: Recepção opcional de eventos Pluggy.
+security:
+- sessionCookie: []
+paths:
+  /auth/csrf:
+    get:
+      tags:
+      - Auth
+      summary: Obtém o cookie CSRF
+      security: []
+      responses:
+        '204':
+          description: Cookie XSRF-TOKEN definido.
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      operationId: getAuthCsrf
+  /auth/register:
+    post:
+      tags:
+      - Auth
+      summary: Cria uma conta
+      security:
+      - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Conta criada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      operationId: postAuthRegister
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      summary: Autentica e cria sessão
+      security:
+      - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Sessão criada.
+          headers:
+            Set-Cookie:
+              description: Cookie de sessão seguro.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      operationId: postAuthLogin
+  /auth/logout:
+    post:
+      tags:
+      - Auth
+      summary: Encerra a sessão
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '204':
+          description: Sessão encerrada.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: postAuthLogout
+  /auth/me:
+    get:
+      tags:
+      - Auth
+      summary: Retorna o usuário autenticado
+      responses:
+        '200':
+          description: Usuário autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: getAuthMe
+  /auth/password:
+    put:
+      tags:
+      - Auth
+      summary: Altera a senha e encerra outras sessões
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+      responses:
+        '204':
+          description: Senha alterada.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putAuthPassword
+  /integrations/pluggy:
+    get:
+      tags:
+      - Integrations
+      summary: Consulta a integração pessoal
+      responses:
+        '200':
+          description: Configuração atual.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Integration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: getIntegrationsPluggy
+    put:
+      tags:
+      - Integrations
+      summary: Cria ou atualiza as credenciais pessoais
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationCredentialsRequest'
+      responses:
+        '200':
+          description: Credenciais validadas e salvas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Integration'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+      operationId: putIntegrationsPluggy
+    delete:
+      tags:
+      - Integrations
+      summary: Desconecta a integração
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - name: deleteImportedData
+        in: query
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '204':
+          description: Integração desconectada.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: deleteIntegrationsPluggy
+  /integrations/pluggy/validate:
+    post:
+      tags:
+      - Integrations
+      summary: Valida credenciais sem salvar
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntegrationCredentialsRequest'
+      responses:
+        '200':
+          description: Credenciais válidas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+      operationId: postIntegrationsPluggyValidate
+  /connections:
+    get:
+      tags:
+      - Connections
+      summary: Lista as conexões do usuário
+      responses:
+        '200':
+          description: Conexões.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: getConnections
+    post:
+      tags:
+      - Connections
+      summary: Cadastra um itemId
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionCreateRequest'
+      responses:
+        '201':
+          description: Conexão validada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postConnections
+  /connections/{id}:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    patch:
+      tags:
+      - Connections
+      summary: Atualiza o itemId após renovação
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionUpdateRequest'
+      responses:
+        '200':
+          description: Conexão atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: patchConnectionsId
+    delete:
+      tags:
+      - Connections
+      summary: Remove uma conexão e interrompe novas sincronizações
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - name: deleteHistory
+        in: query
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '204':
+          description: Conexão removida.
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: deleteConnectionsId
+  /connections/{id}/sync:
+    post:
+      tags:
+      - Connections
+      summary: Consulta os dados disponíveis agora
+      description: 'Não força uma atualização na instituição de origem. Apenas lê o que já
+
+        está disponível e enfileira a reconciliação.
+
+        '
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/PathId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Sincronização enfileirada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncAccepted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: postConnectionsIdSync
+  /accounts:
+    get:
+      tags:
+      - Accounts
+      summary: Lista contas e cartões
+      responses:
+        '200':
+          description: Contas do usuário.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: getAccounts
+    post:
+      tags:
+      - Accounts
+      summary: Cria uma conta manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualAccountRequest'
+      responses:
+        '201':
+          description: Conta manual criada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postAccounts
+  /accounts/{id}:
+    get:
+      tags:
+      - Accounts
+      summary: Detalha uma conta ou cartão
+      parameters:
+      - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Conta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: getAccountsId
+    patch:
+      tags:
+      - Accounts
+      summary: Edita ou desativa uma conta manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountUpdateRequest'
+      responses:
+        '200':
+          description: Conta manual atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conta importada não pode ser editada manualmente.
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: patchAccountsId
+  /cards/{accountId}/profile:
+    put:
+      tags:
+      - Accounts
+      summary: Configura ciclo e limite do cartão
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardProfileRequest'
+      responses:
+        '200':
+          description: Perfil atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putCardsAccountIdProfile
+  /transactions:
+    get:
+      tags:
+      - Transactions
+      summary: Lista transações com filtros
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/CategoryId'
+      - $ref: '#/components/parameters/TransactionType'
+      - $ref: '#/components/parameters/Origin'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - POSTED
+          - SOURCE_REMOVED
+          - RECONCILED
+      - $ref: '#/components/parameters/MinAmount'
+      - $ref: '#/components/parameters/MaxAmount'
+      responses:
+        '200':
+          description: Página de transações.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: getTransactions
+    post:
+      tags:
+      - Transactions
+      summary: Cria um lançamento manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualTransactionRequest'
+      responses:
+        '201':
+          description: Lançamento criado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postTransactions
+  /transactions/{id}:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    patch:
+      tags:
+      - Transactions
+      summary: Corrige uma transação importada ou manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionCorrectionRequest'
+      responses:
+        '200':
+          description: Transação corrigida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: patchTransactionsId
+    delete:
+      tags:
+      - Transactions
+      summary: Exclui um lançamento manual
+      description: Transações importadas não são apagadas; a remoção do histórico exige reconciliação explícita (`SOURCE_REMOVED`) ou exclusão da conta.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '204':
+          description: Lançamento manual excluído.
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: deleteTransactionsId
+  /transactions/{id}/source-removal:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    post:
+      tags:
+      - Transactions
+      summary: Revisa uma transação marcada como removida na origem
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceRemovalReviewRequest'
+      responses:
+        '200':
+          description: Revisão registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postTransactionsIdSourceRemoval
+  /categories:
+    get:
+      tags:
+      - Categories
+      summary: Lista categorias
+      responses:
+        '200':
+          description: Categorias do usuário.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryList'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getCategories
+    post:
+      tags:
+      - Categories
+      summary: Cria uma categoria
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '201':
+          description: Categoria criada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: postCategories
+  /categories/{id}:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    patch:
+      tags:
+      - Categories
+      summary: Edita uma categoria
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '200':
+          description: Categoria atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: patchCategoriesId
+    delete:
+      tags:
+      - Categories
+      summary: Desativa uma categoria
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - name: reassignTo
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Categoria desativada; transações reatribuídas ou sem categoria.
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: deleteCategoriesId
+  /cards/{accountId}/invoices:
+    get:
+      tags:
+      - Invoices
+      summary: Lista faturas de um cartão
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Faturas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: getCardsAccountIdInvoices
+  /invoices/{id}:
+    get:
+      tags:
+      - Invoices
+      summary: Detalha uma fatura
+      parameters:
+      - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Fatura com itens e pagamentos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: getInvoicesId
+  /invoices/{id}/items:
+    post:
+      tags:
+      - Invoices
+      summary: Adiciona item manual à fatura
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/PathId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceItemRequest'
+      responses:
+        '201':
+          description: Item criado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postInvoicesIdItems
+  /invoice-items/{id}:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    patch:
+      tags:
+      - Invoices
+      summary: Edita item manual de fatura
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceItemRequest'
+      responses:
+        '200':
+          description: Item atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceItem'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: patchInvoiceItemsId
+    delete:
+      tags:
+      - Invoices
+      summary: Remove logicamente um item de fatura
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '204':
+          description: Item removido.
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: deleteInvoiceItemsId
+  /invoice-items/{id}/corrections:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    get:
+      tags:
+      - Invoices
+      summary: Lista o histórico de correções do item
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '200':
+          description: Histórico de correções.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceItemCorrection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: getInvoiceItemsIdCorrections
+  /invoices/{id}/payments:
+    post:
+      tags:
+      - Invoices
+      summary: Registra pagamento total ou parcial
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/PathId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoicePaymentRequest'
+      responses:
+        '201':
+          description: Pagamento registrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePayment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postInvoicesIdPayments
+  /internal-matches:
+    get:
+      tags:
+      - Reconciliation
+      summary: Lista sugestões de movimentos internos
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - CONFIRMED
+          - REJECTED
+          default: PENDING
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Sugestões.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalMatchPage'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getInternalMatches
+  /internal-matches/{id}/confirm:
+    post:
+      tags:
+      - Reconciliation
+      summary: Confirma movimento interno
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Correspondência confirmada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalMatch'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: postInternalMatchesIdConfirm
+  /internal-matches/{id}/reject:
+    post:
+      tags:
+      - Reconciliation
+      summary: Rejeita movimento interno sugerido
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Correspondência rejeitada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalMatch'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: postInternalMatchesIdReject
+  /dashboard/summary:
+    get:
+      tags:
+      - Dashboard
+      summary: Resumo do dashboard
+      parameters:
+      - $ref: '#/components/parameters/Period'
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/CategoryId'
+      - $ref: '#/components/parameters/TransactionType'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/MinAmount'
+      - $ref: '#/components/parameters/MaxAmount'
+      responses:
+        '200':
+          description: Resumo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getDashboardSummary
+  /dashboard/categories:
+    get:
+      tags:
+      - Dashboard
+      summary: Distribuição por categoria
+      parameters:
+      - $ref: '#/components/parameters/Period'
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/TransactionType'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/MinAmount'
+      - $ref: '#/components/parameters/MaxAmount'
+      responses:
+        '200':
+          description: Categorias.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardCategory'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getDashboardCategories
+  /dashboard/timeseries:
+    get:
+      tags:
+      - Dashboard
+      summary: Evolução temporal
+      parameters:
+      - $ref: '#/components/parameters/Period'
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/CategoryId'
+      - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: Série temporal.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardBucket'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getDashboardTimeseries
+  /reports/entries:
+    get:
+      tags:
+      - Reports
+      summary: Lista as entradas que compõem um total
+      parameters:
+      - $ref: '#/components/parameters/Period'
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/CategoryId'
+      - $ref: '#/components/parameters/TransactionType'
+      - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/MinAmount'
+      - $ref: '#/components/parameters/MaxAmount'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Entradas do detalhamento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportEntryPage'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getReportsEntries
+  /sync/status:
+    get:
+      tags:
+      - Sync
+      summary: Estado atual das integrações e conexões
+      responses:
+        '200':
+          description: Estado consolidado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatus'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getSyncStatus
+  /sync/runs:
+    get:
+      tags:
+      - Sync
+      summary: Histórico de sincronizações
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Execuções.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncRunPage'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getSyncRuns
+  /me/export:
+    get:
+      tags:
+      - Privacy
+      summary: Exporta os dados ativos do usuário
+      responses:
+        '200':
+          description: Arquivo ZIP com JSON Lines e CSV, sem segredos.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getMeExport
+  /me/delete:
+    post:
+      tags:
+      - Privacy
+      summary: Solicita exclusão da conta
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+      responses:
+        '202':
+          description: Exclusão aceita e agendada.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postMeDelete
+  /investments/positions:
+    x-phase: post-mvp
+    get:
+      tags:
+      - Investments
+      summary: Lista posições manuais de investimento
+      responses:
+        '200':
+          description: Posições.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestmentPositionPage'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getInvestmentsPositions
+    post:
+      tags:
+      - Investments
+      summary: Cria posição manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestmentPositionRequest'
+      responses:
+        '201':
+          description: Posição criada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestmentPosition'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: postInvestmentsPositions
+  /investments/positions/{id}:
+    x-phase: post-mvp
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    patch:
+      tags:
+      - Investments
+      summary: Edita posição manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestmentPositionRequest'
+      responses:
+        '200':
+          description: Posição atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestmentPosition'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: patchInvestmentsPositionsId
+    delete:
+      tags:
+      - Investments
+      summary: Exclui posição manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '204':
+          description: Posição excluída.
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: deleteInvestmentsPositionsId
+  /webhooks/pluggy/{webhookToken}:
+    post:
+      tags:
+      - Webhooks
+      summary: Recebe evento Pluggy
+      description: 'Endpoint opcional, habilitado apenas com HTTPS público. Valida o
+
+        segredo da inscrição, registra o eventId e responde 202 rapidamente.
+
+        '
+      security:
+      - webhookSecret: []
+      parameters:
+      - name: webhookToken
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '202':
+          description: Evento aceito para processamento assíncrono.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Evento duplicado; ignorado de forma idempotente.
+      operationId: postWebhooksPluggyWebhookToken
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-delta_session
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+    webhookSecret:
+      type: apiKey
+      in: header
+      name: X-Webhook-Secret
+  parameters:
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Recomendado para retries de mutações.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    DateFrom:
+      name: from
+      in: query
+      schema:
+        type: string
+        format: date
+    DateTo:
+      name: to
+      in: query
+      schema:
+        type: string
+        format: date
+    AccountId:
+      name: accountId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    CategoryId:
+      name: categoryId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    TransactionType:
+      name: type
+      in: query
+      schema:
+        type: string
+        enum:
+        - DEBIT
+        - CREDIT
+        - TRANSFER
+        - REFUND
+        - CHARGEBACK
+        - ADJUSTMENT
+    Origin:
+      name: origin
+      in: query
+      schema:
+        type: string
+        enum:
+        - IMPORTED
+        - MANUAL
+    MinAmount:
+      name: minAmount
+      in: query
+      schema:
+        type: string
+        pattern: ^-?\d+(\.\d+)?$
+    MaxAmount:
+      name: maxAmount
+      in: query
+      schema:
+        type: string
+        pattern: ^-?\d+(\.\d+)?$
+    Period:
+      name: period
+      in: query
+      schema:
+        type: string
+        enum:
+        - WEEK
+        - MONTH
+        - YEAR
+        default: MONTH
+  responses:
+    Unauthorized:
+      description: Não autenticado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Recurso não encontrado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Conflito de estado ou unicidade.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntity:
+      description: Validação falhou.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblem'
+    TooManyRequests:
+      description: Limite de requisições atingido.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadGateway:
+      description: Provedor externo indisponível ou recusou a operação.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      required:
+      - type
+      - title
+      - status
+      - code
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+        requestId:
+          type: string
+    ValidationProblem:
+      allOf:
+      - $ref: '#/components/schemas/Problem'
+      - type: object
+        properties:
+          errors:
+            type: array
+            items:
+              type: object
+              required:
+              - field
+              - message
+              properties:
+                field:
+                  type: string
+                message:
+                  type: string
+    User:
+      type: object
+      required:
+      - id
+      - username
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    RegisterRequest:
+      type: object
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 40
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          writeOnly: true
+    LoginRequest:
+      type: object
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+    PasswordChangeRequest:
+      type: object
+      required:
+      - currentPassword
+      - newPassword
+      properties:
+        currentPassword:
+          type: string
+          writeOnly: true
+        newPassword:
+          type: string
+          minLength: 12
+          maxLength: 128
+          writeOnly: true
+    IntegrationCredentialsRequest:
+      type: object
+      required:
+      - clientId
+      - clientSecret
+      properties:
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+          writeOnly: true
+    Integration:
+      type: object
+      required:
+      - id
+      - provider
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum:
+          - MEU_PLUGGY
+        clientIdMasked:
+          type: string
+        status:
+          type: string
+          enum:
+          - INCOMPLETE
+          - ACTIVE
+          - SYNCING
+          - SYNCED
+          - CREDENTIAL_FAILURE
+          - ACTION_REQUIRED
+          - AUTHORIZATION_EXPIRED
+          - ITEM_UNAVAILABLE
+        lastSyncAttemptAt:
+          type: string
+          format: date-time
+        lastSuccessfulSyncAt:
+          type: string
+          format: date-time
+        lastErrorCode:
+          type: string
+        connectionCount:
+          type: integer
+    ValidationResult:
+      type: object
+      required:
+      - valid
+      properties:
+        valid:
+          type: boolean
+        message:
+          type: string
+        itemValidated:
+          type: boolean
+    Connection:
+      type: object
+      required:
+      - id
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        itemIdMasked:
+          type: string
+        institutionName:
+          type: string
+        status:
+          type: string
+          enum:
+          - INCOMPLETE
+          - ACTIVE
+          - SYNCING
+          - SYNCED
+          - CREDENTIAL_FAILURE
+          - ACTION_REQUIRED
+          - AUTHORIZATION_EXPIRED
+          - ITEM_UNAVAILABLE
+        consentExpiresAt:
+          type: string
+          format: date-time
+        lastSyncAt:
+          type: string
+          format: date-time
+        lastErrorCode:
+          type: string
+        accountCount:
+          type: integer
+    ConnectionCreateRequest:
+      type: object
+      required:
+      - itemId
+      properties:
+        itemId:
+          type: string
+    ConnectionUpdateRequest:
+      type: object
+      required:
+      - itemId
+      properties:
+        itemId:
+          type: string
+    ConnectionPage:
+      type: object
+      required:
+      - items
+      - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Connection'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
+    Account:
+      type: object
+      required:
+      - id
+      - type
+      - origin
+      - currency
+      - currentBalance
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - BANK
+          - CREDIT
+          - CASH
+          - WALLET
+        subtype:
+          type: string
+        origin:
+          type: string
+          enum:
+          - IMPORTED
+          - MANUAL
+        institutionName:
+          type: string
+        alias:
+          type: string
+        currency:
+          type: string
+        currentBalance:
+          type: string
+        balanceReferenceAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          description: ACTIVE, INACTIVE, UNAVAILABLE ou CLOSED; contas manuais desativadas usam INACTIVE.
+        lastSyncAt:
+          type: string
+          format: date-time
+        cardProfile:
+          $ref: '#/components/schemas/CardProfile'
+    ManualAccountRequest:
+      type: object
+      required:
+      - type
+      - alias
+      - referenceBalance
+      - referenceDate
+      properties:
+        type:
+          type: string
+          enum:
+          - BANK
+          - CASH
+          - WALLET
+        alias:
+          type: string
+        referenceBalance:
+          type: string
+          description: Saldo de referência informado pelo usuário.
+        referenceDate:
+          type: string
+          format: date-time
+        currency:
+          type: string
+          default: BRL
+        notes:
+          type: string
+    AccountUpdateRequest:
+      type: object
+      description: Aplicável apenas a contas com origin=MANUAL; o type é imutável após a criação.
+      properties:
+        alias:
+          type: string
+        referenceBalance:
+          type: string
+        referenceDate:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+    AccountList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+    CardProfile:
+      type: object
+      required:
+      - accountId
+      - closingDay
+      - dueDay
+      - creditBalance
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        closingDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+        dueDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+        creditLimit:
+          type: string
+        creditBalance:
+          type: string
+          description: Crédito acumulado do cartão para faturas futuras; não compõe income, expenses nem currentBalance.
+    CardProfileRequest:
+      type: object
+      required:
+      - closingDay
+      - dueDay
+      properties:
+        closingDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+        dueDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+        creditLimit:
+          type: string
+    Transaction:
+      type: object
+      required:
+      - id
+      - accountId
+      - source
+      - type
+      - status
+      - postedOn
+      - amount
+      - currency
+      - description
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        categoryId:
+          type: string
+          format: uuid
+        categoryName:
+          type: string
+        source:
+          type: string
+          enum:
+          - IMPORTED
+          - MANUAL
+        type:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          - TRANSFER
+          - REFUND
+          - CHARGEBACK
+          - ADJUSTMENT
+          description: Classificação do movimento; deve ser consistente com o sinal de amount.
+        status:
+          type: string
+          enum:
+          - PENDING
+          - POSTED
+          - SOURCE_REMOVED
+          - RECONCILED
+        postedOn:
+          type: string
+          format: date
+        amount:
+          type: string
+          description: 'String decimal assinada: negativa para saída, positiva para entrada. O tipo deve
+            ser consistente com o sinal.'
+        currency:
+          type: string
+        description:
+          type: string
+        editedFields:
+          type: array
+          items:
+            type: string
+        reconciliationState:
+          type: string
+        invoiceId:
+          type: string
+          format: uuid
+        relatedTransactionId:
+          type: string
+          format: uuid
+          description: Transação original para reembolso/chargeback; deve pertencer ao mesmo usuário e
+            conta.
+        adjustmentReason:
+          type: string
+          maxLength: 500
+          description: Motivo explícito para ajuste manual.
+        counterpartTransactionId:
+          type: string
+          format: uuid
+          description: Perna contraparte de uma transferência manual.
+    TransactionPage:
+      type: object
+      required:
+      - items
+      - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
+    ManualTransactionRequest:
+      type: object
+      required:
+      - accountId
+      - type
+      - postedOn
+      - amount
+      - description
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          - TRANSFER
+          - REFUND
+          - CHARGEBACK
+          - ADJUSTMENT
+        postedOn:
+          type: string
+          format: date
+        amount:
+          type: string
+        description:
+          type: string
+          maxLength: 500
+        categoryId:
+          type: string
+          format: uuid
+        notes:
+          type: string
+          maxLength: 2000
+        transferAccountId:
+          type: string
+          format: uuid
+          description: Conta de destino; a conta de origem é accountId. Cria duas pernas vinculadas.
+    TransactionCorrectionRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 500
+        postedOn:
+          type: string
+          format: date
+        amount:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        notes:
+          type: string
+          maxLength: 2000
+    SourceRemovalReviewRequest:
+      type: object
+      required:
+      - action
+      properties:
+        action:
+          type: string
+          enum:
+          - RESTORE
+          - CONFIRM_REMOVAL
+        reason:
+          type: string
+          maxLength: 500
+    Category:
+      type: object
+      required:
+      - id
+      - name
+      - kind
+      - active
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          type: string
+          enum:
+          - INCOME
+          - EXPENSE
+          - TRANSFER
+          - OTHER
+        predefined:
+          type: boolean
+        active:
+          type: boolean
+    CategoryList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+    CategoryRequest:
+      type: object
+      required:
+      - name
+      - kind
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        kind:
+          type: string
+          enum:
+          - INCOME
+          - EXPENSE
+          - TRANSFER
+          - OTHER
+    Invoice:
+      type: object
+      required:
+      - id
+      - cardAccountId
+      - cycleStart
+      - cycleEnd
+      - closingDate
+      - dueDate
+      - status
+      - total
+      - paymentsTotal
+      - outstanding
+      - appliedCredit
+      - source
+      - hasAdjustments
+      - adjustmentCount
+      properties:
+        id:
+          type: string
+          format: uuid
+        cardAccountId:
+          type: string
+          format: uuid
+        cycleStart:
+          type: string
+          format: date
+        cycleEnd:
+          type: string
+          format: date
+        closingDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+          - OPEN
+          - CLOSED
+          - PARTIALLY_PAID
+          - PAID
+          - OVERDUE
+        total:
+          type: string
+        paymentsTotal:
+          type: string
+        outstanding:
+          type: string
+          description: total menos appliedCredit e paymentsTotal, nunca negativo.
+        appliedCredit:
+          type: string
+          description: Crédito acumulado de faturas anteriores aplicado a esta fatura; não inclui itens de crédito/estorno desta fatura e não compõe income nem expenses.
+        minimumPayment:
+          type: string
+        source:
+          type: string
+          enum:
+          - LOCAL
+          - PROVIDER
+        hasAdjustments:
+          type: boolean
+          description: Indica ajuste manual em fatura fechada/paga; não substitui o status de pagamento.
+        adjustmentCount:
+          type: integer
+          minimum: 0
+          description: Quantidade de ajustes manuais.
+    InvoiceDetail:
+      allOf:
+      - $ref: '#/components/schemas/Invoice'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/InvoiceItem'
+          payments:
+            type: array
+            items:
+              $ref: '#/components/schemas/InvoicePayment'
+    InvoicePage:
+      type: object
+      required:
+      - items
+      - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
+    InvoiceItem:
+      type: object
+      required:
+      - id
+      - invoiceId
+      - kind
+      - reportingEffect
+      - source
+      - description
+      - amount
+      - occurredOn
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        transactionId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - PURCHASE
+          - INSTALLMENT
+          - INTEREST
+          - FEE
+          - TAX
+          - CREDIT
+          - REFUND
+          - MANUAL_ADJUSTMENT
+        reportingEffect:
+          type: string
+          enum:
+          - EXPENSE_INCREASE
+          - EXPENSE_DECREASE
+          - NONE
+          description: Direção do efeito; o valor é sempre magnitude positiva.
+        source:
+          type: string
+          enum:
+          - IMPORTED
+          - MANUAL
+          - PROVIDER_BILL
+        description:
+          type: string
+        amount:
+          type: string
+          description: Magnitude positiva; a direção vem de reportingEffect.
+        occurredOn:
+          type: string
+          format: date
+        installmentNumber:
+          type: integer
+        totalInstallments:
+          type: integer
+        correctionCount:
+          type: integer
+          minimum: 0
+          description: Quantidade de correções auditadas do item.
+      allOf:
+      - if:
+          properties:
+            kind:
+              enum:
+              - PURCHASE
+              - INSTALLMENT
+          required:
+          - kind
+        then:
+          required:
+          - transactionId
+    InvoiceItemCorrection:
+      type: object
+      required:
+      - id
+      - invoiceItemId
+      - fieldName
+      - changedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoiceItemId:
+          type: string
+          format: uuid
+        fieldName:
+          type: string
+        oldValue:
+          type: string
+        newValue:
+          type: string
+        reason:
+          type: string
+        changedAt:
+          type: string
+          format: date-time
+    InvoiceItemRequest:
+      type: object
+      required:
+      - kind
+      - reportingEffect
+      - description
+      - amount
+      - occurredOn
+      properties:
+        kind:
+          type: string
+          enum:
+          - PURCHASE
+          - INSTALLMENT
+          - INTEREST
+          - FEE
+          - TAX
+          - CREDIT
+          - REFUND
+          - MANUAL_ADJUSTMENT
+        transactionId:
+          type: string
+          format: uuid
+          description: Obrigatório para PURCHASE e INSTALLMENT; deve pertencer ao mesmo usuário e cartão.
+        reportingEffect:
+          type: string
+          enum:
+          - EXPENSE_INCREASE
+          - EXPENSE_DECREASE
+          - NONE
+          description: Obrigatório; use NONE para itens espelho.
+        description:
+          type: string
+          maxLength: 500
+        amount:
+          type: string
+          description: Magnitude positiva.
+        occurredOn:
+          type: string
+          format: date
+        installmentNumber:
+          type: integer
+        totalInstallments:
+          type: integer
+      allOf:
+      - if:
+          properties:
+            kind:
+              enum:
+              - PURCHASE
+              - INSTALLMENT
+          required:
+          - kind
+        then:
+          required:
+          - transactionId
+    InvoicePayment:
+      type: object
+      required:
+      - id
+      - invoiceId
+      - paymentAccountId
+      - amount
+      - paidOn
+      - status
+      - source
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        paymentAccountId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+        paidOn:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+          - PENDING
+          - CONFIRMED
+          - REVERSED
+        source:
+          type: string
+          enum:
+          - MANUAL
+          - IMPORTED
+          - PROVIDER_BILL
+    InvoicePaymentRequest:
+      type: object
+      required:
+      - paymentAccountId
+      - amount
+      - paidOn
+      properties:
+        paymentAccountId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+        paidOn:
+          type: string
+          format: date
+    InternalMatch:
+      type: object
+      required:
+      - id
+      - kind
+      - debitTransactionId
+      - creditTransactionId
+      - score
+      - status
+      - criteriaVersion
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - TRANSFER
+          - CARD_PAYMENT
+        debitTransactionId:
+          type: string
+          format: uuid
+        creditTransactionId:
+          type: string
+          format: uuid
+        score:
+          type: number
+        status:
+          type: string
+          enum:
+          - PENDING
+          - CONFIRMED
+          - REJECTED
+        reason:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+        criteriaVersion:
+          type: string
+          description: Versão dos critérios determinísticos de sugestão.
+    InternalMatchPage:
+      type: object
+      required:
+      - items
+      - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalMatch'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
+    DashboardSummary:
+      type: object
+      required:
+      - periodStart
+      - periodEnd
+      - periodResult
+      - currentBalance
+      - income
+      - expenses
+      properties:
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        periodResult:
+          type: string
+          description: Receitas menos despesas do período.
+        currentBalance:
+          type: string
+          description: Soma dos saldos de contas BANK, CASH e WALLET; exclui cartões e passivos.
+        currentBalanceReferenceAt:
+          type: string
+          format: date-time
+          description: Data de referência dos saldos que compõem currentBalance.
+        income:
+          type: string
+          description: Total de receitas do período.
+        expenses:
+          type: string
+          description: Total de despesas do período. A distribuição por categoria é fornecida por /dashboard/categories
+            e não é um total paralelo.
+        pendingCount:
+          type: integer
+          minimum: 0
+          description: Transações pendentes no período; não compõem os totais.
+        pendingIncome:
+          type: string
+          description: Soma das entradas pendentes; não compõe income.
+        pendingExpenses:
+          type: string
+          description: Soma das saídas pendentes; não compõe expenses.
+        pendingInternalMatches:
+          type: integer
+          description: Quantidade de movimentos internos aguardando confirmação do usuário.
+        lastSuccessfulSyncAt:
+          type: string
+          format: date-time
+          description: Sincronização bem-sucedida mais recente entre as conexões com contas/cartões incluídos no filtro; nulo quando nenhuma se aplica.
+        cardOutstandingBalance:
+          type: string
+          description: Saldo devedor total de cartões no período. Não é somado a currentBalance.
+      description: Resumo do dashboard em períodos calendário America/Sao_Paulo. currentBalance soma apenas
+        contas BANK, CASH e WALLET; cartões são exibidos separadamente em cardOutstandingBalance.
+    DashboardCategory:
+      type: object
+      required:
+      - categoryId
+      - categoryName
+      - amount
+      - transactionCount
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        categoryName:
+          type: string
+        amount:
+          type: string
+        transactionCount:
+          type: integer
+    DashboardBucket:
+      type: object
+      required:
+      - label
+      - start
+      - end
+      - income
+      - expenses
+      - result
+      properties:
+        label:
+          type: string
+        start:
+          type: string
+          format: date
+          description: Início inclusivo do bucket.
+        end:
+          type: string
+          format: date
+          description: Fim exclusivo do bucket.
+        income:
+          type: string
+          description: Total de receitas no bucket.
+        expenses:
+          type: string
+          description: Total de despesas no bucket.
+        result:
+          type: string
+          description: Receitas menos despesas no bucket.
+      description: Bucket de agregação com intervalo [start, end) em America/Sao_Paulo.
+    ReportEntry:
+      type: object
+      required:
+      - id
+      - source
+      - sourceId
+      - origin
+      - occurredOn
+      - amount
+      - description
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum:
+          - TRANSACTION
+          - INVOICE_ITEM
+        sourceId:
+          type: string
+          format: uuid
+        origin:
+          type: string
+          enum:
+          - IMPORTED
+          - MANUAL
+          description: Origem normalizada; distingue importado de manual no drill-down. Itens PROVIDER_BILL são normalizados para IMPORTED.
+        occurredOn:
+          type: string
+          format: date
+        amount:
+          type: string
+          description: Valor assinado que compõe o total.
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        transactionId:
+          type: string
+          format: uuid
+        type:
+          type: string
+    ReportEntryPage:
+      type: object
+      required:
+      - items
+      - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportEntry'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
+    SyncAccepted:
+      type: object
+      required:
+      - jobId
+      - status
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - QUEUED
+    SyncRun:
+      type: object
+      required:
+      - id
+      - status
+      - startedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        integrationId:
+          type: string
+          format: uuid
+        connectionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        readCount:
+          type: integer
+        createdCount:
+          type: integer
+        updatedCount:
+          type: integer
+        skippedCount:
+          type: integer
+        failedCount:
+          type: integer
+        errorCode:
+          type: string
+    SyncRunPage:
+      type: object
+      required:
+      - items
+      - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncRun'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
+    SyncStatus:
+      type: object
+      properties:
+        integrations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Integration'
+        connections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Connection'
+        pendingJobs:
+          type: integer
+    DeleteAccountRequest:
+      type: object
+      required:
+      - password
+      - confirmation
+      properties:
+        password:
+          type: string
+          writeOnly: true
+        confirmation:
+          type: string
+          enum:
+          - EXCLUIR
+    InvestmentPosition:
+      type: object
+      required:
+      - id
+      - broker
+      - assetName
+      - quantity
+      - referencePrice
+      - referenceDate
+      - origin
+      properties:
+        id:
+          type: string
+          format: uuid
+        broker:
+          type: string
+          enum:
+          - XP
+          - SANTANDER
+          - OTHER
+        assetName:
+          type: string
+        ticker:
+          type: string
+        quantity:
+          type: string
+        referencePrice:
+          type: string
+          description: Preço unitário de referência; o total é quantity × referencePrice.
+        referenceDate:
+          type: string
+          format: date
+        notes:
+          type: string
+        origin:
+          type: string
+          enum:
+          - MANUAL
+    InvestmentPositionRequest:
+      type: object
+      required:
+      - broker
+      - assetName
+      - quantity
+      - referencePrice
+      - referenceDate
+      properties:
+        broker:
+          type: string
+          enum:
+          - XP
+          - SANTANDER
+          - OTHER
+        assetName:
+          type: string
+          maxLength: 120
+        ticker:
+          type: string
+          maxLength: 20
+        quantity:
+          type: string
+        referencePrice:
+          type: string
+          description: Preço unitário de referência; o total é quantity × referencePrice.
+        referenceDate:
+          type: string
+          format: date
+        notes:
+          type: string
+          maxLength: 2000
+    InvestmentPositionPage:
+      type: object
+      required:
+      - items
+      - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvestmentPosition'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean

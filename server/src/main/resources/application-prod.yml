@@ -1,0 +1,27 @@
+# Profile de produção (self-hosted).
+# Configuração sensível vem do ambiente/key ring; nada de segredo neste arquivo.
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: ${DELTA_DB_POOL_SIZE:20}
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: WARN
+    com.deltafinance: INFO

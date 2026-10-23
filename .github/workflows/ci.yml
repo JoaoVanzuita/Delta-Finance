@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Java 25, Spotless, Checkstyle, JaCoCo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: server/pom.xml
+
+      - name: Build, lint e testes (unitários + integração)
+        run: ./mvnw -B --no-transfer-progress verify
+
+      - name: Publicar relatórios de teste
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            server/target/surefire-reports/
+            server/target/failsafe-reports/
+            server/target/site/jacoco/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  frontend:
+    name: Frontend (lint, tipos, testes, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configurar Node.js 24.22.0
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.22.0'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Verificar formatação
+        run: npm run format:check
+
+      - name: Checagem de tipos
+        run: npm run typecheck
+
+      - name: Testes de componente
+        run: npm run test
+
+      - name: Build de produção
+        run: npm run build
+
+  compose:
+    name: Validação do Compose e dos Dockerfiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Preparar ambiente de exemplo
+        run: |
+          cp .env.example .env
+          mkdir -p secrets
+
+      - name: Validar configuração do Compose
+        run: docker compose config --quiet
+
+      - name: Build das imagens
+        run: docker compose build

@@ -1,0 +1,18 @@
+# Profile local: desenvolvimento na máquina do mantenedor.
+# Não usar em produção; nenhum segredo real deve ser versionado aqui.
+spring:
+  datasource:
+    url: jdbc:postgresql://${DELTA_DB_HOST:localhost}:${DELTA_DB_PORT:5432}/${DELTA_DB_NAME:delta_finance}
+  jpa:
+    properties:
+      hibernate:
+        format_sql: false
+
+springdoc:
+  swagger-ui:
+    enabled: true
+
+logging:
+  level:
+    com.deltafinance: DEBUG
+    org.flywaydb: INFO

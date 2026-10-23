@@ -1,0 +1,11 @@
+# Contexto de build do backend.
+target
+.git
+.gitignore
+.idea
+.vscode
+*.log
+*.dump
+.env
+.env.*
+secrets

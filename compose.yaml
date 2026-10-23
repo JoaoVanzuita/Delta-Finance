@@ -1,0 +1,130 @@
+# Stack self-hosted do Delta Finance.
+#
+# Uso:
+#   cp .env.example .env
+#   mkdir -p secrets            # key ring externo, nunca versionado
+#   docker compose up -d --build
+#
+# Serviços: db (PostgreSQL 18.6), server (Spring Boot), client (SPA + proxy /api)
+# e proxy (Caddy com TLS). O backend não é publicado diretamente.
+
+name: delta-finance
+
+services:
+  db:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DELTA_DB_NAME}
+      POSTGRES_USER: ${DELTA_DB_USER}
+      POSTGRES_PASSWORD: ${DELTA_DB_PASSWORD}
+      TZ: America/Sao_Paulo
+      PGTZ: America/Sao_Paulo
+    volumes:
+      # PostgreSQL 18+ espera o volume em /var/lib/postgresql (dados em subdiretório
+      # versionado), não em /var/lib/postgresql/data.
+      - pgdata:/var/lib/postgresql
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: delta-finance/server:local
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DELTA_DB_HOST: db
+      DELTA_DB_PORT: 5432
+      DELTA_DB_NAME: ${DELTA_DB_NAME}
+      DELTA_DB_USER: ${DELTA_DB_USER}
+      DELTA_DB_PASSWORD: ${DELTA_DB_PASSWORD}
+      DELTA_DB_POOL_SIZE: ${DELTA_DB_POOL_SIZE:-20}
+      DELTA_COOKIE_SECURE: ${DELTA_COOKIE_SECURE:-true}
+      DELTA_CRYPTO_KEY_FILE: ${DELTA_CRYPTO_KEY_FILE:-/run/secrets/crypto-keys.json}
+      DELTA_CRYPTO_ACTIVE_VERSION: ${DELTA_CRYPTO_ACTIVE_VERSION:-1}
+      DELTA_INDEX_KEY_VERSION: ${DELTA_INDEX_KEY_VERSION:-1}
+      DELTA_PLUGGY_BASE_URL: ${DELTA_PLUGGY_BASE_URL:-https://api.pluggy.ai}
+      DELTA_PLUGGY_WEBHOOKS_ENABLED: ${DELTA_PLUGGY_WEBHOOKS_ENABLED:-false}
+      DELTA_PLUGGY_CONNECTION_LIMIT: ${DELTA_PLUGGY_CONNECTION_LIMIT:-5}
+      DELTA_PLUGGY_CONNECTION_LIMIT_CHECKED_AT: ${DELTA_PLUGGY_CONNECTION_LIMIT_CHECKED_AT:-2026-10-22}
+      TZ: America/Sao_Paulo
+    volumes:
+      # Key ring externo ao banco e à imagem; montado somente leitura.
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8080/actuator/health/liveness || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    stop_grace_period: 45s
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    image: delta-finance/client:local
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1/healthz || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  proxy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    environment:
+      DELTA_DOMAIN: ${DELTA_DOMAIN}
+      DELTA_ACME_EMAIL: ${DELTA_ACME_EMAIL}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      client:
+        condition: service_healthy
+    networks:
+      - frontend
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  # Rede pública interna do stack: apenas proxy e client participam.
+  frontend:
+  # Banco e backend não são expostos ao host.
+  backend:

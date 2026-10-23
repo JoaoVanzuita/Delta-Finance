@@ -1,0 +1,58 @@
+# Diretórios de build e dependências
+**/target/
+**/node_modules/
+**/dist/
+**/coverage/
+**/.vite/
+**/.nyc_output/
+**/playwright-report/
+**/test-results/
+**/blob-report/
+**/junit-results/
+
+# Segredos e configuração local (nunca versionar)
+.env
+.env.*
+!.env.example
+!client/.env.production
+!client/.env.development
+secrets/
+*.key
+*.pem
+*.p12
+*.jks
+crypto-keys.json
+
+# Dumps, backups e artefatos operacionais
+backups/
+*.dump
+*.sql.gz
+*.zip
+*.age
+
+# Logs
+*.log
+logs/
+
+# Ferramentas e IDEs
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+nbproject/
+.history/
+
+# Sistemas operacionais
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporários
+*.tmp
+*.swp
+*.swo
+*~
