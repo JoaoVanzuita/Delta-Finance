@@ -7,8 +7,6 @@ import com.deltafinance.auth.domain.PasswordPolicyException;
 import com.deltafinance.auth.domain.Usernames;
 import com.deltafinance.security.SessionAttributes;
 import com.deltafinance.security.UserPrincipal;
-import com.deltafinance.shared.audit.AuditEventType;
-import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.ErrorCode;
 import com.deltafinance.shared.errors.InvalidCredentialsException;
@@ -53,7 +51,7 @@ public class AuthService {
   private final PasswordEncoder passwordEncoder;
   private final PasswordPolicy passwordPolicy;
   private final LoginAttemptService loginAttemptService;
-  private final AuditService auditService;
+  private final AuthAuditService authAuditService;
   private final SecurityContextRepository securityContextRepository;
   private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
   private final Clock clock;
@@ -64,7 +62,7 @@ public class AuthService {
       PasswordEncoder passwordEncoder,
       PasswordPolicy passwordPolicy,
       LoginAttemptService loginAttemptService,
-      AuditService auditService,
+      AuthAuditService authAuditService,
       SecurityContextRepository securityContextRepository,
       FindByIndexNameSessionRepository<? extends Session> sessionRepository,
       Clock clock) {
@@ -72,7 +70,7 @@ public class AuthService {
     this.passwordEncoder = passwordEncoder;
     this.passwordPolicy = passwordPolicy;
     this.loginAttemptService = loginAttemptService;
-    this.auditService = auditService;
+    this.authAuditService = authAuditService;
     this.securityContextRepository = securityContextRepository;
     this.sessionRepository = sessionRepository;
     this.clock = clock;
@@ -104,7 +102,7 @@ public class AuthService {
       throw new ConflictException(ErrorCode.USERNAME_TAKEN, "Nome de usuário indisponível.");
     }
 
-    auditService.record(user.getId(), AuditEventType.USER_REGISTERED, "app_user", user.getId());
+    authAuditService.userRegistered(user.getId());
     return toView(user);
   }
 
@@ -116,8 +114,7 @@ public class AuthService {
 
     LoginAttemptService.Decision decision = loginAttemptService.check(normalized, ipAddress);
     if (decision.blocked()) {
-      auditService.record(
-          null, AuditEventType.LOGIN_BLOCKED, "app_user", null, Map.of("reason", "RATE_LIMITED"));
+      authAuditService.loginBlocked(null);
       throw new TooManyRequestsException(
           "Muitas tentativas de login. Aguarde antes de tentar novamente.",
           decision.retryAfter().toSeconds());
@@ -130,27 +127,21 @@ public class AuthService {
 
     if (!canAuthenticate) {
       loginAttemptService.recordFailure(normalized, ipAddress);
-      auditService.record(
-          user.map(AppUser::getId).orElse(null),
-          AuditEventType.LOGIN_FAILURE,
-          "app_user",
-          user.map(AppUser::getId).orElse(null),
-          Map.of("reason", "BAD_CREDENTIALS"));
+      authAuditService.loginFailed(user.map(AppUser::getId).orElse(null));
       throw new InvalidCredentialsException();
     }
 
     AppUser authenticated = user.orElseThrow();
     loginAttemptService.recordSuccess(normalized, ipAddress);
     establishSession(authenticated, request, response);
-    auditService.record(
-        authenticated.getId(), AuditEventType.LOGIN_SUCCESS, "app_user", authenticated.getId());
+    authAuditService.loginSucceeded(authenticated.getId());
     return toView(authenticated);
   }
 
   public void logout(HttpServletRequest request, HttpServletResponse response) {
     var principal = currentPrincipal();
     if (principal != null) {
-      auditService.record(principal.id(), AuditEventType.LOGOUT, "app_user", principal.id());
+      authAuditService.logout(principal.id());
     }
     new SecurityContextLogoutHandler().logout(request, response, null);
     new CookieClearingLogoutHandler(CSRF_COOKIE).logout(request, response, null);
@@ -184,7 +175,7 @@ public class AuthService {
     user.changePasswordHash(passwordEncoder.encode(command.newPassword()));
     userRepository.save(user);
     revokeOtherSessions(user.getUsernameNormalized(), currentSessionId);
-    auditService.record(user.getId(), AuditEventType.PASSWORD_CHANGED, "app_user", user.getId());
+    authAuditService.passwordChanged(user.getId());
   }
 
   private void establishSession(

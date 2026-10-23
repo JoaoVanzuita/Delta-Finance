@@ -12,7 +12,10 @@ interface NavigationItem {
  * Navegação inicial. Novas rotas entram junto com as histórias correspondentes;
  * nenhum item é exibido antes de a tela existir.
  */
-const navigation: readonly NavigationItem[] = [{ to: '/', label: 'Início', end: true }]
+const navigation: readonly NavigationItem[] = [
+  { to: '/', label: 'Início', end: true },
+  { to: '/account', label: 'Conta' },
+]
 
 function Brand() {
   return (

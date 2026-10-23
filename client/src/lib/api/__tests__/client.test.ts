@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api, UNAUTHENTICATED_EVENT } from '@/lib/api/client'
+import {
+  api,
+  markSessionCleared,
+  markSessionEstablished,
+  UNAUTHENTICATED_EVENT,
+} from '@/lib/api/client'
 import { ApiError } from '@/lib/api/problem'
 
 const CSRF_COOKIE = 'XSRF-TOKEN=token-123; path=/'
@@ -14,6 +19,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 describe('api client', () => {
   beforeEach(() => {
+    markSessionCleared()
     document.cookie = CSRF_COOKIE
   })
 
@@ -78,6 +84,7 @@ describe('api client', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
+    markSessionEstablished()
     const listener = vi.fn()
     window.addEventListener(UNAUTHENTICATED_EVENT, listener)
 

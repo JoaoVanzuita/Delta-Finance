@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { Link } from 'react-router'
 
 /**
  * Página inicial provisória da fase de fundação.
@@ -20,6 +21,20 @@ export function HomePage() {
           Controle financeiro privado para a família, com dados isolados por usuário. Cada pessoa
           configura a própria conexão bancária e vê apenas o próprio espaço.
         </p>
+        <div className="flex flex-wrap gap-3 pt-1">
+          <Link
+            to="/login"
+            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
+          >
+            Entrar
+          </Link>
+          <Link
+            to="/register"
+            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+          >
+            Criar conta
+          </Link>
+        </div>
       </header>
 
       <section
@@ -30,9 +45,9 @@ export function HomePage() {
           Aplicação em construção
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          A base de identidade, sessão, criptografia e auditoria já está pronta. As telas de
-          cadastro, login e importação bancária entram nas próximas fases. Não insira dados
-          financeiros reais nesta versão.
+          A base de identidade, sessão, criptografia e auditoria está pronta, e o cadastro e o login
+          já funcionam. A importação bancária e o dashboard entram nas próximas fases. Ainda não há
+          dados financeiros para cadastrar.
         </p>
         <ul className="mt-4 space-y-2 text-sm text-ink">
           <li className="flex gap-2">
@@ -46,6 +61,10 @@ export function HomePage() {
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
             Campos sensíveis cifrados com chave externa ao banco
+          </li>
+          <li className="flex gap-2">
+            <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
+            Isolamento entre usuários verificado no servidor
           </li>
         </ul>
       </section>

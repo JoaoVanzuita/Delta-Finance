@@ -1,15 +1,20 @@
 import { createBrowserRouter } from 'react-router'
 
+import { AccountSettingsPage } from '@/features/auth/pages/AccountSettingsPage'
+import { LoginPage } from '@/features/auth/pages/LoginPage'
+import { RegisterPage } from '@/features/auth/pages/RegisterPage'
+
 import { HomePage } from './HomePage'
+import { NotFoundPage } from './NotFoundPage'
+import { ProtectedRoute } from './ProtectedRoute'
 import { RootLayout } from './RootLayout'
 
 /**
  * Tabela de rotas.
  *
- * As rotas de negócio (/login, /dashboard, /accounts, /transactions, /invoices,
- * /reconciliation, /settings/integration, /settings/privacy) são adicionadas nas
- * histórias correspondentes (T044+). Elas não são criadas vazias aqui para que a
- * navegação não anuncie funcionalidades ainda inexistentes.
+ * Rotas de negócio são adicionadas junto com as histórias correspondentes. Nesta
+ * fase existem apenas identidade (login/registro/conta) e a página inicial; não
+ * há links para telas ainda inexistentes.
  */
 export const router = createBrowserRouter([
   {
@@ -19,6 +24,26 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <HomePage />,
+      },
+      {
+        path: 'login',
+        element: <LoginPage />,
+      },
+      {
+        path: 'register',
+        element: <RegisterPage />,
+      },
+      {
+        path: 'account',
+        element: (
+          <ProtectedRoute>
+            <AccountSettingsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '*',
+        element: <NotFoundPage />,
       },
     ],
   },

@@ -31,6 +31,20 @@ interface RequestOptions {
 }
 
 let csrfBootstrap: Promise<void> | null = null
+let sessionEstablished = false
+
+/**
+ * Marca que existe uma sessão conhecida. O evento de sessão expirada só é
+ * emitido nesse caso: a sondagem inicial de `/auth/me` para visitante anônimo
+ * não deve exibir "sessão expirada".
+ */
+export function markSessionEstablished(): void {
+  sessionEstablished = true
+}
+
+export function markSessionCleared(): void {
+  sessionEstablished = false
+}
 
 function readCookie(name: string): string | null {
   if (typeof document === 'undefined') {
@@ -142,7 +156,7 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
 
   if (!response.ok) {
     const error = await toApiError(response)
-    if (error.status === 401 && typeof window !== 'undefined') {
+    if (error.status === 401 && sessionEstablished && typeof window !== 'undefined') {
       window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT))
     }
     throw error

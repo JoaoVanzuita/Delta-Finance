@@ -5,8 +5,10 @@ Controle financeiro privado para uma família, operado em infraestrutura própri
 integrações e relatórios; a integração bancária é configurada individualmente no
 Meu Pluggy, sem compartilhamento de credenciais.
 
-> **Estado**: fundação (fase 1). Ainda não há cadastro, login, importação
-> bancária ou dashboard. Não use dados financeiros reais nesta fase.
+> **Estado**: fase 3 (conta pessoal). Cadastro, login, sessão segura e
+> isolamento entre usuários estão implementados. Ainda não há importação
+> bancária, contas, transações ou dashboard; não use dados financeiros reais
+> nesta versão.
 
 ## Stack
 
@@ -95,6 +97,9 @@ npm run format:check
 npm run typecheck
 npm run test
 npm run build
+
+# E2E (Playwright, stub de API)
+npm run test:e2e
 ```
 
 Os testes de integração do backend usam Testcontainers e são ignorados

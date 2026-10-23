@@ -116,19 +116,19 @@ URL, filtro ou conteúdo; todas as tentativas devem ser negadas.
 
 ### Tests for User Story 1
 
-- [ ] T040 [P] [US1] Contract test dos endpoints de registro, login, logout, `me` e senha, incluindo 12/128 caracteres, frase-senha válida, senha comum rejeitada pela lista local versionada de 10.000 entradas, senha contendo o nome de usuário e bloqueio após 5 falhas/15 min, em `server/src/test/java/com/deltafinance/api/AuthApiTest.java`.
-- [ ] T041 [P] [US1] Integration test de sessão, expiração de 30 minutos de inatividade e 12 horas absolutas, logout, troca de senha e limite de tentativas de login em `server/src/test/java/com/deltafinance/integration/AuthSessionIT.java`.
-- [ ] T042 [P] [US1] Integration test de acesso cruzado de leitura, escrita e exclusão em recursos de identidade e configurações de conta, com dois usuários e identificadores manipulados, em `server/src/test/java/com/deltafinance/integration/IsolationIT.java`.
-- [ ] T043 [P] [US1] Testes de formulários, validação da política de senha, erros genéricos e route guards em `client/src/features/auth/__tests__/AuthFlow.test.tsx`.
+- [X] T040 [P] [US1] Contract test dos endpoints de registro, login, logout, `me` e senha, incluindo 12/128 caracteres, frase-senha válida, senha comum rejeitada pela lista local versionada de 10.000 entradas, senha contendo o nome de usuário e bloqueio após 5 falhas/15 min, em `server/src/test/java/com/deltafinance/api/AuthApiTest.java`.
+- [X] T041 [P] [US1] Integration test de sessão, expiração de 30 minutos de inatividade e 12 horas absolutas, logout, troca de senha e limite de tentativas de login em `server/src/test/java/com/deltafinance/integration/AuthSessionIT.java`.
+- [X] T042 [P] [US1] Integration test de acesso cruzado de leitura, escrita e exclusão em recursos de identidade e configurações de conta, com dois usuários e identificadores manipulados, em `server/src/test/java/com/deltafinance/integration/IsolationIT.java`.
+- [X] T043 [P] [US1] Testes de formulários, validação da política de senha, erros genéricos e route guards em `client/src/features/auth/__tests__/AuthFlow.test.tsx`.
 
 ### Implementation for User Story 1
 
-- [ ] T044 [US1] Implementar a página e formulário de registro em `client/src/features/auth/pages/RegisterPage.tsx`.
-- [ ] T045 [US1] Implementar login, logout, expiração de sessão e mensagens genéricas em `client/src/features/auth/pages/LoginPage.tsx` e `client/src/features/auth/hooks/useSession.ts`.
-- [ ] T046 [US1] Implementar alteração de senha, aplicando a mesma política, e configurações da conta em `client/src/features/auth/pages/AccountSettingsPage.tsx`.
-- [ ] T047 [US1] Implementar route guards, tabela de rotas e tratamento de 401/403/404 em `client/src/app/ProtectedRoute.tsx`, `client/src/app/router.tsx` e `client/src/features/auth/components/SessionExpiredBanner.tsx`.
-- [ ] T048 [US1] Completar auditoria de eventos de autenticação e senha em `server/src/main/java/com/deltafinance/auth/application/AuthAuditService.java`.
-- [ ] T049 [US1] Adicionar E2E de dois usuários e isolamento em `client/e2e/isolation.spec.ts`.
+- [X] T044 [US1] Implementar a página e formulário de registro em `client/src/features/auth/pages/RegisterPage.tsx`.
+- [X] T045 [US1] Implementar login, logout, expiração de sessão e mensagens genéricas em `client/src/features/auth/pages/LoginPage.tsx` e `client/src/features/auth/hooks/useSession.ts`.
+- [X] T046 [US1] Implementar alteração de senha, aplicando a mesma política, e configurações da conta em `client/src/features/auth/pages/AccountSettingsPage.tsx`.
+- [X] T047 [US1] Implementar route guards, tabela de rotas e tratamento de 401/403/404 em `client/src/app/ProtectedRoute.tsx`, `client/src/app/router.tsx` e `client/src/features/auth/components/SessionExpiredBanner.tsx`.
+- [X] T048 [US1] Completar auditoria de eventos de autenticação e senha em `server/src/main/java/com/deltafinance/auth/application/AuthAuditService.java`.
+- [X] T049 [US1] Adicionar E2E de dois usuários e isolamento em `client/e2e/isolation.spec.ts`.
 
 **Checkpoint**: US1 funcional e testável isoladamente; nenhum dado cruza
 usuários.

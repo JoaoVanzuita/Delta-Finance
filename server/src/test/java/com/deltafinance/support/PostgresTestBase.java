@@ -163,6 +163,20 @@ public abstract class PostgresTestBase {
         SNAPSHOT_DIRECTORY + "/" + name + ".dump");
   }
 
+  /**
+   * Limpa dados de identidade/sessão entre testes.
+   *
+   * <p>Mantém o schema intacto (migrações aplicadas) e respeita a ordem das FKs.
+   */
+  protected void cleanIdentityData() {
+    jdbcTemplate.execute("delete from spring_session_attributes");
+    jdbcTemplate.execute("delete from spring_session");
+    jdbcTemplate.execute("delete from idempotency_key");
+    jdbcTemplate.execute("delete from audit_event");
+    jdbcTemplate.execute("delete from login_attempt");
+    jdbcTemplate.execute("delete from app_user");
+  }
+
   /** Indica se uma tabela existe no schema {@code public}. */
   protected boolean tableExists(String table) {
     Boolean exists =

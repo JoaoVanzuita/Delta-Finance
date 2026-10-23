@@ -53,7 +53,7 @@ server:
         name: __Host-delta_session
         http-only: true
         secure: ${DELTA_COOKIE_SECURE:true}
-        same-site: lax
+        same-site: Lax
         path: /
   error:
     include-message: never
