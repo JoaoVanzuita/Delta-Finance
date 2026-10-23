@@ -8,6 +8,11 @@ spring:
       hibernate:
         format_sql: false
 
+# Ao rodar `cd server && ./mvnw spring-boot:run`, o key ring do repositório está em ../secrets.
+delta:
+  crypto:
+    key-file: ${DELTA_CRYPTO_KEY_FILE:../secrets/crypto-keys.json}
+
 springdoc:
   swagger-ui:
     enabled: true

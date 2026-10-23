@@ -76,29 +76,29 @@ e contratos que bloqueia todas as histórias.
 
 **⚠️ CRITICAL**: nenhuma história pode começar antes desta fase.
 
-- [ ] T017 Criar a migração de identidade `V001__identity.sql` em `server/src/main/resources/db/migration/V001__identity.sql` com `app_user` (`username_normalized` único, `password_hash` Argon2id, `status` `ACTIVE|DELETION_PENDING|DELETED`), `login_attempt`, `audit_event`, `idempotency_key` e tabelas do Spring Session.
-- [ ] T018 [P] Implementar `Money`, `Clock`, `CursorPage` e `PageRequest` em `server/src/main/java/com/deltafinance/shared/money/`, `shared/time/` e `shared/pagination/`.
-- [ ] T019 [P] Implementar o carregador do key ring e as propriedades de criptografia em `server/src/main/java/com/deltafinance/shared/crypto/KeyRing.java` e `CryptoProperties.java`.
-- [ ] T020 [P] Implementar AES-256-GCM com nonce, tag, AAD e versão de chave em `server/src/main/java/com/deltafinance/shared/crypto/CryptoService.java`; cobrir tamper e rotação em `server/src/test/java/com/deltafinance/unit/crypto/CryptoServiceTest.java`.
-- [ ] T021 [P] Implementar HMAC-SHA-256 para IDs externos, dedup e fingerprints em `server/src/main/java/com/deltafinance/shared/crypto/IndexHmacService.java` com testes em `server/src/test/java/com/deltafinance/unit/crypto/IndexHmacServiceTest.java`.
-- [ ] T022 [P] Implementar serialização de `BigDecimal` como string decimal em `server/src/main/java/com/deltafinance/shared/money/MoneyJsonModule.java`.
-- [ ] T023 Implementar a entidade base com `created_at`, `updated_at`, `version` e auditoria em `server/src/main/java/com/deltafinance/shared/persistence/BaseEntity.java`.
-- [ ] T024 Implementar sessão, cookies, CSRF, headers e logout no Spring Security em `server/src/main/java/com/deltafinance/security/SecurityConfig.java`.
-- [ ] T025 Implementar `AppUser`, repositório, `PasswordEncoder` Argon2id calibrado (m=19 MiB, t=2, p=1, salt 16 B, hash 32 B) e `PasswordPolicy` com lista local versionada de senhas comuns (mínimo 10.000 entradas) e rejeição de senha que contenha o nome de usuário normalizado em `server/src/main/java/com/deltafinance/auth/domain/AppUser.java`, `AppUserRepository.java`, `server/src/main/java/com/deltafinance/auth/domain/PasswordPolicy.java` e `server/src/main/java/com/deltafinance/auth/config/PasswordConfig.java`.
-- [ ] T026 Implementar `AuthService` e `AuthController` para registro, login, logout, sessão atual e troca de senha, validando a política de senha (12–128, lista comum mínima, nome de usuário normalizado) em `server/src/main/java/com/deltafinance/auth/application/AuthService.java` e `auth/api/AuthController.java`.
-- [ ] T027 Implementar limitação de tentativas (5 falhas/15 min por usuário+IP, bloqueio de 15 min, reset em sucesso) e auditoria de autenticação em `server/src/main/java/com/deltafinance/auth/application/LoginAttemptService.java` e `server/src/main/java/com/deltafinance/shared/audit/AuditService.java`.
-- [ ] T028 [P] Implementar `ProblemDetail`, códigos de erro e `RequestIdFilter` em `server/src/main/java/com/deltafinance/shared/errors/GlobalExceptionHandler.java` e `RequestIdFilter.java`.
-- [ ] T029 [P] Configurar logs JSON e mascaramento de dados sensíveis em `server/src/main/resources/logback-spring.xml` e `server/src/main/java/com/deltafinance/shared/logging/SensitiveDataMasker.java`.
-- [ ] T030 [P] Configurar Actuator, health liveness/readiness e métricas em `server/src/main/resources/application.yml` e `server/src/main/java/com/deltafinance/shared/config/ObservabilityConfig.java`.
-- [ ] T031 [P] Implementar `AuthenticatedUser` e `OwnershipGuard` para derivação de `user_id` da sessão e verificação de propriedade nas consultas de repositório em `server/src/main/java/com/deltafinance/security/AuthenticatedUser.java` e `OwnershipGuard.java`.
-- [ ] T032 [P] Implementar o cliente HTTP do frontend, CSRF, `ProblemDetail` e tratamento de 401/403 em `client/src/lib/api/client.ts` e `client/src/lib/api/problem.ts`.
-- [ ] T033 [P] Executar as skills `frontend-design` e `ui-ux-pro-max` e registrar direção visual, tokens e princípios em `client/docs/design-direction.md`.
-- [ ] T034 [P] Implementar layout base, navegação e tokens visuais em `client/src/components/layout/AppShell.tsx` e `client/src/styles/tokens.css`.
-- [ ] T035 [P] Adicionar regras ArchUnit de fronteiras, ausência de ciclos e consultas de repositório que não atravessem `user_id` em `server/src/test/java/com/deltafinance/architecture/ModuleBoundaryTest.java`.
-- [ ] T036 [P] Adicionar helpers de teste RTL e axe em `client/src/test/render.tsx` e `client/src/test/axe.ts`.
-- [ ] T037 Adicionar lint do OpenAPI e geração de tipos do cliente em `client/package.json` e `client/src/lib/api/schema.d.ts`.
-- [ ] T038 [P] Criar fixture de dois usuários e fábrica de dados em `server/src/test/java/com/deltafinance/support/TwoUserFixture.java` e `TestDataFactory.java`.
-- [ ] T039 Implementar `MigrationIT` e documentar a política expand/contract em `server/src/test/java/com/deltafinance/integration/MigrationIT.java` e `server/src/main/resources/db/migration/README.md`: aplicar todas as migrações em banco vazio; aplicar em snapshot da versão anterior (a partir de V002); validar idempotência, expand/contract e falha de migração impedindo readiness.
+- [X] T017 Criar a migração de identidade `V001__identity.sql` em `server/src/main/resources/db/migration/V001__identity.sql` com `app_user` (`username_normalized` único, `password_hash` Argon2id, `status` `ACTIVE|DELETION_PENDING|DELETED`), `login_attempt`, `audit_event`, `idempotency_key` e tabelas do Spring Session.
+- [X] T018 [P] Implementar `Money`, `Clock`, `CursorPage` e `PageRequest` em `server/src/main/java/com/deltafinance/shared/money/`, `shared/time/` e `shared/pagination/`.
+- [X] T019 [P] Implementar o carregador do key ring e as propriedades de criptografia em `server/src/main/java/com/deltafinance/shared/crypto/KeyRing.java` e `CryptoProperties.java`.
+- [X] T020 [P] Implementar AES-256-GCM com nonce, tag, AAD e versão de chave em `server/src/main/java/com/deltafinance/shared/crypto/CryptoService.java`; cobrir tamper e rotação em `server/src/test/java/com/deltafinance/unit/crypto/CryptoServiceTest.java`.
+- [X] T021 [P] Implementar HMAC-SHA-256 para IDs externos, dedup e fingerprints em `server/src/main/java/com/deltafinance/shared/crypto/IndexHmacService.java` com testes em `server/src/test/java/com/deltafinance/unit/crypto/IndexHmacServiceTest.java`.
+- [X] T022 [P] Implementar serialização de `BigDecimal` como string decimal em `server/src/main/java/com/deltafinance/shared/money/MoneyJsonModule.java`.
+- [X] T023 Implementar a entidade base com `created_at`, `updated_at`, `version` e auditoria em `server/src/main/java/com/deltafinance/shared/persistence/BaseEntity.java`.
+- [X] T024 Implementar sessão, cookies, CSRF, headers e logout no Spring Security em `server/src/main/java/com/deltafinance/security/SecurityConfig.java`.
+- [X] T025 Implementar `AppUser`, repositório, `PasswordEncoder` Argon2id calibrado (m=19 MiB, t=2, p=1, salt 16 B, hash 32 B) e `PasswordPolicy` com lista local versionada de senhas comuns (mínimo 10.000 entradas) e rejeição de senha que contenha o nome de usuário normalizado em `server/src/main/java/com/deltafinance/auth/domain/AppUser.java`, `AppUserRepository.java`, `server/src/main/java/com/deltafinance/auth/domain/PasswordPolicy.java` e `server/src/main/java/com/deltafinance/auth/config/PasswordConfig.java`.
+- [X] T026 Implementar `AuthService` e `AuthController` para registro, login, logout, sessão atual e troca de senha, validando a política de senha (12–128, lista comum mínima, nome de usuário normalizado) em `server/src/main/java/com/deltafinance/auth/application/AuthService.java` e `auth/api/AuthController.java`.
+- [X] T027 Implementar limitação de tentativas (5 falhas/15 min por usuário+IP, bloqueio de 15 min, reset em sucesso) e auditoria de autenticação em `server/src/main/java/com/deltafinance/auth/application/LoginAttemptService.java` e `server/src/main/java/com/deltafinance/shared/audit/AuditService.java`.
+- [X] T028 [P] Implementar `ProblemDetail`, códigos de erro e `RequestIdFilter` em `server/src/main/java/com/deltafinance/shared/errors/GlobalExceptionHandler.java` e `RequestIdFilter.java`.
+- [X] T029 [P] Configurar logs JSON e mascaramento de dados sensíveis em `server/src/main/resources/logback-spring.xml` e `server/src/main/java/com/deltafinance/shared/logging/SensitiveDataMasker.java`.
+- [X] T030 [P] Configurar Actuator, health liveness/readiness e métricas em `server/src/main/resources/application.yml` e `server/src/main/java/com/deltafinance/shared/config/ObservabilityConfig.java`.
+- [X] T031 [P] Implementar `AuthenticatedUser` e `OwnershipGuard` para derivação de `user_id` da sessão e verificação de propriedade nas consultas de repositório em `server/src/main/java/com/deltafinance/security/AuthenticatedUser.java` e `OwnershipGuard.java`.
+- [X] T032 [P] Implementar o cliente HTTP do frontend, CSRF, `ProblemDetail` e tratamento de 401/403 em `client/src/lib/api/client.ts` e `client/src/lib/api/problem.ts`.
+- [X] T033 [P] Executar as skills `frontend-design` e `ui-ux-pro-max` e registrar direção visual, tokens e princípios em `client/docs/design-direction.md`.
+- [X] T034 [P] Implementar layout base, navegação e tokens visuais em `client/src/components/layout/AppShell.tsx` e `client/src/styles/tokens.css`.
+- [X] T035 [P] Adicionar regras ArchUnit de fronteiras, ausência de ciclos e consultas de repositório que não atravessem `user_id` em `server/src/test/java/com/deltafinance/architecture/ModuleBoundaryTest.java`.
+- [X] T036 [P] Adicionar helpers de teste RTL e axe em `client/src/test/render.tsx` e `client/src/test/axe.ts`.
+- [X] T037 Adicionar lint do OpenAPI e geração de tipos do cliente em `client/package.json` e `client/src/lib/api/schema.d.ts`.
+- [X] T038 [P] Criar fixture de dois usuários e fábrica de dados em `server/src/test/java/com/deltafinance/support/TwoUserFixture.java` e `TestDataFactory.java`.
+- [X] T039 Implementar `MigrationIT` e documentar a política expand/contract em `server/src/test/java/com/deltafinance/integration/MigrationIT.java` e `server/src/main/resources/db/migration/README.md`: aplicar todas as migrações em banco vazio; aplicar em snapshot da versão anterior (a partir de V002); validar idempotência, expand/contract e falha de migração impedindo readiness.
 
 **Checkpoint**: fundação pronta; autenticação, CSRF, criptografia, erros e
 observabilidade funcionam, e as histórias podem começar.

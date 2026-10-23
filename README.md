@@ -106,8 +106,9 @@ automaticamente quando o Docker não está disponível. A base está em
 
 - Nenhum segredo real é versionado. `.env`, `secrets/`, dumps e backups estão no
   `.gitignore`.
-- O key ring fica fora do banco e da imagem, montado somente leitura. **Sem o
-  key ring, os campos cifrados são irrecuperáveis** — faça backup separado.
+- O key ring fica fora do banco e da imagem, montado somente leitura. Use
+  permissão `640` e o grupo configurado em `DELTA_KEYRING_GID`. **Sem o key ring,
+  os campos cifrados são irrecuperáveis** — faça backup separado.
 - Client Secret e API Key da Pluggy nunca chegam ao navegador; a API Key é
   temporária e mantida apenas no servidor.
 - Connect Token não faz parte do MVP.

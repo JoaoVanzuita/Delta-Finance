@@ -29,6 +29,7 @@
     <caffeine.version>3.3.0</caffeine.version>
     <archunit.version>1.5.0</archunit.version>
     <testcontainers.version>2.0.5</testcontainers.version>
+    <bouncycastle.version>1.86</bouncycastle.version>
 
     <!-- Tooling de qualidade -->
     <jacoco.version>0.8.15</jacoco.version>
@@ -60,8 +61,16 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
-    <!-- Spring Session JDBC entra na fase 2 (T017 cria as tabelas, T024 configura a sessão). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-session-jdbc</artifactId>
+    </dependency>
 
+    <!-- Boot 4 separa a auto-configuração do Flyway em um módulo próprio. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-flyway</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-core</artifactId>
@@ -74,6 +83,13 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
+    </dependency>
+
+    <!-- Necessário para Argon2id do Spring Security Crypto -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>${bouncycastle.version}</version>
     </dependency>
 
     <dependency>
@@ -115,6 +131,12 @@
     <dependency>
       <groupId>com.tngtech.archunit</groupId>
       <artifactId>archunit</artifactId>
+      <version>${archunit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
       <version>${archunit.version}</version>
       <scope>test</scope>
     </dependency>

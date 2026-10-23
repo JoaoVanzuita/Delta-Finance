@@ -43,9 +43,11 @@ openssl rand -base64 32
 openssl rand -base64 32
 ```
 
-O arquivo deve ficar fora do Git, com permissão `600`, e ser montado como Docker
-secret/arquivo read-only. Sem esse arquivo, os campos cifrados não podem ser
-lidos.
+O arquivo deve ficar fora do Git, com permissão `640`, e ser montado como Docker
+secret/arquivo read-only. O container roda como usuário sem privilégios e recebe
+o grupo proprietário do arquivo via `DELTA_KEYRING_GID` no `.env` (padrão 1000;
+ajuste com `stat -c %g secrets/crypto-keys.json`). Sem esse arquivo, os campos
+cifrados não podem ser lidos.
 
 ## 3. Subir o stack
 

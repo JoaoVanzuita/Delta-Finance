@@ -57,8 +57,13 @@ cat > secrets/crypto-keys.json <<EOF
   "index": [{ "version": ${DELTA_INDEX_KEY_VERSION:-1}, "key": "$(openssl rand -base64 32)" }]
 }
 EOF
-chmod 600 secrets/crypto-keys.json
+chmod 640 secrets/crypto-keys.json
 ```
+
+O container roda como usuário `app` (uid 999) e recebe o grupo do arquivo via
+`DELTA_KEYRING_GID` no `.env` (padrão 1000). Descubra o grupo com
+`stat -c %g secrets/crypto-keys.json` e ajuste o `.env` se necessário. O arquivo
+não deve ser legível por outros usuários do host.
 
 Regras:
 

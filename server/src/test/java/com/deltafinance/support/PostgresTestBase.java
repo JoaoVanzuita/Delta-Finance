@@ -2,6 +2,8 @@ package com.deltafinance.support;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
 import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -12,7 +14,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.Container.ExecResult;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -47,7 +48,8 @@ public abstract class PostgresTestBase {
   private static final String DATABASE_PASSWORD = "delta";
   private static final String SNAPSHOT_DIRECTORY = "/tmp/delta-snapshots";
 
-  @Container
+  // Compartilhado por toda a JVM de testes: reiniciar o container entre classes mudaria a porta
+  // mapeada e invalidaria o ApplicationContext em cache. O Ryuk o remove ao final da JVM.
   protected static final PostgreSQLContainer POSTGRES =
       new PostgreSQLContainer(POSTGRES_IMAGE)
           .withDatabaseName(DATABASE_NAME)
@@ -66,6 +68,8 @@ public abstract class PostgresTestBase {
     registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     registry.add("spring.flyway.enabled", () -> "true");
     registry.add("spring.flyway.clean-disabled", () -> "false");
+    registry.add("spring.session.jdbc.initialize-schema", () -> "never");
+    registry.add("delta.crypto.key-file", () -> testResourcePath("crypto-keys-test.json"));
 
     String target = flywayTarget();
     if (target != null) {
@@ -80,6 +84,19 @@ public abstract class PostgresTestBase {
       target = System.getenv("FLYWAY_TARGET");
     }
     return target == null || target.isBlank() ? null : target.trim();
+  }
+
+  /** Caminho absoluto de um recurso classpath usado por propriedades do Spring. */
+  protected static String testResourcePath(String name) {
+    var resource = PostgresTestBase.class.getResource("/" + name);
+    if (resource == null) {
+      throw new IllegalStateException("Recurso de teste não encontrado: " + name);
+    }
+    try {
+      return Path.of(resource.toURI()).toString();
+    } catch (URISyntaxException exception) {
+      throw new IllegalStateException("URI de recurso inválida: " + name, exception);
+    }
   }
 
   protected static PostgreSQLContainer postgres() {

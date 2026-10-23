@@ -1,0 +1,9 @@
+extends:
+  - recommended
+
+rules:
+  # O contrato é versionado e não descreve uma API pública com servidores de exemplo.
+  no-server-example.com: off
+  security-defined: off
+  # Respostas de erro são centralizadas em componentes; nem toda operação lista 4xx.
+  operation-4xx-response: off

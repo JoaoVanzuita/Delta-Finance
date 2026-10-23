@@ -57,9 +57,14 @@ services:
       DELTA_PLUGGY_CONNECTION_LIMIT: ${DELTA_PLUGGY_CONNECTION_LIMIT:-5}
       DELTA_PLUGGY_CONNECTION_LIMIT_CHECKED_AT: ${DELTA_PLUGGY_CONNECTION_LIMIT_CHECKED_AT:-2026-10-22}
       TZ: America/Sao_Paulo
-    volumes:
-      # Key ring externo ao banco e à imagem; montado somente leitura.
-      - ./secrets:/run/secrets:ro
+    secrets:
+      # Key ring externo ao banco e à imagem; montado somente leitura em /run/secrets.
+      - source: crypto_keys
+        target: crypto-keys.json
+    # O arquivo do key ring é 0640 no host; o processo (uid app) entra no grupo
+    # proprietário do arquivo para conseguir lê-lo sem torná-lo público.
+    group_add:
+      - "${DELTA_KEYRING_GID:-1000}"
     depends_on:
       db:
         condition: service_healthy
@@ -117,6 +122,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+secrets:
+  crypto_keys:
+    file: ./secrets/crypto-keys.json
 
 volumes:
   pgdata:

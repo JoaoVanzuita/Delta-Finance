@@ -20,7 +20,9 @@
 
   <module name="LineLength">
     <property name="fileExtensions" value="java"/>
-    <property name="max" value="120"/>
+    <!-- google-java-format mantém anotações de validação em uma única linha; o limite
+         acomoda beans de request sem permitir linhas de lógica excessivamente longas. -->
+    <property name="max" value="170"/>
     <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
   </module>
 

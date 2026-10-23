@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+  <!--
+    Logs de produção em JSON (stdout), prontos para coleta.
+    Em local/test, mantém formato legível para desenvolvimento.
+    Nenhum appender inclui corpo de requisição, valores financeiros ou segredos.
+  -->
+
+  <springProfile name="local | test">
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n</pattern>
+        <charset>UTF-8</charset>
+      </encoder>
+    </appender>
+  </springProfile>
+
+  <springProfile name="!local &amp; !test">
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+        <includeMdc>true</includeMdc>
+        <customFields>{"application":"delta-finance"}</customFields>
+      </encoder>
+    </appender>
+  </springProfile>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+
+  <logger name="com.deltafinance" level="INFO"/>
+</configuration>

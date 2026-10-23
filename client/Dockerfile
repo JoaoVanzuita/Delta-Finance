@@ -11,6 +11,10 @@ COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY client/ ./
+
+# O contrato versionado é a fonte dos tipos do cliente; o lint e a geração
+# fazem parte do build (prebuild). O caminho relativo esperado é ../specs.
+COPY specs/001-finance/contracts/openapi.yaml /specs/001-finance/contracts/openapi.yaml
 RUN npm run build
 
 # ---------- Runtime ----------

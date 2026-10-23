@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router'
 
 import { HomePage } from './HomePage'
+import { RootLayout } from './RootLayout'
 
 /**
  * Tabela de rotas.
@@ -13,6 +14,12 @@ import { HomePage } from './HomePage'
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <HomePage />,
+    element: <RootLayout />,
+    children: [
+      {
+        index: true,
+        element: <HomePage />,
+      },
+    ],
   },
 ])

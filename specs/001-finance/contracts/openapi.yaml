@@ -432,6 +432,8 @@ paths:
       security:
       - sessionCookie: []
         csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/PathId'
       requestBody:
         required: true
         content:

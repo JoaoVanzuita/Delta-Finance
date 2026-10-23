@@ -23,7 +23,7 @@ liberado. O runbook de atualização/rollback entra em T187.
 | Serviço | Endpoint | Observação |
 |---|---|---|
 | `server` | `/actuator/health/liveness` | processo vivo |
-| `server` | `/actuator/health/readiness` | banco (e, a partir de T019/T030, key ring) |
+| `server` | `/actuator/health/readiness` | banco + key ring (versões ativas, sem material de chave) |
 | `client` | `/healthz` | SPA servida pelo Caddy interno |
 | `proxy` | `127.0.0.1:2019/config/` | liveness do Caddy (admin local) |
 | `db` | `pg_isready` | pronto para conexões |
