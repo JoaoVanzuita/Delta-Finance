@@ -8,6 +8,8 @@ public interface PluggyIntegrationRepository extends JpaRepository<PluggyIntegra
 
   Optional<PluggyIntegration> findByUserIdAndProvider(UUID userId, String provider);
 
+  Optional<PluggyIntegration> findByIdAndUserId(UUID id, UUID userId);
+
   default Optional<PluggyIntegration> findMeuPluggy(UUID userId) {
     return findByUserIdAndProvider(userId, PluggyIntegration.PROVIDER);
   }

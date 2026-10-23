@@ -33,18 +33,21 @@ public class PluggyAuthClient {
   private final CryptoService cryptoService;
   private final JsonMapper jsonMapper;
   private final Clock clock;
+  private final PluggyRateLimiter rateLimiter;
 
   public PluggyAuthClient(
       RestClient pluggyRestClient,
       ApiKeyCache apiKeyCache,
       CryptoService cryptoService,
       JsonMapper jsonMapper,
-      Clock clock) {
+      Clock clock,
+      PluggyRateLimiter rateLimiter) {
     this.restClient = pluggyRestClient;
     this.apiKeyCache = apiKeyCache;
     this.cryptoService = cryptoService;
     this.jsonMapper = jsonMapper;
     this.clock = clock;
+    this.rateLimiter = rateLimiter;
   }
 
   public String getApiKey(PluggyIntegration integration) {
@@ -91,6 +94,7 @@ public class PluggyAuthClient {
   }
 
   private String requestApiKey(String clientId, String clientSecret) {
+    rateLimiter.acquire("auth");
     String body;
     try {
       body =
@@ -107,12 +111,17 @@ public class PluggyAuthClient {
         throw new PluggyCredentialException();
       }
       if (status == 429) {
-        throw new PluggyRateLimitedException(retryAfter(exception));
+        Duration retryAfter = retryAfter(exception);
+        rateLimiter.onRateLimited("auth", retryAfter);
+        throw new PluggyRateLimitedException(retryAfter);
       }
+      rateLimiter.onTransientFailure("auth");
       throw new PluggyException("Provedor indisponível para autenticação.", exception);
     } catch (RestClientException exception) {
+      rateLimiter.onTransientFailure("auth");
       throw new PluggyException("Falha de comunicação com o provedor.", exception);
     }
+    rateLimiter.onSuccess("auth");
 
     JsonNode response = parse(body);
     String apiKey = response.path("apiKey").asString(null);

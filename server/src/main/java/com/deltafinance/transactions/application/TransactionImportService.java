@@ -27,8 +27,10 @@ import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -39,6 +41,9 @@ import tools.jackson.databind.JsonNode;
  * <p>Dedup por HMAC(provider, connection, account, externalId); quando o ID externo muda, a
  * reconciliação por fingerprint evita duplicar a despesa e registra o novo ID em {@code
  * external_identity_history}. {@code PENDING→POSTED} atualiza o mesmo registro.
+ *
+ * <p>A reconciliação de ausências só ocorre em uma leitura conclusiva e não vazia: transações que
+ * deixaram de aparecer na janela são marcadas como {@code SOURCE_REMOVED}, nunca apagadas.
  */
 @Service
 public class TransactionImportService {
@@ -81,37 +86,99 @@ public class TransactionImportService {
 
   /** Importação inicial de 12 meses por conta da conexão. */
   public int importInitial(PluggyIntegration integration, UUID connectionId) {
-    LocalDate from = clock.today().minusMonths(MONTHS_INITIAL);
-    List<FinancialAccount> accounts =
-        accountRepository.findByConnectionIdOrderByCreatedAtAsc(connectionId);
-    int imported = 0;
-    for (FinancialAccount account : accounts) {
-      String externalAccountId = decryptAccountId(account);
-      String apiKey = authClient.getApiKey(integration);
-      PluggyModels.PluggyTransactionPage page;
-      try {
-        page = dataClient.listTransactions(apiKey, externalAccountId, from, null);
-      } catch (PluggyUnauthorizedException exception) {
-        apiKey = authClient.refreshApiKey(integration);
-        page = dataClient.listTransactions(apiKey, externalAccountId, from, null);
-      }
-      for (PluggyModels.PluggyTransaction transaction : page.items()) {
-        upsert(integration.getUserId(), connectionId, account, externalAccountId, transaction);
-        imported++;
-      }
-    }
-    return imported;
+    return importRange(integration, connectionId, clock.today().minusMonths(MONTHS_INITIAL)).read();
   }
 
-  private void upsert(
+  /**
+   * Importa a janela informada para todas as contas da conexão.
+   *
+   * <p>Chamadas repetidas atualizam o mesmo registro local. O retorno distingue leitura, criação,
+   * atualização e descarte, permitindo registrar {@code sync_run} fielmente.
+   */
+  public ImportStats importRange(PluggyIntegration integration, UUID connectionId, LocalDate from) {
+    List<FinancialAccount> accounts =
+        accountRepository.findByConnectionIdOrderByCreatedAtAsc(connectionId);
+    ImportStats total = ImportStats.empty();
+    for (FinancialAccount account : accounts) {
+      total = total.plus(importAccount(integration, connectionId, account, from));
+    }
+    return total;
+  }
+
+  private ImportStats importAccount(
+      PluggyIntegration integration, UUID connectionId, FinancialAccount account, LocalDate from) {
+    String externalAccountId = decryptAccountId(account);
+    String apiKey = authClient.getApiKey(integration);
+    PluggyModels.PluggyTransactionPage page;
+    try {
+      page = dataClient.listTransactions(apiKey, externalAccountId, from, null);
+    } catch (PluggyUnauthorizedException exception) {
+      apiKey = authClient.refreshApiKey(integration);
+      page = dataClient.listTransactions(apiKey, externalAccountId, from, null);
+    }
+
+    int read = 0;
+    int created = 0;
+    int updated = 0;
+    int skipped = 0;
+    Set<byte[]> seenHashes = new HashSet<>();
+    for (PluggyModels.PluggyTransaction imported : page.items()) {
+      read++;
+      if (imported.externalId() == null || imported.externalId().isBlank()) {
+        skipped++;
+        continue;
+      }
+      seenHashes.add(hmacService.externalIdHash(SOURCE, imported.externalId()));
+      Outcome outcome =
+          upsert(integration.getUserId(), connectionId, account, externalAccountId, imported);
+      switch (outcome) {
+        case CREATED -> created++;
+        case UPDATED -> updated++;
+        case SKIPPED -> skipped++;
+        default -> {
+          // Enum fechado: nenhum outcome adicional é esperado.
+        }
+      }
+    }
+
+    // Lista vazia é inconclusiva: não marque ausências a partir dela (FR-040/FR-046).
+    if (read > 0) {
+      updated += markMissingAsSourceRemoved(integration.getUserId(), account, from, seenHashes);
+    }
+    return new ImportStats(read, created, updated, skipped, 0);
+  }
+
+  private int markMissingAsSourceRemoved(
+      UUID userId, FinancialAccount account, LocalDate from, Set<byte[]> seenHashes) {
+    int removed = 0;
+    for (Transaction candidate :
+        transactionRepository.findByUserIdAndAccountIdOrderByPostedOnDescIdDesc(
+            userId, account.getId())) {
+      if (candidate.getSource() != TransactionSource.IMPORTED
+          || candidate.getPostedOn().isBefore(from)
+          || candidate.getExternalTransactionIdHash() == null
+          || candidate.getStatus() == TransactionStatus.SOURCE_REMOVED) {
+        continue;
+      }
+      boolean seen =
+          seenHashes.stream()
+              .anyMatch(
+                  hash -> hmacService.matches(hash, candidate.getExternalTransactionIdHash()));
+      if (!seen) {
+        candidate.markSourceRemoved();
+        transactionRepository.save(candidate);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  private Outcome upsert(
       UUID userId,
       UUID connectionId,
       FinancialAccount account,
       String externalAccountId,
       PluggyModels.PluggyTransaction imported) {
-    if (imported.externalId() == null || imported.externalId().isBlank()) {
-      return;
-    }
     BigDecimal amount = imported.amount() == null ? BigDecimal.ZERO : imported.amount();
     String description = imported.description() == null ? "" : imported.description();
     LocalDate postedOn = imported.date() == null ? clock.today() : imported.date();
@@ -200,31 +267,49 @@ public class TransactionImportService {
           hmacService.externalIdHash(SOURCE, imported.externalId()),
           dedupKey,
           fingerprint);
-    } else {
-      transaction.applyImported(
-          type,
-          status,
-          postedOn,
-          postedOn,
-          amountSourceEnc,
-          amountEffectiveEnc,
-          descriptionSourceEnc,
-          descriptionEffectiveEnc,
-          externalIdEnc,
-          hmacService.externalIdHash(SOURCE, imported.externalId()),
-          dedupKey,
-          fingerprint);
-      if (categoryId != null) {
-        transaction.setCategoryId(categoryId);
-      }
-      if (relatedId != null && transaction.getRelatedTransactionId() == null) {
-        transaction.linkRelatedTransaction(relatedId);
-      }
+      transactionRepository.save(transaction);
+      upsertIdentityHistory(
+          userId,
+          account.getId(),
+          transaction.getId(),
+          imported.externalId(),
+          encrypt(userId, "external_transaction_id", transaction.getId(), imported.externalId()));
+      return Outcome.CREATED;
+    }
+
+    transaction.applyImported(
+        type,
+        status,
+        postedOn,
+        postedOn,
+        amountSourceEnc,
+        amountEffectiveEnc,
+        descriptionSourceEnc,
+        descriptionEffectiveEnc,
+        externalIdEnc,
+        hmacService.externalIdHash(SOURCE, imported.externalId()),
+        dedupKey,
+        fingerprint);
+    if (transaction.getReconciliationState() == ReconciliationState.SOURCE_REMOVED) {
+      // A origem voltou a trazer o registro: restauração automática sem duplicar a linha.
+      transaction.setReconciliationState(ReconciliationState.NONE);
+    }
+    if (categoryId != null) {
+      transaction.setCategoryId(categoryId);
+    }
+    if (relatedId != null && transaction.getRelatedTransactionId() == null) {
+      transaction.linkRelatedTransaction(relatedId);
     }
     transactionRepository.save(transaction);
-
     upsertIdentityHistory(
         userId, account.getId(), transaction.getId(), imported.externalId(), externalIdEnc);
+    return Outcome.UPDATED;
+  }
+
+  private enum Outcome {
+    CREATED,
+    UPDATED,
+    SKIPPED
   }
 
   private void upsertIdentityHistory(

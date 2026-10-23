@@ -21,6 +21,10 @@ public final class ErrorCode {
   public static final String INTEGRATION_INCOMPLETE = "INTEGRATION_INCOMPLETE";
   public static final String ITEM_ALREADY_CONNECTED = "ITEM_ALREADY_CONNECTED";
   public static final String CONNECTION_LIMIT_REACHED = "CONNECTION_LIMIT_REACHED";
+  public static final String CONNECTION_UNAVAILABLE = "CONNECTION_UNAVAILABLE";
+  public static final String SOURCE_REMOVAL_CONFLICT = "SOURCE_REMOVAL_CONFLICT";
+  public static final String WEBHOOK_DUPLICATE = "WEBHOOK_DUPLICATE";
+  public static final String WEBHOOKS_DISABLED = "WEBHOOKS_DISABLED";
 
   private ErrorCode() {}
 }

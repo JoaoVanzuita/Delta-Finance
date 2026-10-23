@@ -70,7 +70,9 @@ public class SecurityConfig {
     http.csrf(
             csrf ->
                 csrf.csrfTokenRepository(csrfTokenRepository)
-                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
+                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                    // Webhook usa segredo próprio e não sessão/CSRF de navegador.
+                    .ignoringRequestMatchers("/api/v1/webhooks/**"))
         .securityContext(
             context ->
                 context
@@ -82,6 +84,8 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers(
                         "/api/v1/auth/csrf", "/api/v1/auth/register", "/api/v1/auth/login")
+                    .permitAll()
+                    .requestMatchers("/api/v1/webhooks/**")
                     .permitAll()
                     .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                     .permitAll()

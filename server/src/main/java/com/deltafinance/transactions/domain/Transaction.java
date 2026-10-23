@@ -250,4 +250,16 @@ public class Transaction extends BaseEntity {
   public void markStatus(TransactionStatus status) {
     this.status = Objects.requireNonNull(status, "status");
   }
+
+  /** Marca a transação como ausente na origem sem apagar a linha. */
+  public void markSourceRemoved() {
+    this.status = TransactionStatus.SOURCE_REMOVED;
+    this.reconciliationState = ReconciliationState.SOURCE_REMOVED;
+  }
+
+  /** Restaura uma transação validada na origem, mantendo a mesma linha e o histórico. */
+  public void restoreFromSource(TransactionStatus restoredStatus) {
+    this.status = Objects.requireNonNull(restoredStatus, "restoredStatus");
+    this.reconciliationState = ReconciliationState.NONE;
+  }
 }

@@ -7,22 +7,14 @@ import { ApiError } from '@/lib/api/problem'
 import { financeApi, type Integration } from '../api'
 import { ConnectionForm } from '../components/ConnectionForm'
 import { ConnectionLimitNotice } from '../components/ConnectionLimitNotice'
+import { ConnectionsList } from '../components/ConnectionsList'
 import { SecretField } from '../components/SecretField'
+import { SyncStatusPanel } from '../components/SyncStatusPanel'
+import { connectionStatusLabels } from '../syncLabels'
 
 const CONNECTION_LIMIT = Number(import.meta.env.VITE_PLUGGY_CONNECTION_LIMIT ?? 5)
 const CONNECTION_LIMIT_CHECKED_AT =
   import.meta.env.VITE_PLUGGY_CONNECTION_LIMIT_CHECKED_AT ?? '2026-10-22'
-
-const statusLabels: Record<string, string> = {
-  INCOMPLETE: 'Configuração incompleta',
-  ACTIVE: 'Ativa',
-  SYNCING: 'Sincronizando',
-  SYNCED: 'Sincronizada',
-  CREDENTIAL_FAILURE: 'Falha de credenciais',
-  ACTION_REQUIRED: 'Requer ação',
-  AUTHORIZATION_EXPIRED: 'Autorização expirada',
-  ITEM_UNAVAILABLE: 'Conexão indisponível',
-}
 
 export function IntegrationSetupPage() {
   const queryClient = useQueryClient()
@@ -81,18 +73,6 @@ export function IntegrationSetupPage() {
     },
   })
 
-  const removeConnection = useMutation({
-    mutationFn: (id: string) => financeApi.removeConnection(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['connections'] })
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void queryClient.invalidateQueries({ queryKey: ['integration'] })
-    },
-    onError: (caught) => {
-      setError(caught instanceof ApiError ? caught.message : 'Não foi possível remover a conexão.')
-    },
-  })
-
   const integration = integrationQuery.data
   const connections = connectionsQuery.data?.items ?? []
   const configured = Boolean(integration?.clientIdMasked)
@@ -125,7 +105,9 @@ export function IntegrationSetupPage() {
             </p>
           </div>
           <span className="rounded-card border border-line bg-surface-muted px-3 py-1 text-xs font-medium text-ink">
-            {integration ? (statusLabels[integration.status] ?? integration.status) : 'Carregando…'}
+            {integration
+              ? (connectionStatusLabels[integration.status] ?? integration.status)
+              : 'Carregando…'}
           </span>
         </div>
 
@@ -217,13 +199,17 @@ export function IntegrationSetupPage() {
         </form>
       </section>
 
+      <SyncStatusPanel connections={connections} />
+
+      <ConnectionsList connections={connections} configured={configured} />
+
       <section
-        aria-labelledby="connections-heading"
+        aria-labelledby="add-connection-heading"
         className="space-y-4 rounded-card border border-line bg-surface p-5 sm:p-6"
       >
         <div>
-          <h2 id="connections-heading" className="text-lg font-semibold text-ink">
-            Conexões
+          <h2 id="add-connection-heading" className="text-lg font-semibold text-ink">
+            Adicionar conexão
           </h2>
           <p className="mt-1 text-sm text-ink-muted">
             Cada itemId corresponde a uma autorização bancária. Adicione um item por vez.
@@ -242,37 +228,6 @@ export function IntegrationSetupPage() {
           <p className="text-sm text-ink-muted">
             Salve credenciais válidas para adicionar conexões.
           </p>
-        )}
-
-        {connections.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nenhuma conexão configurada.</p>
-        ) : (
-          <ul className="divide-y divide-line rounded-card border border-line">
-            {connections.map((connection) => (
-              <li
-                key={connection.id}
-                className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-ink">
-                    {connection.institutionName ?? 'Instituição não informada'}
-                  </p>
-                  <p className="numeric text-xs text-ink-muted">
-                    itemId {connection.itemIdMasked ?? 'não disponível'} · {connection.accountCount}{' '}
-                    conta(s) · {statusLabels[connection.status] ?? connection.status}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeConnection.mutate(connection.id)}
-                  disabled={removeConnection.isPending}
-                  className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted disabled:opacity-60"
-                >
-                  Remover
-                </button>
-              </li>
-            ))}
-          </ul>
         )}
       </section>
     </div>

@@ -31,10 +31,13 @@ public class PluggyDataClient {
 
   private final RestClient restClient;
   private final JsonMapper jsonMapper;
+  private final PluggyRateLimiter rateLimiter;
 
-  public PluggyDataClient(RestClient pluggyRestClient, JsonMapper jsonMapper) {
+  public PluggyDataClient(
+      RestClient pluggyRestClient, JsonMapper jsonMapper, PluggyRateLimiter rateLimiter) {
     this.restClient = pluggyRestClient;
     this.jsonMapper = jsonMapper;
+    this.rateLimiter = rateLimiter;
   }
 
   public PluggyModels.PluggyItem getItem(String apiKey, String itemId) {
@@ -141,6 +144,8 @@ public class PluggyDataClient {
 
   private JsonNode getJson(
       String path, String itemId, MultiValueMap<String, String> params, String apiKey) {
+    String endpoint = endpointKey(path);
+    rateLimiter.acquire(endpoint);
     String uri =
         UriComponentsBuilder.fromPath(path)
             .queryParams(params)
@@ -158,6 +163,7 @@ public class PluggyDataClient {
       if (body == null || body.isBlank()) {
         throw new PluggyException("Resposta vazia do provedor.");
       }
+      rateLimiter.onSuccess(endpoint);
       return jsonMapper.readTree(body);
     } catch (RestClientResponseException exception) {
       int status = exception.getStatusCode().value();
@@ -165,10 +171,14 @@ public class PluggyDataClient {
         throw new PluggyUnauthorizedException();
       }
       if (status == 429) {
-        throw new PluggyRateLimitedException(retryAfter(exception));
+        Duration retryAfter = retryAfter(exception);
+        rateLimiter.onRateLimited(endpoint, retryAfter);
+        throw new PluggyRateLimitedException(retryAfter);
       }
+      rateLimiter.onTransientFailure(endpoint);
       throw new PluggyException("Provedor indisponível.", exception);
     } catch (RestClientException exception) {
+      rateLimiter.onTransientFailure(endpoint);
       throw new PluggyException("Falha de comunicação com o provedor.", exception);
     } catch (RuntimeException exception) {
       if (exception instanceof PluggyException pluggyException) {
@@ -176,6 +186,19 @@ public class PluggyDataClient {
       }
       throw new PluggyException("Resposta inválida do provedor.", exception);
     }
+  }
+
+  private static String endpointKey(String path) {
+    if (path.startsWith("/items/")) {
+      return "items";
+    }
+    if (path.startsWith("/accounts")) {
+      return "accounts";
+    }
+    if (path.startsWith("/v2/transactions")) {
+      return "transactions";
+    }
+    return path;
   }
 
   private static Duration retryAfter(RestClientResponseException exception) {

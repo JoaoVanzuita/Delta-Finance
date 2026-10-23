@@ -137,4 +137,16 @@ public class PluggyIntegration extends BaseEntity {
     this.lastErrorCode = errorCode;
     this.status = newStatus;
   }
+
+  /** Registra falha temporária sem rebaixar o último estado conhecido. */
+  public void recordTransientError(String errorCode) {
+    this.lastErrorCode = errorCode;
+  }
+
+  /** Restaura o último estado conhecido após falha temporária. */
+  public void restoreStatus(IntegrationStatus previousStatus) {
+    if (previousStatus != null) {
+      this.status = previousStatus;
+    }
+  }
 }

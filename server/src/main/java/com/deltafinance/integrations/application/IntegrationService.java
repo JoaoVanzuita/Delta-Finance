@@ -54,6 +54,11 @@ public class IntegrationService {
     return view(integration);
   }
 
+  /** Visão da integração sem criar registro quando ainda não existe. */
+  public java.util.Optional<IntegrationView> findView(UUID userId) {
+    return integrationRepository.findMeuPluggy(userId).map(this::view);
+  }
+
   /**
    * Valida as credenciais no provedor e só então substitui as existentes.
    *

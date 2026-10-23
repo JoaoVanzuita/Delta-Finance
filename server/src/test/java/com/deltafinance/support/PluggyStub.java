@@ -6,8 +6,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -47,10 +49,15 @@ public final class PluggyStub {
       new ConcurrentHashMap<>();
   private final List<RecordedRequest> requests = new CopyOnWriteArrayList<>();
   private final List<String> dataApiKeys = new CopyOnWriteArrayList<>();
+  private final Set<String> validApiKeys = ConcurrentHashMap.newKeySet();
+  private final Map<String, Integer> failuresRemaining = new ConcurrentHashMap<>();
+  private final Map<String, Integer> failureStatus = new ConcurrentHashMap<>();
+  private final AtomicInteger authCalls = new AtomicInteger();
+  private volatile boolean rotateKeys;
   private final JsonMapper jsonMapper = JsonMapper.shared();
 
   private record ItemFixture(
-      String id, String institution, String status, Instant consentExpiresAt) {}
+      String id, String institution, String status, Instant consentExpiresAt, String errorCode) {}
 
   public PluggyStub() {
     try {
@@ -81,6 +88,11 @@ public final class PluggyStub {
     transactionsByAccount.clear();
     requests.clear();
     dataApiKeys.clear();
+    validApiKeys.clear();
+    failuresRemaining.clear();
+    failureStatus.clear();
+    authCalls.set(0);
+    rotateKeys = false;
   }
 
   public void registerClient(String clientId, String clientSecret) {
@@ -89,7 +101,44 @@ public final class PluggyStub {
 
   public void addItem(String itemId, String institution, String status) {
     items.put(
-        itemId, new ItemFixture(itemId, institution, status, Instant.now().plusSeconds(3600)));
+        itemId,
+        new ItemFixture(itemId, institution, status, Instant.now().plusSeconds(3600), null));
+  }
+
+  public void setItemStatus(String itemId, String status) {
+    updateItem(
+        itemId,
+        current ->
+            new ItemFixture(
+                current.id(),
+                current.institution(),
+                status,
+                current.consentExpiresAt(),
+                current.errorCode()));
+  }
+
+  public void setItemConsentExpiresAt(String itemId, Instant consentExpiresAt) {
+    updateItem(
+        itemId,
+        current ->
+            new ItemFixture(
+                current.id(),
+                current.institution(),
+                current.status(),
+                consentExpiresAt,
+                current.errorCode()));
+  }
+
+  public void setItemErrorCode(String itemId, String errorCode) {
+    updateItem(
+        itemId,
+        current ->
+            new ItemFixture(
+                current.id(),
+                current.institution(),
+                current.status(),
+                current.consentExpiresAt(),
+                errorCode));
   }
 
   public void addAccount(String itemId, AccountFixture account) {
@@ -102,12 +151,67 @@ public final class PluggyStub {
         .add(transaction);
   }
 
+  public void setTransactions(String accountId, List<TransactionFixture> transactions) {
+    transactionsByAccount.put(accountId, new CopyOnWriteArrayList<>(transactions));
+  }
+
+  public void removeTransaction(String accountId, String externalId) {
+    List<TransactionFixture> current = transactionsByAccount.getOrDefault(accountId, List.of());
+    transactionsByAccount.put(
+        accountId,
+        new CopyOnWriteArrayList<>(
+            current.stream().filter(item -> !item.externalId().equals(externalId)).toList()));
+  }
+
+  public void updateTransactionStatus(String accountId, String externalId, String status) {
+    List<TransactionFixture> current = transactionsByAccount.getOrDefault(accountId, List.of());
+    List<TransactionFixture> updated = new ArrayList<>();
+    for (TransactionFixture item : current) {
+      updated.add(
+          item.externalId().equals(externalId)
+              ? new TransactionFixture(
+                  item.externalId(),
+                  item.accountId(),
+                  item.description(),
+                  item.amount(),
+                  item.date(),
+                  status,
+                  item.category())
+              : item);
+    }
+    setTransactions(accountId, updated);
+  }
+
+  /** Faz as próximas chamadas a um prefixo falharem com o status informado. */
+  public void failPath(String pathPrefix, int status, int times) {
+    failuresRemaining.put(pathPrefix, times);
+    failureStatus.put(pathPrefix, status);
+  }
+
+  /** Faz o provedor emitir uma nova API Key a cada POST /auth. */
+  public void rotateKeys(boolean enabled) {
+    this.rotateKeys = enabled;
+  }
+
+  /** Invalida as API Keys emitidas; a próxima chamada de dados recebe 401. */
+  public void invalidateApiKeys() {
+    validApiKeys.clear();
+  }
+
+  public int authCalls() {
+    return authCalls.get();
+  }
+
   public List<String> dataApiKeys() {
     return List.copyOf(dataApiKeys);
   }
 
   public List<RecordedRequest> requests() {
     return List.copyOf(requests);
+  }
+
+  private void updateItem(String itemId, java.util.function.UnaryOperator<ItemFixture> update) {
+    items.computeIfPresent(itemId, (key, current) -> update.apply(current));
   }
 
   private final class StubDispatcher extends Dispatcher {
@@ -120,8 +224,16 @@ public final class PluggyStub {
         dataApiKeys.add(apiKey);
       }
 
+      MockResponse failure = failure(path);
+      if (failure != null) {
+        return failure;
+      }
+
       if (path.startsWith("/auth")) {
         return auth(request);
+      }
+      if (requiresApiKey(path) && (apiKey == null || !validApiKeys.contains(apiKey))) {
+        return response(401, Map.of("message", "invalid api key"));
       }
       if (path.startsWith("/items/")) {
         return item(path.substring("/items/".length()));
@@ -135,7 +247,25 @@ public final class PluggyStub {
       return response(404, Map.of("message", "not found"));
     }
 
+    private MockResponse failure(String path) {
+      for (Map.Entry<String, Integer> entry : failuresRemaining.entrySet()) {
+        if (path.startsWith(entry.getKey()) && entry.getValue() > 0) {
+          failuresRemaining.computeIfPresent(entry.getKey(), (key, remaining) -> remaining - 1);
+          int status = failureStatus.getOrDefault(entry.getKey(), 500);
+          return response(status, Map.of("message", "injected failure"));
+        }
+      }
+      return null;
+    }
+
+    private boolean requiresApiKey(String path) {
+      return path.startsWith("/items/")
+          || path.startsWith("/accounts")
+          || path.startsWith("/v2/transactions");
+    }
+
     private MockResponse auth(RecordedRequest request) {
+      authCalls.incrementAndGet();
       String body = request.getBody().readUtf8();
       try {
         var node = jsonMapper.readTree(body);
@@ -144,7 +274,9 @@ public final class PluggyStub {
         if (clientId == null || secret == null || !secret.equals(clients.get(clientId))) {
           return response(401, Map.of("message", "invalid credentials"));
         }
-        return response(200, Map.of("apiKey", "key-" + clientId));
+        String apiKey = rotateKeys ? "key-" + clientId + "-" + authCalls.get() : "key-" + clientId;
+        validApiKeys.add(apiKey);
+        return response(200, Map.of("apiKey", apiKey));
       } catch (RuntimeException exception) {
         return response(400, Map.of("message", "bad request"));
       }
@@ -162,6 +294,9 @@ public final class PluggyStub {
       body.put("lastUpdatedAt", Instant.now().toString());
       body.put("nextAutoSyncAt", Instant.now().plusSeconds(3600).toString());
       body.put("connector", Map.of("name", item.institution()));
+      if (item.errorCode() != null) {
+        body.put("error", Map.of("code", item.errorCode()));
+      }
       return response(200, body);
     }
 

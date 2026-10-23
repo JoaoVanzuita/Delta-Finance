@@ -3,12 +3,17 @@ package com.deltafinance.transactions.api;
 import com.deltafinance.security.AuthenticatedUser;
 import com.deltafinance.shared.pagination.CursorPage;
 import com.deltafinance.shared.pagination.PageRequest;
+import com.deltafinance.transactions.application.SourceRemovalReviewService;
 import com.deltafinance.transactions.application.TransactionQueryService;
 import com.deltafinance.transactions.application.TransactionView;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,11 +23,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class TransactionController {
 
   private final TransactionQueryService queryService;
+  private final SourceRemovalReviewService sourceRemovalReviewService;
   private final AuthenticatedUser authenticatedUser;
 
   public TransactionController(
-      TransactionQueryService queryService, AuthenticatedUser authenticatedUser) {
+      TransactionQueryService queryService,
+      SourceRemovalReviewService sourceRemovalReviewService,
+      AuthenticatedUser authenticatedUser) {
     this.queryService = queryService;
+    this.sourceRemovalReviewService = sourceRemovalReviewService;
     this.authenticatedUser = authenticatedUser;
   }
 
@@ -52,5 +61,13 @@ public class TransactionController {
         page.items().stream().map(TransactionResponse::from).toList(),
         page.nextCursor(),
         page.hasMore());
+  }
+
+  /** Revisão explícita de uma transação removida na origem (RESTORE/CONFIRM_REMOVAL). */
+  @PostMapping("/{id}/source-removal")
+  public TransactionResponse reviewSourceRemoval(
+      @PathVariable UUID id, @Valid @RequestBody SourceRemovalReviewRequest request) {
+    return TransactionResponse.from(
+        sourceRemovalReviewService.review(authenticatedUser.requireId(), id, request.action()));
   }
 }

@@ -145,10 +145,42 @@ public class PluggyConnection extends BaseEntity {
     }
   }
 
+  /** Sinaliza início de leitura sem alterar a data da última sincronização bem-sucedida. */
+  public void markSyncing() {
+    if (this.status != ConnectionStatus.AUTHORIZATION_EXPIRED
+        && this.status != ConnectionStatus.ACTION_REQUIRED
+        && this.status != ConnectionStatus.CREDENTIAL_FAILURE) {
+      this.status = ConnectionStatus.SYNCING;
+    }
+  }
+
+  /** Atualiza metadados fornecidos pelo item durante uma leitura bem-sucedida. */
+  public void updateProviderMetadata(
+      byte[] institutionNameEnc, Instant consentExpiresAt, Instant nextAutoSyncAt) {
+    if (institutionNameEnc != null) {
+      this.institutionNameEnc = institutionNameEnc;
+    }
+    this.consentExpiresAt = consentExpiresAt;
+    this.nextAutoSyncAt = nextAutoSyncAt;
+  }
+
   public void recordError(String errorCode, ConnectionStatus newStatus) {
     this.lastErrorCode = errorCode;
     this.status = newStatus;
     this.consecutiveFailures++;
+  }
+
+  /** Registra falha temporária sem rebaixar o último estado conhecido. */
+  public void recordTransientError(String errorCode, Instant at) {
+    this.lastErrorCode = errorCode;
+    this.consecutiveFailures++;
+  }
+
+  /** Restaura o último estado conhecido após falha temporária. */
+  public void restoreStatus(ConnectionStatus previousStatus) {
+    if (previousStatus != null) {
+      this.status = previousStatus;
+    }
   }
 
   /** Remove a credencial de acesso (itemId) sem apagar o histórico local. */

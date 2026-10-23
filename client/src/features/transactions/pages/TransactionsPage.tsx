@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api/problem'
 
 import { formatMoney } from '@/features/accounts/format'
 import { financeApi, type Transaction } from '@/features/integration/api'
+import { SourceRemovedReview } from '@/features/transactions/components/SourceRemovedReview'
 
 const statusLabels: Record<string, string> = {
   PENDING: 'Pendente',
@@ -226,6 +227,7 @@ export function TransactionsPage() {
                       </span>
                     ) : null}
                   </div>
+                  <SourceRemovedReview transaction={transaction} />
                 </div>
                 <p
                   className={[

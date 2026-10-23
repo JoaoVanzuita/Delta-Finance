@@ -1,0 +1,10 @@
+# Perfil de testes automatizados.
+#
+# O scheduler é desligado para tornar os testes determinísticos; os próprios
+# testes chamam SyncJobService/SyncScheduler quando precisam exercitar a fila.
+delta:
+  sync:
+    scheduler-enabled: false
+    jitter: 0s
+  pluggy:
+    webhooks-enabled: false

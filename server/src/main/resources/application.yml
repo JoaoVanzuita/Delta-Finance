@@ -4,6 +4,14 @@ spring:
   profiles:
     default: local
 
+  task:
+    scheduling:
+      pool:
+        size: 2
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
+
   datasource:
     url: jdbc:postgresql://${DELTA_DB_HOST:localhost}:${DELTA_DB_PORT:5432}/${DELTA_DB_NAME:delta_finance}
     username: ${DELTA_DB_USER:delta}
@@ -97,6 +105,19 @@ delta:
     connection-limit-checked-at: ${DELTA_PLUGGY_CONNECTION_LIMIT_CHECKED_AT:2026-10-22}
     webhooks-enabled: ${DELTA_PLUGGY_WEBHOOKS_ENABLED:false}
     request-timeout: 30s
+  sync:
+    initial-window-months: ${DELTA_SYNC_INITIAL_WINDOW_MONTHS:12}
+    daily-window-days: ${DELTA_SYNC_DAILY_WINDOW_DAYS:7}
+    reconciliation-window-months: ${DELTA_SYNC_RECONCILIATION_WINDOW_MONTHS:12}
+    reconciliation-day-of-month: ${DELTA_SYNC_RECONCILIATION_DAY:1}
+    scheduler-enabled: ${DELTA_SYNC_SCHEDULER_ENABLED:true}
+    scheduler-interval: ${DELTA_SYNC_SCHEDULER_INTERVAL:1m}
+    initial-delay: ${DELTA_SYNC_INITIAL_DELAY:30s}
+    jitter: ${DELTA_SYNC_JITTER:60s}
+    max-attempts: ${DELTA_SYNC_MAX_ATTEMPTS:5}
+    retry-base: ${DELTA_SYNC_RETRY_BASE:30s}
+    retry-max: ${DELTA_SYNC_RETRY_MAX:1h}
+    batch-size: ${DELTA_SYNC_BATCH_SIZE:10}
   security:
     sessions:
       absolute-timeout: 12h

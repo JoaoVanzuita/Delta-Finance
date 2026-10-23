@@ -85,6 +85,10 @@ public final class AuthTestClient {
     return mockMvc.perform(withBody(withCookies(request(HttpMethod.PUT, path)), body));
   }
 
+  public ResultActions patch(String path, Object body) throws Exception {
+    return mockMvc.perform(withBody(withCookies(request(HttpMethod.PATCH, path)), body));
+  }
+
   public ResultActions delete(String path) throws Exception {
     return mockMvc.perform(withCookies(request(HttpMethod.DELETE, path)));
   }

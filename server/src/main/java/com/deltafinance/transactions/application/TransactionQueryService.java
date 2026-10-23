@@ -73,6 +73,14 @@ public class TransactionQueryService {
     return hasMore ? CursorPage.of(views, nextCursor) : CursorPage.last(views);
   }
 
+  /** Retorna uma transação do usuário ou lança 404. */
+  public TransactionView get(UUID userId, UUID transactionId) {
+    return transactionRepository
+        .findByIdAndUserId(transactionId, userId)
+        .map(this::toView)
+        .orElseThrow(com.deltafinance.shared.errors.NotFoundException::new);
+  }
+
   private TransactionView toView(Transaction transaction) {
     String categoryName = null;
     if (transaction.getCategoryId() != null) {

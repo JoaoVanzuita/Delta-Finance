@@ -188,30 +188,30 @@ preservação do histórico e ausência de duplicação.
 
 ### Tests for User Story 3
 
-- [ ] T071 [P] [US3] Contract + integration test de idempotência e concorrência de jobs em `server/src/test/java/com/deltafinance/integration/SyncJobIT.java`.
-- [ ] T072 [P] [US3] Integration test de falhas, lista vazia, preservação de histórico, `SOURCE_REMOVED`, `CONFIRM_REMOVAL`, `RESTORE` via `POST /transactions/{id}/source-removal`, remoção de item e `PENDING`→`POSTED` sem duplicação em `server/src/test/java/com/deltafinance/integration/SyncRecoveryIT.java`.
-- [ ] T073 [P] [US3] Integration test de mudança de itemId e reconciliação em `server/src/test/java/com/deltafinance/integration/ItemIdChangeIT.java`.
-- [ ] T074 [P] [US3] Teste de webhook duplicado/replay e mapeamento por itemId em `server/src/test/java/com/deltafinance/api/PluggyWebhookTest.java`.
-- [ ] T194 [P] [US3] Teste de ciclo de vida de credenciais: API Key expirada no meio da sincronização, renovação via `POST /auth` no servidor e atualização do cache por `integrationId` sem expor a chave; expiração anual da autorização da aplicação (`USER_AUTHORIZATION_EXPIRED`) distinta da expiração do consentimento bancário individual (`consentExpiresAt`), com histórico preservado e ação exigida, em `server/src/test/java/com/deltafinance/integration/CredentialLifecycleIT.java`.
-- [ ] T075 [P] [US3] Teste de estados de sincronização no frontend em `client/src/features/integration/__tests__/SyncStatus.test.tsx`.
+- [X] T071 [P] [US3] Contract + integration test de idempotência e concorrência de jobs em `server/src/test/java/com/deltafinance/integration/SyncJobIT.java`.
+- [X] T072 [P] [US3] Integration test de falhas, lista vazia, preservação de histórico, `SOURCE_REMOVED`, `CONFIRM_REMOVAL`, `RESTORE` via `POST /transactions/{id}/source-removal`, remoção de item e `PENDING`→`POSTED` sem duplicação em `server/src/test/java/com/deltafinance/integration/SyncRecoveryIT.java`.
+- [X] T073 [P] [US3] Integration test de mudança de itemId e reconciliação em `server/src/test/java/com/deltafinance/integration/ItemIdChangeIT.java`.
+- [X] T074 [P] [US3] Teste de webhook duplicado/replay e mapeamento por itemId em `server/src/test/java/com/deltafinance/api/PluggyWebhookTest.java`.
+- [X] T194 [P] [US3] Teste de ciclo de vida de credenciais: API Key expirada no meio da sincronização, renovação via `POST /auth` no servidor e atualização do cache por `integrationId` sem expor a chave; expiração anual da autorização da aplicação (`USER_AUTHORIZATION_EXPIRED`) distinta da expiração do consentimento bancário individual (`consentExpiresAt`), com histórico preservado e ação exigida, em `server/src/test/java/com/deltafinance/integration/CredentialLifecycleIT.java`.
+- [X] T075 [P] [US3] Teste de estados de sincronização no frontend em `client/src/features/integration/__tests__/SyncStatus.test.tsx`.
 
 ### Implementation for User Story 3
 
-- [ ] T076 [US3] Criar a migração `V004__sync_webhooks.sql` para `sync_job`, `sync_run`, `webhook_subscription` e `webhook_event` em `server/src/main/resources/db/migration/V004__sync_webhooks.sql`.
-- [ ] T077 [P] [US3] Implementar `SyncJob`/`SyncRun` e repositórios em `server/src/main/java/com/deltafinance/connections/domain/SyncJob.java`, `SyncRun.java` e repositórios.
-- [ ] T078 [P] [US3] Implementar `WebhookSubscription`/`WebhookEvent` e repositórios em `server/src/main/java/com/deltafinance/integrations/domain/WebhookSubscription.java`, `WebhookEvent.java` e repositórios.
-- [ ] T079 [US3] Implementar `SyncJobService` com `FOR UPDATE SKIP LOCKED`, retries, backoff e locks por integração em `server/src/main/java/com/deltafinance/connections/application/SyncJobService.java`.
-- [ ] T080 [US3] Implementar `PluggySyncService` com janela diária de 7 dias, importação inicial e reconciliação mensal de 12 meses, com janelas configuráveis e documentadas, em `server/src/main/java/com/deltafinance/connections/application/PluggySyncService.java`.
-- [ ] T081 [US3] Implementar a máquina de estados e o mapeamento de erros (`USER_AUTHORIZATION_EXPIRED`, `LOGIN_ERROR`, `429`, timeout e vazio), distinguindo autorização da aplicação de consentimento bancário independente, em `server/src/main/java/com/deltafinance/connections/application/SyncStateService.java`.
-- [ ] T082 [US3] Implementar reconciliação de itemId sem perda histórica em `server/src/main/java/com/deltafinance/connections/application/ItemReconciliationService.java`.
-- [ ] T083 [US3] Implementar `SyncController` para status, histórico e consulta de dados disponíveis em `server/src/main/java/com/deltafinance/connections/api/SyncController.java`.
-- [ ] T192 [US3] Implementar revisão explícita de transações `SOURCE_REMOVED` via `POST /transactions/{id}/source-removal`, com ações de restaurar/confirmar remoção e histórico preservado, em `server/src/main/java/com/deltafinance/transactions/application/SourceRemovalReviewService.java` e `client/src/features/transactions/components/SourceRemovedReview.tsx`.
-- [ ] T084 [US3] Implementar o endpoint opcional de webhook com segredo, `eventId` idempotente e resposta 202 em `server/src/main/java/com/deltafinance/integrations/api/PluggyWebhookController.java`.
-- [ ] T085 [US3] Implementar registro de webhook por integração atrás de feature flag em `server/src/main/java/com/deltafinance/integrations/application/WebhookService.java`.
-- [ ] T086 [US3] Implementar rate limiter e backoff por endpoint Pluggy em `server/src/main/java/com/deltafinance/integrations/infrastructure/PluggyRateLimiter.java`.
-- [ ] T087 [US3] Implementar scheduler com jitter e graceful shutdown em `server/src/main/java/com/deltafinance/connections/application/SyncScheduler.java`.
-- [ ] T088 [US3] Implementar painel de status, lista de conexões e ações no frontend em `client/src/features/integration/components/SyncStatusPanel.tsx` e `ConnectionsList.tsx`, dentro da página única `/settings/integration`.
-- [ ] T089 [US3] Adicionar métricas, auditoria e logs sanitizados de sincronização em `server/src/main/java/com/deltafinance/connections/application/SyncMetrics.java` e `server/src/main/java/com/deltafinance/shared/audit/AuditService.java`.
+- [X] T076 [US3] Criar a migração `V004__sync_webhooks.sql` para `sync_job`, `sync_run`, `webhook_subscription` e `webhook_event` em `server/src/main/resources/db/migration/V004__sync_webhooks.sql`.
+- [X] T077 [P] [US3] Implementar `SyncJob`/`SyncRun` e repositórios em `server/src/main/java/com/deltafinance/connections/domain/SyncJob.java`, `SyncRun.java` e repositórios.
+- [X] T078 [P] [US3] Implementar `WebhookSubscription`/`WebhookEvent` e repositórios em `server/src/main/java/com/deltafinance/integrations/domain/WebhookSubscription.java`, `WebhookEvent.java` e repositórios.
+- [X] T079 [US3] Implementar `SyncJobService` com `FOR UPDATE SKIP LOCKED`, retries, backoff e locks por integração em `server/src/main/java/com/deltafinance/connections/application/SyncJobService.java`.
+- [X] T080 [US3] Implementar `PluggySyncService` com janela diária de 7 dias, importação inicial e reconciliação mensal de 12 meses, com janelas configuráveis e documentadas, em `server/src/main/java/com/deltafinance/connections/application/PluggySyncService.java`.
+- [X] T081 [US3] Implementar a máquina de estados e o mapeamento de erros (`USER_AUTHORIZATION_EXPIRED`, `LOGIN_ERROR`, `429`, timeout e vazio), distinguindo autorização da aplicação de consentimento bancário independente, em `server/src/main/java/com/deltafinance/connections/application/SyncStateService.java`.
+- [X] T082 [US3] Implementar reconciliação de itemId sem perda histórica em `server/src/main/java/com/deltafinance/connections/application/ItemReconciliationService.java`.
+- [X] T083 [US3] Implementar `SyncController` para status, histórico e consulta de dados disponíveis em `server/src/main/java/com/deltafinance/connections/api/SyncController.java`.
+- [X] T192 [US3] Implementar revisão explícita de transações `SOURCE_REMOVED` via `POST /transactions/{id}/source-removal`, com ações de restaurar/confirmar remoção e histórico preservado, em `server/src/main/java/com/deltafinance/transactions/application/SourceRemovalReviewService.java` e `client/src/features/transactions/components/SourceRemovedReview.tsx`.
+- [X] T084 [US3] Implementar o endpoint opcional de webhook com segredo, `eventId` idempotente e resposta 202 em `server/src/main/java/com/deltafinance/integrations/api/PluggyWebhookController.java`.
+- [X] T085 [US3] Implementar registro de webhook por integração atrás de feature flag em `server/src/main/java/com/deltafinance/integrations/application/WebhookService.java`.
+- [X] T086 [US3] Implementar rate limiter e backoff por endpoint Pluggy em `server/src/main/java/com/deltafinance/integrations/infrastructure/PluggyRateLimiter.java`.
+- [X] T087 [US3] Implementar scheduler com jitter e graceful shutdown em `server/src/main/java/com/deltafinance/connections/application/SyncScheduler.java`.
+- [X] T088 [US3] Implementar painel de status, lista de conexões e ações no frontend em `client/src/features/integration/components/SyncStatusPanel.tsx` e `ConnectionsList.tsx`, dentro da página única `/settings/integration`.
+- [X] T089 [US3] Adicionar métricas, auditoria e logs sanitizados de sincronização em `server/src/main/java/com/deltafinance/connections/application/SyncMetrics.java` e `server/src/main/java/com/deltafinance/shared/audit/AuditService.java`.
 
 **Checkpoint**: US3 funcional; sincronizações repetidas não duplicam, falhas não
 apagam histórico e a reconexão preserva dados.

@@ -5,6 +5,10 @@ export type Integration = components['schemas']['Integration']
 export type ValidationResult = components['schemas']['ValidationResult']
 export type Connection = components['schemas']['Connection']
 export type ConnectionPage = components['schemas']['ConnectionPage']
+export type SyncStatus = components['schemas']['SyncStatus']
+export type SyncRun = components['schemas']['SyncRun']
+export type SyncRunPage = components['schemas']['SyncRunPage']
+export type SyncAccepted = components['schemas']['SyncAccepted']
 export type Account = components['schemas']['Account']
 export type AccountList = components['schemas']['AccountList']
 export type Transaction = components['schemas']['Transaction']
@@ -49,7 +53,20 @@ export const financeApi = {
 
   connections: () => api.get<ConnectionPage>('/connections'),
   addConnection: (itemId: string) => api.post<Connection>('/connections', { itemId }),
+  updateConnection: (id: string, itemId: string) =>
+    api.patch<Connection>(`/connections/${id}`, { itemId }),
   removeConnection: (id: string) => api.delete<void>(`/connections/${id}`),
+  syncConnection: (id: string) => api.post<SyncAccepted>(`/connections/${id}/sync`),
+
+  syncStatus: () => api.get<SyncStatus>('/sync/status'),
+  syncRuns: (cursor?: string, limit = 20) => {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (cursor) params.set('cursor', cursor)
+    return api.get<SyncRunPage>(`/sync/runs?${params.toString()}`)
+  },
+
+  reviewSourceRemoval: (transactionId: string, action: 'RESTORE' | 'CONFIRM_REMOVAL') =>
+    api.post<Transaction>(`/transactions/${transactionId}/source-removal`, { action }),
 
   accounts: () => api.get<AccountList>('/accounts'),
   account: (id: string) => api.get<Account>(`/accounts/${id}`),

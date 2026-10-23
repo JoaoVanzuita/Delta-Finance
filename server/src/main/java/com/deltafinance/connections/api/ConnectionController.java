@@ -1,6 +1,7 @@
 package com.deltafinance.connections.api;
 
 import com.deltafinance.connections.application.ConnectionService;
+import com.deltafinance.connections.application.SyncJobService;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -20,11 +21,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConnectionController {
 
   private final ConnectionService connectionService;
+  private final SyncJobService syncJobService;
   private final AuthenticatedUser authenticatedUser;
 
   public ConnectionController(
-      ConnectionService connectionService, AuthenticatedUser authenticatedUser) {
+      ConnectionService connectionService,
+      SyncJobService syncJobService,
+      AuthenticatedUser authenticatedUser) {
     this.connectionService = connectionService;
+    this.syncJobService = syncJobService;
     this.authenticatedUser = authenticatedUser;
   }
 
@@ -54,5 +59,18 @@ public class ConnectionController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void remove(@PathVariable UUID id) {
     connectionService.remove(authenticatedUser.requireId(), id);
+  }
+
+  /**
+   * Consulta os dados já disponíveis agora.
+   *
+   * <p>Não força atualização na instituição de origem; apenas enfileira a leitura e a
+   * reconciliação.
+   */
+  @PostMapping("/{id}/sync")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public SyncAcceptedResponse sync(@PathVariable UUID id) {
+    return SyncAcceptedResponse.queued(
+        syncJobService.enqueueAvailableData(authenticatedUser.requireId(), id));
   }
 }

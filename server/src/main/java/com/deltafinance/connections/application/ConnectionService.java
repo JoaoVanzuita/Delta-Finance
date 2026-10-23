@@ -53,6 +53,7 @@ public class ConnectionService {
   private final CryptoService cryptoService;
   private final IndexHmacService hmacService;
   private final AuditService auditService;
+  private final ItemReconciliationService itemReconciliationService;
   private final Clock clock;
 
   public ConnectionService(
@@ -67,6 +68,7 @@ public class ConnectionService {
       CryptoService cryptoService,
       IndexHmacService hmacService,
       AuditService auditService,
+      ItemReconciliationService itemReconciliationService,
       Clock clock) {
     this.connectionRepository = connectionRepository;
     this.integrationService = integrationService;
@@ -79,6 +81,7 @@ public class ConnectionService {
     this.cryptoService = cryptoService;
     this.hmacService = hmacService;
     this.auditService = auditService;
+    this.itemReconciliationService = itemReconciliationService;
     this.clock = clock;
   }
 
@@ -161,41 +164,7 @@ public class ConnectionService {
   }
 
   public ConnectionView updateItemId(UUID userId, UUID connectionId, String itemId) {
-    String normalizedItemId = requireItemId(itemId);
-    PluggyConnection connection =
-        connectionRepository
-            .findByIdAndUserId(connectionId, userId)
-            .orElseThrow(NotFoundException::new);
-    PluggyIntegration integration = integrationService.requireIntegration(userId);
-    byte[] itemHash = hmacService.externalIdHash("pluggy", normalizedItemId);
-    connectionRepository
-        .findByIntegrationIdAndExternalItemIdHash(integration.getId(), itemHash)
-        .filter(other -> !other.getId().equals(connection.getId()))
-        .ifPresent(
-            other -> {
-              throw new ConflictException(
-                  ErrorCode.ITEM_ALREADY_CONNECTED, "Este item já está conectado.");
-            });
-
-    PluggyModels.PluggyItem item = fetchItem(integration, normalizedItemId);
-    byte[] itemEnc =
-        cryptoService.encrypt(
-            normalizedItemId,
-            new CryptoContext(userId, CONNECTION_TABLE, ITEM_ID_COLUMN, connection.getId()));
-    byte[] institutionEnc =
-        item.institutionName() == null || item.institutionName().isBlank()
-            ? null
-            : cryptoService.encrypt(
-                item.institutionName(),
-                new CryptoContext(
-                    userId, CONNECTION_TABLE, "institution_name", connection.getId()));
-    connection.updateItemId(itemEnc, itemHash, institutionEnc);
-    connectionRepository.save(connection);
-
-    accountImportService.importAccounts(integration, connection.getId(), normalizedItemId);
-    transactionImportService.importInitial(integration, connection.getId());
-    connection.recordSync(clock.now(), ConnectionStatus.SYNCED);
-    connectionRepository.save(connection);
+    PluggyConnection connection = itemReconciliationService.reconcile(userId, connectionId, itemId);
     return toView(connection);
   }
 
