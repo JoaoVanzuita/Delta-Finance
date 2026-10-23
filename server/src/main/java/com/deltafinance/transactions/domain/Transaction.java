@@ -81,6 +81,9 @@ public class Transaction extends BaseEntity {
   @Column(name = "related_transaction_id")
   private UUID relatedTransactionId;
 
+  @Column(name = "invoice_id")
+  private UUID invoiceId;
+
   @Column(name = "adjustment_reason_enc", columnDefinition = "bytea")
   private byte[] adjustmentReasonEnc;
 
@@ -258,6 +261,14 @@ public class Transaction extends BaseEntity {
 
   public UUID getRelatedTransactionId() {
     return relatedTransactionId;
+  }
+
+  public UUID getInvoiceId() {
+    return invoiceId;
+  }
+
+  public void setInvoiceId(UUID invoiceId) {
+    this.invoiceId = invoiceId;
   }
 
   public byte[] getAdjustmentReasonEnc() {

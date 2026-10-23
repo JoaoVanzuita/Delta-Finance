@@ -4,6 +4,8 @@ import { AccountDetailPage } from '@/features/accounts/pages/AccountDetailPage'
 import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
 import { ManualAccountPage } from '@/features/accounts/pages/ManualAccountPage'
 import { CategoriesPage } from '@/features/categories/pages/CategoriesPage'
+import { InvoiceDetailPage } from '@/features/invoices/pages/InvoiceDetailPage'
+import { InvoicesPage } from '@/features/invoices/pages/InvoicesPage'
 import { ReconciliationPage } from '@/features/reconciliation/pages/ReconciliationPage'
 import { ManualEntryPage } from '@/features/transactions/pages/ManualEntryPage'
 import { AccountSettingsPage } from '@/features/auth/pages/AccountSettingsPage'
@@ -102,6 +104,22 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <ReconciliationPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'cards/:accountId/invoices',
+        element: (
+          <ProtectedRoute>
+            <InvoicesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'invoices/:id',
+        element: (
+          <ProtectedRoute>
+            <InvoiceDetailPage />
           </ProtectedRoute>
         ),
       },

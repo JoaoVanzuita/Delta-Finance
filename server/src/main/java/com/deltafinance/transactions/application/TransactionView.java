@@ -22,4 +22,5 @@ public record TransactionView(
     String notes,
     String adjustmentReason,
     UUID relatedTransactionId,
-    UUID counterpartTransactionId) {}
+    UUID counterpartTransactionId,
+    UUID invoiceId) {}

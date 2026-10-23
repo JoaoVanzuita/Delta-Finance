@@ -22,7 +22,8 @@ public record TransactionResponse(
     String notes,
     String adjustmentReason,
     UUID relatedTransactionId,
-    UUID counterpartTransactionId) {
+    UUID counterpartTransactionId,
+    UUID invoiceId) {
 
   public static TransactionResponse from(TransactionView view) {
     return new TransactionResponse(
@@ -42,6 +43,7 @@ public record TransactionResponse(
         view.notes(),
         view.adjustmentReason(),
         view.relatedTransactionId(),
-        view.counterpartTransactionId());
+        view.counterpartTransactionId(),
+        view.invoiceId());
   }
 }

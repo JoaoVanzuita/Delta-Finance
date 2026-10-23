@@ -138,7 +138,8 @@ public class TransactionQueryService {
             : transaction.getRelatedTransactionId(),
         transaction.getType() == TransactionType.TRANSFER
             ? transaction.getRelatedTransactionId()
-            : null);
+            : null,
+        transaction.getInvoiceId());
   }
 
   private String decrypt(UUID userId, String table, String column, UUID recordId, byte[] value) {

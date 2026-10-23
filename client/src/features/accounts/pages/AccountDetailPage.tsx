@@ -114,6 +114,14 @@ export function AccountDetailPage() {
         >
           Ver transações desta conta
         </Link>
+        {account.type === 'CREDIT' ? (
+          <Link
+            to={`/cards/${account.id}/invoices`}
+            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+          >
+            Ver faturas
+          </Link>
+        ) : null}
         {account.origin === 'MANUAL' ? (
           <Link
             to={`/accounts/${account.id}/edit`}
