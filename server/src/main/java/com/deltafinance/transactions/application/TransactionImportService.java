@@ -1,0 +1,370 @@
+package com.deltafinance.transactions.application;
+
+import com.deltafinance.accounts.domain.FinancialAccount;
+import com.deltafinance.accounts.domain.FinancialAccountRepository;
+import com.deltafinance.categories.domain.Category;
+import com.deltafinance.categories.domain.CategoryKind;
+import com.deltafinance.categories.domain.CategoryRepository;
+import com.deltafinance.integrations.domain.PluggyIntegration;
+import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
+import com.deltafinance.integrations.infrastructure.PluggyDataClient;
+import com.deltafinance.integrations.infrastructure.PluggyModels;
+import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
+import com.deltafinance.shared.crypto.CryptoContext;
+import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.IndexHmacService;
+import com.deltafinance.shared.time.Clock;
+import com.deltafinance.transactions.domain.ExternalIdentityHistory;
+import com.deltafinance.transactions.domain.ExternalIdentityHistoryRepository;
+import com.deltafinance.transactions.domain.ReconciliationState;
+import com.deltafinance.transactions.domain.Transaction;
+import com.deltafinance.transactions.domain.TransactionRepository;
+import com.deltafinance.transactions.domain.TransactionSource;
+import com.deltafinance.transactions.domain.TransactionStatus;
+import com.deltafinance.transactions.domain.TransactionType;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.Normalizer;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+
+/**
+ * Importa transações com idempotência.
+ *
+ * <p>Dedup por HMAC(provider, connection, account, externalId); quando o ID externo muda, a
+ * reconciliação por fingerprint evita duplicar a despesa e registra o novo ID em {@code
+ * external_identity_history}. {@code PENDING→POSTED} atualiza o mesmo registro.
+ */
+@Service
+public class TransactionImportService {
+
+  private static final String TABLE = "transaction";
+  private static final String SOURCE = "PLUGGY";
+  private static final int MONTHS_INITIAL = 12;
+  private static final int REFUND_WINDOW_DAYS = 90;
+
+  private final TransactionRepository transactionRepository;
+  private final FinancialAccountRepository accountRepository;
+  private final CategoryRepository categoryRepository;
+  private final ExternalIdentityHistoryRepository identityRepository;
+  private final PluggyAuthClient authClient;
+  private final PluggyDataClient dataClient;
+  private final CryptoService cryptoService;
+  private final IndexHmacService hmacService;
+  private final Clock clock;
+
+  public TransactionImportService(
+      TransactionRepository transactionRepository,
+      FinancialAccountRepository accountRepository,
+      CategoryRepository categoryRepository,
+      ExternalIdentityHistoryRepository identityRepository,
+      PluggyAuthClient authClient,
+      PluggyDataClient dataClient,
+      CryptoService cryptoService,
+      IndexHmacService hmacService,
+      Clock clock) {
+    this.transactionRepository = transactionRepository;
+    this.accountRepository = accountRepository;
+    this.categoryRepository = categoryRepository;
+    this.identityRepository = identityRepository;
+    this.authClient = authClient;
+    this.dataClient = dataClient;
+    this.cryptoService = cryptoService;
+    this.hmacService = hmacService;
+    this.clock = clock;
+  }
+
+  /** Importação inicial de 12 meses por conta da conexão. */
+  public int importInitial(PluggyIntegration integration, UUID connectionId) {
+    LocalDate from = clock.today().minusMonths(MONTHS_INITIAL);
+    List<FinancialAccount> accounts =
+        accountRepository.findByConnectionIdOrderByCreatedAtAsc(connectionId);
+    int imported = 0;
+    for (FinancialAccount account : accounts) {
+      String externalAccountId = decryptAccountId(account);
+      String apiKey = authClient.getApiKey(integration);
+      PluggyModels.PluggyTransactionPage page;
+      try {
+        page = dataClient.listTransactions(apiKey, externalAccountId, from, null);
+      } catch (PluggyUnauthorizedException exception) {
+        apiKey = authClient.refreshApiKey(integration);
+        page = dataClient.listTransactions(apiKey, externalAccountId, from, null);
+      }
+      for (PluggyModels.PluggyTransaction transaction : page.items()) {
+        upsert(integration.getUserId(), connectionId, account, externalAccountId, transaction);
+        imported++;
+      }
+    }
+    return imported;
+  }
+
+  private void upsert(
+      UUID userId,
+      UUID connectionId,
+      FinancialAccount account,
+      String externalAccountId,
+      PluggyModels.PluggyTransaction imported) {
+    if (imported.externalId() == null || imported.externalId().isBlank()) {
+      return;
+    }
+    BigDecimal amount = imported.amount() == null ? BigDecimal.ZERO : imported.amount();
+    String description = imported.description() == null ? "" : imported.description();
+    LocalDate postedOn = imported.date() == null ? clock.today() : imported.date();
+    TransactionStatus status = mapStatus(imported.status());
+    TransactionType type = mapType(amount, description);
+    byte[] dedupKey =
+        hmacService.dedupKey(SOURCE, connectionId, externalAccountId, imported.externalId());
+    byte[] fingerprint =
+        hmacService.fingerprint(
+            account.getId().toString(),
+            amount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
+            postedOn.toString(),
+            normalize(description),
+            installmentMetadata(imported.creditCardMetadata()));
+
+    Transaction transaction =
+        transactionRepository
+            .findByUserIdAndDedupKey(userId, dedupKey)
+            .or(
+                () ->
+                    transactionRepository.findFirstByUserIdAndAccountIdAndFingerprint(
+                        userId, account.getId(), fingerprint))
+            .orElse(null);
+
+    UUID categoryId =
+        resolveCategory(userId, account, type, amount, imported.category(), transaction);
+    UUID relatedId =
+        transaction == null ? findOriginalTransaction(userId, account, type, amount) : null;
+
+    byte[] amountSourceEnc =
+        encrypt(userId, "amount_source", transaction == null ? null : transaction.getId(), amount);
+    byte[] amountEffectiveEnc =
+        encrypt(
+            userId, "amount_effective", transaction == null ? null : transaction.getId(), amount);
+    byte[] descriptionSourceEnc =
+        encrypt(
+            userId,
+            "description_source",
+            transaction == null ? null : transaction.getId(),
+            description);
+    byte[] descriptionEffectiveEnc =
+        encrypt(
+            userId,
+            "description_effective",
+            transaction == null ? null : transaction.getId(),
+            description);
+    byte[] externalIdEnc =
+        encrypt(
+            userId,
+            "external_transaction_id",
+            transaction == null ? null : transaction.getId(),
+            imported.externalId());
+
+    if (transaction == null) {
+      transaction =
+          new Transaction(
+              userId,
+              account.getId(),
+              TransactionSource.IMPORTED,
+              type,
+              status,
+              postedOn,
+              postedOn,
+              imported.currency(),
+              amountSourceEnc,
+              amountEffectiveEnc,
+              descriptionSourceEnc,
+              descriptionEffectiveEnc);
+      transaction.setCategoryId(categoryId);
+      if (relatedId != null) {
+        transaction.linkRelatedTransaction(relatedId);
+      }
+      transaction.setReconciliationState(ReconciliationState.NONE);
+      transaction = transactionRepository.save(transaction);
+      // Cifragens usam o ID recém-gerado; refaz para vincular o AAD correto.
+      transaction.applyImported(
+          type,
+          status,
+          postedOn,
+          postedOn,
+          encrypt(userId, "amount_source", transaction.getId(), amount),
+          encrypt(userId, "amount_effective", transaction.getId(), amount),
+          encrypt(userId, "description_source", transaction.getId(), description),
+          encrypt(userId, "description_effective", transaction.getId(), description),
+          encrypt(userId, "external_transaction_id", transaction.getId(), imported.externalId()),
+          hmacService.externalIdHash(SOURCE, imported.externalId()),
+          dedupKey,
+          fingerprint);
+    } else {
+      transaction.applyImported(
+          type,
+          status,
+          postedOn,
+          postedOn,
+          amountSourceEnc,
+          amountEffectiveEnc,
+          descriptionSourceEnc,
+          descriptionEffectiveEnc,
+          externalIdEnc,
+          hmacService.externalIdHash(SOURCE, imported.externalId()),
+          dedupKey,
+          fingerprint);
+      if (categoryId != null) {
+        transaction.setCategoryId(categoryId);
+      }
+      if (relatedId != null && transaction.getRelatedTransactionId() == null) {
+        transaction.linkRelatedTransaction(relatedId);
+      }
+    }
+    transactionRepository.save(transaction);
+
+    upsertIdentityHistory(
+        userId, account.getId(), transaction.getId(), imported.externalId(), externalIdEnc);
+  }
+
+  private void upsertIdentityHistory(
+      UUID userId, UUID accountId, UUID transactionId, String externalId, byte[] externalIdEnc) {
+    byte[] externalHash = hmacService.externalIdHash(SOURCE, externalId);
+    Instant now = clock.now();
+    ExternalIdentityHistory history =
+        identityRepository
+            .findByUserIdAndSourceAndAccountIdAndExternalIdHash(
+                userId, SOURCE, accountId, externalHash)
+            .orElseGet(
+                () ->
+                    new ExternalIdentityHistory(
+                        userId,
+                        transactionId,
+                        accountId,
+                        SOURCE,
+                        externalIdEnc,
+                        externalHash,
+                        now));
+    history.touch(now);
+    identityRepository.save(history);
+  }
+
+  private UUID resolveCategory(
+      UUID userId,
+      FinancialAccount account,
+      TransactionType type,
+      BigDecimal amount,
+      String providerCategory,
+      Transaction existing) {
+    if (existing != null
+        && existing.getCategoryId() != null
+        && (providerCategory == null || providerCategory.isBlank())) {
+      return existing.getCategoryId();
+    }
+    if (providerCategory == null || providerCategory.isBlank()) {
+      return null;
+    }
+    String normalized = normalize(providerCategory);
+    byte[] hash = hmacService.hmac("category", normalized);
+    var found = categoryRepository.findByUserIdAndNormalizedNameHash(userId, hash);
+    if (found.isPresent()) {
+      return found.get().getId();
+    }
+    UUID categoryId = UUID.randomUUID();
+    CategoryKind kind =
+        type == TransactionType.CREDIT || type == TransactionType.REFUND
+            ? CategoryKind.INCOME
+            : CategoryKind.EXPENSE;
+    Category category =
+        new Category(
+            categoryId,
+            userId,
+            cryptoService.encrypt(
+                providerCategory, new CryptoContext(userId, "category", "name", categoryId)),
+            hash,
+            kind,
+            null);
+    return categoryRepository.save(category).getId();
+  }
+
+  private UUID findOriginalTransaction(
+      UUID userId, FinancialAccount account, TransactionType type, BigDecimal amount) {
+    if (type != TransactionType.REFUND && type != TransactionType.CHARGEBACK) {
+      return null;
+    }
+    LocalDate limit = clock.today().minusDays(REFUND_WINDOW_DAYS);
+    for (Transaction candidate :
+        transactionRepository.findByUserIdAndAccountIdOrderByPostedOnDescIdDesc(
+            userId, account.getId())) {
+      if (candidate.getPostedOn().isBefore(limit) || candidate.getType() != TransactionType.DEBIT) {
+        continue;
+      }
+      BigDecimal candidateAmount =
+          new BigDecimal(
+              cryptoService.decryptString(
+                  candidate.getAmountEffectiveEnc(),
+                  new CryptoContext(userId, TABLE, "amount_effective", candidate.getId())));
+      if (candidateAmount.signum() < 0 && candidateAmount.abs().compareTo(amount.abs()) == 0) {
+        return candidate.getId();
+      }
+    }
+    return null;
+  }
+
+  private byte[] encrypt(UUID userId, String column, UUID recordId, BigDecimal amount) {
+    return cryptoService.encrypt(
+        amount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
+        new CryptoContext(userId, TABLE, column, recordId == null ? UUID.randomUUID() : recordId));
+  }
+
+  private byte[] encrypt(UUID userId, String column, UUID recordId, String value) {
+    return cryptoService.encrypt(
+        value,
+        new CryptoContext(userId, TABLE, column, recordId == null ? UUID.randomUUID() : recordId));
+  }
+
+  private String decryptAccountId(FinancialAccount account) {
+    return cryptoService.decryptString(
+        account.getExternalAccountIdEnc(),
+        new CryptoContext(
+            account.getUserId(), "financial_account", "external_account_id", account.getId()));
+  }
+
+  private static TransactionStatus mapStatus(String status) {
+    return status != null && "PENDING".equalsIgnoreCase(status)
+        ? TransactionStatus.PENDING
+        : TransactionStatus.POSTED;
+  }
+
+  private static TransactionType mapType(BigDecimal amount, String description) {
+    if (amount.signum() > 0) {
+      String normalized = normalize(description);
+      if (normalized.contains("chargeback")) {
+        return TransactionType.CHARGEBACK;
+      }
+      if (normalized.contains("estorno")
+          || normalized.contains("reembolso")
+          || normalized.contains("refund")) {
+        return TransactionType.REFUND;
+      }
+      return TransactionType.CREDIT;
+    }
+    return TransactionType.DEBIT;
+  }
+
+  private static String installmentMetadata(JsonNode metadata) {
+    if (metadata == null || metadata.isMissingNode() || metadata.isNull()) {
+      return "";
+    }
+    return metadata.path("totalInstallments").asString("")
+        + "/"
+        + metadata.path("installmentNumber").asString("");
+  }
+
+  private static String normalize(String value) {
+    return Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFKC)
+        .strip()
+        .toLowerCase(Locale.ROOT)
+        .replaceAll("\\s+", " ");
+  }
+}

@@ -5,10 +5,10 @@ Controle financeiro privado para uma família, operado em infraestrutura própri
 integrações e relatórios; a integração bancária é configurada individualmente no
 Meu Pluggy, sem compartilhamento de credenciais.
 
-> **Estado**: fase 3 (conta pessoal). Cadastro, login, sessão segura e
-> isolamento entre usuários estão implementados. Ainda não há importação
-> bancária, contas, transações ou dashboard; não use dados financeiros reais
-> nesta versão.
+> **Estado**: fase 4 (integração Meu Pluggy). Cadastro/login, configuração
+> pessoal da integração, conexões por itemId, importação de contas, cartões e
+> transações estão implementados. Sincronização programada, faturas e dashboard
+> ainda não; use apenas dados de teste.
 
 ## Stack
 

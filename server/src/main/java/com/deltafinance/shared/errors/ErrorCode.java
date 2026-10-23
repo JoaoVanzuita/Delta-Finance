@@ -14,6 +14,13 @@ public final class ErrorCode {
   public static final String NOT_FOUND = "NOT_FOUND";
   public static final String CONFLICT = "CONFLICT";
   public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
+  public static final String PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE";
+  public static final String PROVIDER_AUTH_FAILED = "PROVIDER_AUTH_FAILED";
+  public static final String PROVIDER_RATE_LIMITED = "PROVIDER_RATE_LIMITED";
+  public static final String INTEGRATION_REQUIRED = "INTEGRATION_REQUIRED";
+  public static final String INTEGRATION_INCOMPLETE = "INTEGRATION_INCOMPLETE";
+  public static final String ITEM_ALREADY_CONNECTED = "ITEM_ALREADY_CONNECTED";
+  public static final String CONNECTION_LIMIT_REACHED = "CONNECTION_LIMIT_REACHED";
 
   private ErrorCode() {}
 }

@@ -127,6 +127,15 @@ public class GlobalExceptionHandler {
         request);
   }
 
+  @ExceptionHandler(IllegalArgumentException.class)
+  public ResponseEntity<ProblemDetail> handleIllegalArgument(
+      IllegalArgumentException exception, HttpServletRequest request) {
+    return handleApiException(
+        new ApiException(
+            HttpStatus.BAD_REQUEST, ErrorCode.INVALID_REQUEST, "Parâmetro de requisição inválido."),
+        request);
+  }
+
   @ExceptionHandler(NoResourceFoundException.class)
   public ResponseEntity<ProblemDetail> handleNoResource(
       NoResourceFoundException exception, HttpServletRequest request) {

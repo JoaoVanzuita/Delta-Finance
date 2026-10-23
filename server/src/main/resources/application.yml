@@ -91,6 +91,12 @@ delta:
     key-file: ${DELTA_CRYPTO_KEY_FILE:./secrets/crypto-keys.json}
     active-version: ${DELTA_CRYPTO_ACTIVE_VERSION:1}
     index-key-version: ${DELTA_INDEX_KEY_VERSION:1}
+  pluggy:
+    base-url: ${DELTA_PLUGGY_BASE_URL:https://api.pluggy.ai}
+    connection-limit: ${DELTA_PLUGGY_CONNECTION_LIMIT:5}
+    connection-limit-checked-at: ${DELTA_PLUGGY_CONNECTION_LIMIT_CHECKED_AT:2026-10-22}
+    webhooks-enabled: ${DELTA_PLUGGY_WEBHOOKS_ENABLED:false}
+    request-timeout: 30s
   security:
     sessions:
       absolute-timeout: 12h

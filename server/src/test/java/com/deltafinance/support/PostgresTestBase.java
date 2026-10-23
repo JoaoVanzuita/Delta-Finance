@@ -169,6 +169,13 @@ public abstract class PostgresTestBase {
    * <p>Mantém o schema intacto (migrações aplicadas) e respeita a ordem das FKs.
    */
   protected void cleanIdentityData() {
+    jdbcTemplate.execute("delete from external_identity_history");
+    jdbcTemplate.execute("delete from transaction");
+    jdbcTemplate.execute("delete from card_profile");
+    jdbcTemplate.execute("delete from financial_account");
+    jdbcTemplate.execute("delete from category");
+    jdbcTemplate.execute("delete from pluggy_connection");
+    jdbcTemplate.execute("delete from pluggy_integration");
     jdbcTemplate.execute("delete from spring_session_attributes");
     jdbcTemplate.execute("delete from spring_session");
     jdbcTemplate.execute("delete from idempotency_key");

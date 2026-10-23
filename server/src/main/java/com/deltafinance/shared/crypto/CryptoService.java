@@ -111,6 +111,11 @@ public final class CryptoService {
     }
   }
 
+  /** Versão ativa da chave de dados (usada em novas cifragens). */
+  public int activeKeyVersion() {
+    return keyRing.activeDataVersion();
+  }
+
   /** Versão da chave embutida no ciphertext, útil para rotação e auditoria. */
   public int keyVersionOf(byte[] payload) {
     if (payload == null || payload.length < MIN_PAYLOAD_BYTES) {
