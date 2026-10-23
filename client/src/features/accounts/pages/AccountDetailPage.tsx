@@ -107,12 +107,22 @@ export function AccountDetailPage() {
         </section>
       ) : null}
 
-      <Link
-        to={`/transactions?accountId=${account.id}`}
-        className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
-      >
-        Ver transações desta conta
-      </Link>
+      <div className="flex flex-wrap gap-3">
+        <Link
+          to={`/transactions?accountId=${account.id}`}
+          className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
+        >
+          Ver transações desta conta
+        </Link>
+        {account.origin === 'MANUAL' ? (
+          <Link
+            to={`/accounts/${account.id}/edit`}
+            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+          >
+            Editar conta manual
+          </Link>
+        ) : null}
+      </div>
     </div>
   )
 }

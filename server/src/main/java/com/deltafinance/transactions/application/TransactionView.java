@@ -1,6 +1,7 @@
 package com.deltafinance.transactions.application;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /** Visão pública de transação com valores decifrados. */
@@ -16,5 +17,9 @@ public record TransactionView(
     String amount,
     String currency,
     String description,
+    List<String> editedFields,
     String reconciliationState,
-    UUID relatedTransactionId) {}
+    String notes,
+    String adjustmentReason,
+    UUID relatedTransactionId,
+    UUID counterpartTransactionId) {}

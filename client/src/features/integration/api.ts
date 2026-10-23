@@ -13,6 +13,16 @@ export type Account = components['schemas']['Account']
 export type AccountList = components['schemas']['AccountList']
 export type Transaction = components['schemas']['Transaction']
 export type TransactionPage = components['schemas']['TransactionPage']
+export type ManualAccountInput = components['schemas']['ManualAccountRequest']
+export type AccountUpdateInput = components['schemas']['AccountUpdateRequest']
+export type Category = components['schemas']['Category']
+export type CategoryList = components['schemas']['CategoryList']
+export type CategoryInput = components['schemas']['CategoryRequest']
+export type ManualTransactionInput = components['schemas']['ManualTransactionRequest']
+export type TransactionCorrectionInput = components['schemas']['TransactionCorrectionRequest']
+export type InternalMatch = components['schemas']['InternalMatch']
+export type InternalMatchPage = components['schemas']['InternalMatchPage']
+export type InternalMatchStatus = InternalMatch['status']
 
 export interface CredentialsInput {
   readonly clientId: string
@@ -70,7 +80,29 @@ export const financeApi = {
 
   accounts: () => api.get<AccountList>('/accounts'),
   account: (id: string) => api.get<Account>(`/accounts/${id}`),
+  createAccount: (input: ManualAccountInput) => api.post<Account>('/accounts', input),
+  updateAccount: (id: string, input: AccountUpdateInput) =>
+    api.patch<Account>(`/accounts/${id}`, input),
 
   transactions: (filters: TransactionFilters = {}) =>
     api.get<TransactionPage>(`/transactions${transactionQuery(filters)}`),
+  createTransaction: (input: ManualTransactionInput) =>
+    api.post<Transaction>('/transactions', input),
+  correctTransaction: (id: string, input: TransactionCorrectionInput) =>
+    api.patch<Transaction>(`/transactions/${id}`, input),
+  deleteTransaction: (id: string) => api.delete<void>(`/transactions/${id}`),
+
+  categories: () => api.get<CategoryList>('/categories'),
+  createCategory: (input: CategoryInput) => api.post<Category>('/categories', input),
+  updateCategory: (id: string, input: CategoryInput) =>
+    api.patch<Category>(`/categories/${id}`, input),
+  deactivateCategory: (id: string, reassignTo?: string) => {
+    const query = reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : ''
+    return api.delete<void>(`/categories/${id}${query}`)
+  },
+
+  internalMatches: (status: InternalMatchStatus = 'PENDING') =>
+    api.get<InternalMatchPage>(`/internal-matches?status=${status}&limit=50`),
+  confirmMatch: (id: string) => api.post<InternalMatch>(`/internal-matches/${id}/confirm`),
+  rejectMatch: (id: string) => api.post<InternalMatch>(`/internal-matches/${id}/reject`),
 }

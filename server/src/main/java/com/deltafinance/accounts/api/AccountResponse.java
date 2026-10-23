@@ -16,6 +16,7 @@ public record AccountResponse(
     Instant balanceReferenceAt,
     String status,
     Instant lastSyncAt,
+    String notes,
     CardProfileResponse cardProfile) {
 
   public static AccountResponse from(AccountView view) {
@@ -31,6 +32,7 @@ public record AccountResponse(
         view.balanceReferenceAt(),
         view.status(),
         view.lastSyncAt(),
+        view.notes(),
         view.cardProfile() == null ? null : CardProfileResponse.from(view.cardProfile()));
   }
 }

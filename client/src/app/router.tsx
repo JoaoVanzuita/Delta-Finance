@@ -2,6 +2,10 @@ import { createBrowserRouter } from 'react-router'
 
 import { AccountDetailPage } from '@/features/accounts/pages/AccountDetailPage'
 import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
+import { ManualAccountPage } from '@/features/accounts/pages/ManualAccountPage'
+import { CategoriesPage } from '@/features/categories/pages/CategoriesPage'
+import { ReconciliationPage } from '@/features/reconciliation/pages/ReconciliationPage'
+import { ManualEntryPage } from '@/features/transactions/pages/ManualEntryPage'
 import { AccountSettingsPage } from '@/features/auth/pages/AccountSettingsPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { RegisterPage } from '@/features/auth/pages/RegisterPage'
@@ -46,6 +50,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'accounts/new',
+        element: (
+          <ProtectedRoute>
+            <ManualAccountPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: 'accounts/:id',
         element: (
           <ProtectedRoute>
@@ -54,10 +66,42 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'accounts/:id/edit',
+        element: (
+          <ProtectedRoute>
+            <ManualAccountPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: 'transactions',
         element: (
           <ProtectedRoute>
             <TransactionsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'transactions/new',
+        element: (
+          <ProtectedRoute>
+            <ManualEntryPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'categories',
+        element: (
+          <ProtectedRoute>
+            <CategoriesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'reconciliation',
+        element: (
+          <ProtectedRoute>
+            <ReconciliationPage />
           </ProtectedRoute>
         ),
       },

@@ -810,6 +810,7 @@ export interface components {
             status?: string;
             /** Format: date-time */
             lastSyncAt?: string;
+            notes?: string;
             cardProfile?: components["schemas"]["CardProfile"];
         };
         ManualAccountRequest: {
@@ -874,6 +875,8 @@ export interface components {
             amount: string;
             currency: string;
             description: string;
+            /** @description Observações do usuário; nunca sobrescritas pela sincronização. */
+            notes?: string;
             editedFields?: string[];
             reconciliationState?: string;
             /** Format: uuid */
@@ -907,12 +910,19 @@ export interface components {
             description: string;
             /** Format: uuid */
             categoryId?: string;
-            notes?: string;
             /**
              * Format: uuid
              * @description Conta de destino; a conta de origem é accountId. Cria duas pernas vinculadas.
              */
             transferAccountId?: string;
+            /**
+             * Format: uuid
+             * @description Transação original para reembolso/chargeback; obrigatória quando não houver correspondência automática.
+             */
+            relatedTransactionId?: string;
+            /** @description Obrigatório para ADJUSTMENT; nunca inferido automaticamente. */
+            adjustmentReason?: string;
+            notes?: string;
         };
         TransactionCorrectionRequest: {
             description?: string;

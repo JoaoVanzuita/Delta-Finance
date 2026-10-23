@@ -119,8 +119,26 @@ public class TransactionQueryService {
             "description_effective",
             transaction.getId(),
             transaction.getDescriptionEffectiveEnc()),
+        transaction.getEditedFields(),
         transaction.getReconciliationState().name(),
-        transaction.getRelatedTransactionId());
+        decrypt(
+            transaction.getUserId(),
+            "transaction",
+            "notes",
+            transaction.getId(),
+            transaction.getNotesEnc()),
+        decrypt(
+            transaction.getUserId(),
+            "transaction",
+            "adjustment_reason",
+            transaction.getId(),
+            transaction.getAdjustmentReasonEnc()),
+        transaction.getType() == TransactionType.TRANSFER
+            ? null
+            : transaction.getRelatedTransactionId(),
+        transaction.getType() == TransactionType.TRANSFER
+            ? transaction.getRelatedTransactionId()
+            : null);
   }
 
   private String decrypt(UUID userId, String table, String column, UUID recordId, byte[] value) {

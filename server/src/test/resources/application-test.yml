@@ -2,6 +2,14 @@
 #
 # O scheduler é desligado para tornar os testes determinísticos; os próprios
 # testes chamam SyncJobService/SyncScheduler quando precisam exercitar a fila.
+spring:
+  datasource:
+    hikari:
+      # Vários contextos de teste (um por stub Pluggy) ficam em cache na JVM;
+      # um pool pequeno evita esgotar max_connections do PostgreSQL.
+      maximum-pool-size: 2
+      minimum-idle: 1
+
 delta:
   sync:
     scheduler-enabled: false

@@ -2,6 +2,7 @@ package com.deltafinance.transactions.api;
 
 import com.deltafinance.transactions.application.TransactionView;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record TransactionResponse(
@@ -16,8 +17,12 @@ public record TransactionResponse(
     String amount,
     String currency,
     String description,
+    List<String> editedFields,
     String reconciliationState,
-    UUID relatedTransactionId) {
+    String notes,
+    String adjustmentReason,
+    UUID relatedTransactionId,
+    UUID counterpartTransactionId) {
 
   public static TransactionResponse from(TransactionView view) {
     return new TransactionResponse(
@@ -32,7 +37,11 @@ public record TransactionResponse(
         view.amount(),
         view.currency(),
         view.description(),
+        view.editedFields(),
         view.reconciliationState(),
-        view.relatedTransactionId());
+        view.notes(),
+        view.adjustmentReason(),
+        view.relatedTransactionId(),
+        view.counterpartTransactionId());
   }
 }

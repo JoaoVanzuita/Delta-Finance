@@ -1,12 +1,13 @@
 import { useState } from 'react'
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import { ApiError } from '@/lib/api/problem'
 
 import { formatMoney } from '@/features/accounts/format'
 import { financeApi, type Transaction } from '@/features/integration/api'
+import { CorrectionDialog } from '@/features/transactions/components/CorrectionDialog'
 import { SourceRemovedReview } from '@/features/transactions/components/SourceRemovedReview'
 
 const statusLabels: Record<string, string> = {
@@ -33,6 +34,7 @@ export function TransactionsPage() {
   const [origin, setOrigin] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [correcting, setCorrecting] = useState<Transaction | null>(null)
 
   const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
   const filters = {
@@ -66,7 +68,15 @@ export function TransactionsPage() {
         <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
           Movimentos
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Transações</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Transações</h1>
+          <Link
+            to="/transactions/new"
+            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
+          >
+            Novo lançamento
+          </Link>
+        </div>
         <p className="max-w-2xl text-sm leading-relaxed text-ink-muted">
           Movimentos importados e manuais. Pendentes aparecem separados dos totais oficiais.
         </p>
@@ -227,6 +237,13 @@ export function TransactionsPage() {
                       </span>
                     ) : null}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setCorrecting(transaction)}
+                    className="mt-2 inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-xs font-medium text-ink transition-colors hover:bg-surface-muted"
+                  >
+                    Corrigir
+                  </button>
                   <SourceRemovedReview transaction={transaction} />
                 </div>
                 <p
@@ -252,6 +269,10 @@ export function TransactionsPage() {
             </button>
           ) : null}
         </>
+      ) : null}
+
+      {correcting ? (
+        <CorrectionDialog transaction={correcting} onClose={() => setCorrecting(null)} />
       ) : null}
     </div>
   )

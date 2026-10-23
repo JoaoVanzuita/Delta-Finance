@@ -60,6 +60,9 @@ public class FinancialAccount extends BaseEntity {
   @Column(name = "last_sync_at")
   private Instant lastSyncAt;
 
+  @Column(name = "notes_enc", columnDefinition = "bytea")
+  private byte[] notesEnc;
+
   protected FinancialAccount() {
     // Hibernate
   }
@@ -72,6 +75,17 @@ public class FinancialAccount extends BaseEntity {
     account.origin = AccountOrigin.IMPORTED;
     account.type = Objects.requireNonNull(type, "type");
     account.subtype = subtype;
+    account.currency = currency == null || currency.isBlank() ? "BRL" : currency;
+    account.status = AccountStatus.ACTIVE;
+    return account;
+  }
+
+  /** Conta manual de dinheiro/carteira, sem conexão externa. */
+  public static FinancialAccount manual(UUID userId, AccountType type, String currency) {
+    FinancialAccount account = new FinancialAccount();
+    account.userId = Objects.requireNonNull(userId, "userId");
+    account.origin = AccountOrigin.MANUAL;
+    account.type = Objects.requireNonNull(type, "type");
     account.currency = currency == null || currency.isBlank() ? "BRL" : currency;
     account.status = AccountStatus.ACTIVE;
     return account;
@@ -133,6 +147,10 @@ public class FinancialAccount extends BaseEntity {
     return lastSyncAt;
   }
 
+  public byte[] getNotesEnc() {
+    return notesEnc;
+  }
+
   public void applyImported(
       byte[] externalAccountIdEnc,
       byte[] externalAccountIdHash,
@@ -159,6 +177,24 @@ public class FinancialAccount extends BaseEntity {
 
   public void deactivate() {
     this.status = AccountStatus.INACTIVE;
+  }
+
+  public void activate() {
+    this.status = AccountStatus.ACTIVE;
+  }
+
+  /** Atualiza campos editáveis de uma conta manual. */
+  public void applyManual(
+      byte[] aliasEnc,
+      byte[] balanceEnc,
+      Instant balanceReferenceAt,
+      AccountStatus status,
+      byte[] notesEnc) {
+    this.aliasEnc = aliasEnc;
+    this.balanceEnc = balanceEnc;
+    this.balanceReferenceAt = balanceReferenceAt;
+    this.status = Objects.requireNonNull(status, "status");
+    this.notesEnc = notesEnc;
   }
 
   public void updateSubtype(String subtype) {

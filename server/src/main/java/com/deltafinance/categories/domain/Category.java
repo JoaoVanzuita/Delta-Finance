@@ -94,4 +94,12 @@ public class Category extends BaseEntity {
     this.nameEnc = Objects.requireNonNull(nameEnc, "nameEnc");
     this.normalizedNameHash = Objects.requireNonNull(normalizedNameHash, "normalizedNameHash");
   }
+
+  public void changeKind(CategoryKind kind) {
+    this.kind = Objects.requireNonNull(kind, "kind");
+  }
+
+  public void activate() {
+    this.active = true;
+  }
 }

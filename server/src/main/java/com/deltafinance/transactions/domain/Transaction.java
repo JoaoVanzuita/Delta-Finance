@@ -7,8 +7,12 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Movimento financeiro importado ou manual.
@@ -80,6 +84,13 @@ public class Transaction extends BaseEntity {
   @Column(name = "adjustment_reason_enc", columnDefinition = "bytea")
   private byte[] adjustmentReasonEnc;
 
+  @Column(name = "notes_enc", columnDefinition = "bytea")
+  private byte[] notesEnc;
+
+  @JdbcTypeCode(SqlTypes.ARRAY)
+  @Column(name = "edited_fields", nullable = false, columnDefinition = "text[]")
+  private String[] editedFields = new String[0];
+
   @Enumerated(EnumType.STRING)
   @Column(name = "reconciliation_state", nullable = false, length = 24)
   private ReconciliationState reconciliationState;
@@ -89,6 +100,65 @@ public class Transaction extends BaseEntity {
   }
 
   public Transaction(
+      UUID userId,
+      UUID accountId,
+      TransactionSource source,
+      TransactionType type,
+      TransactionStatus status,
+      LocalDate postedOn,
+      LocalDate sourcePostedOn,
+      String currency,
+      byte[] amountSourceEnc,
+      byte[] amountEffectiveEnc,
+      byte[] descriptionSourceEnc,
+      byte[] descriptionEffectiveEnc) {
+    init(
+        userId,
+        accountId,
+        source,
+        type,
+        status,
+        postedOn,
+        sourcePostedOn,
+        currency,
+        amountSourceEnc,
+        amountEffectiveEnc,
+        descriptionSourceEnc,
+        descriptionEffectiveEnc);
+  }
+
+  /** Construtor com ID explícito, usado quando o AAD precisa do ID antes do flush. */
+  public Transaction(
+      UUID id,
+      UUID userId,
+      UUID accountId,
+      TransactionSource source,
+      TransactionType type,
+      TransactionStatus status,
+      LocalDate postedOn,
+      LocalDate sourcePostedOn,
+      String currency,
+      byte[] amountSourceEnc,
+      byte[] amountEffectiveEnc,
+      byte[] descriptionSourceEnc,
+      byte[] descriptionEffectiveEnc) {
+    super(id);
+    init(
+        userId,
+        accountId,
+        source,
+        type,
+        status,
+        postedOn,
+        sourcePostedOn,
+        currency,
+        amountSourceEnc,
+        amountEffectiveEnc,
+        descriptionSourceEnc,
+        descriptionEffectiveEnc);
+  }
+
+  private void init(
       UUID userId,
       UUID accountId,
       TransactionSource source,
@@ -194,12 +264,61 @@ public class Transaction extends BaseEntity {
     return adjustmentReasonEnc;
   }
 
+  public byte[] getNotesEnc() {
+    return notesEnc;
+  }
+
+  public List<String> getEditedFields() {
+    return editedFields == null ? List.of() : List.of(editedFields);
+  }
+
+  public boolean hasEdited(String field) {
+    return editedFields != null && Arrays.asList(editedFields).contains(field);
+  }
+
+  public void markEdited(String field) {
+    if (hasEdited(field)) {
+      return;
+    }
+    String[] updated =
+        Arrays.copyOf(
+            editedFields == null ? new String[0] : editedFields,
+            (editedFields == null ? 0 : editedFields.length) + 1);
+    updated[updated.length - 1] = field;
+    this.editedFields = updated;
+  }
+
   public ReconciliationState getReconciliationState() {
     return reconciliationState;
   }
 
   public void setCategoryId(UUID categoryId) {
     this.categoryId = categoryId;
+  }
+
+  public void setPostedOn(LocalDate postedOn) {
+    this.postedOn = Objects.requireNonNull(postedOn, "postedOn");
+  }
+
+  public void setAmountEffectiveEnc(byte[] amountEffectiveEnc) {
+    this.amountEffectiveEnc = Objects.requireNonNull(amountEffectiveEnc, "amountEffectiveEnc");
+  }
+
+  public void setDescriptionEffectiveEnc(byte[] descriptionEffectiveEnc) {
+    this.descriptionEffectiveEnc =
+        Objects.requireNonNull(descriptionEffectiveEnc, "descriptionEffectiveEnc");
+  }
+
+  public void setNotesEnc(byte[] notesEnc) {
+    this.notesEnc = notesEnc;
+  }
+
+  public void setAdjustmentReasonEnc(byte[] adjustmentReasonEnc) {
+    this.adjustmentReasonEnc = adjustmentReasonEnc;
+  }
+
+  public void setType(TransactionType type) {
+    this.type = Objects.requireNonNull(type, "type");
   }
 
   public void linkRelatedTransaction(UUID relatedTransactionId) {

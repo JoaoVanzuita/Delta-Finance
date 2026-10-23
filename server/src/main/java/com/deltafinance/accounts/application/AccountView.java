@@ -16,4 +16,5 @@ public record AccountView(
     Instant balanceReferenceAt,
     String status,
     Instant lastSyncAt,
+    String notes,
     CardProfileView cardProfile) {}

@@ -66,6 +66,7 @@ public class AccountQueryService {
         account.getBalanceReferenceAt(),
         account.getStatus().name(),
         account.getLastSyncAt(),
+        decrypt(account, account.getNotesEnc(), "notes"),
         cardView);
   }
 

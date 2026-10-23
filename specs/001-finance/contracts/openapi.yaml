@@ -1703,6 +1703,9 @@ components:
         lastSyncAt:
           type: string
           format: date-time
+        notes:
+          type: string
+          maxLength: 500
         cardProfile:
           $ref: '#/components/schemas/CardProfile'
     ManualAccountRequest:
@@ -1856,6 +1859,10 @@ components:
           type: string
         description:
           type: string
+        notes:
+          type: string
+          maxLength: 2000
+          description: Observações do usuário; nunca sobrescritas pela sincronização.
         editedFields:
           type: array
           items:
@@ -1924,13 +1931,21 @@ components:
         categoryId:
           type: string
           format: uuid
-        notes:
-          type: string
-          maxLength: 2000
         transferAccountId:
           type: string
           format: uuid
           description: Conta de destino; a conta de origem é accountId. Cria duas pernas vinculadas.
+        relatedTransactionId:
+          type: string
+          format: uuid
+          description: Transação original para reembolso/chargeback; obrigatória quando não houver correspondência automática.
+        adjustmentReason:
+          type: string
+          maxLength: 500
+          description: Obrigatório para ADJUSTMENT; nunca inferido automaticamente.
+        notes:
+          type: string
+          maxLength: 2000
     TransactionCorrectionRequest:
       type: object
       properties:

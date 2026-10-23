@@ -38,12 +38,20 @@ export function AccountsPage() {
             sinalizados, sem estimativas.
           </p>
         </div>
-        <Link
-          to="/settings/integration"
-          className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
-        >
-          Gerenciar conexões
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/accounts/new"
+            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
+          >
+            Nova conta manual
+          </Link>
+          <Link
+            to="/settings/integration"
+            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+          >
+            Gerenciar conexões
+          </Link>
+        </div>
       </header>
 
       {accountsQuery.isLoading ? (

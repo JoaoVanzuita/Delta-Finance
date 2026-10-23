@@ -18,7 +18,11 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   Optional<Transaction> findFirstByUserIdAndAccountIdAndFingerprint(
       UUID userId, UUID accountId, byte[] fingerprint);
 
+  boolean existsByUserIdAndRelatedTransactionId(UUID userId, UUID relatedTransactionId);
+
   List<Transaction> findByUserIdAndAccountIdOrderByPostedOnDescIdDesc(UUID userId, UUID accountId);
+
+  List<Transaction> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
   @Query(
       """

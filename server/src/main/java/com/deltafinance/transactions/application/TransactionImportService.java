@@ -10,6 +10,8 @@ import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
+import com.deltafinance.shared.audit.AuditEventType;
+import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.crypto.IndexHmacService;
@@ -61,6 +63,7 @@ public class TransactionImportService {
   private final PluggyDataClient dataClient;
   private final CryptoService cryptoService;
   private final IndexHmacService hmacService;
+  private final AuditService auditService;
   private final Clock clock;
 
   public TransactionImportService(
@@ -72,6 +75,7 @@ public class TransactionImportService {
       PluggyDataClient dataClient,
       CryptoService cryptoService,
       IndexHmacService hmacService,
+      AuditService auditService,
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
@@ -81,6 +85,7 @@ public class TransactionImportService {
     this.dataClient = dataClient;
     this.cryptoService = cryptoService;
     this.hmacService = hmacService;
+    this.auditService = auditService;
     this.clock = clock;
   }
 
@@ -204,7 +209,9 @@ public class TransactionImportService {
             .orElse(null);
 
     UUID categoryId =
-        resolveCategory(userId, account, type, amount, imported.category(), transaction);
+        transaction != null && transaction.hasEdited("category")
+            ? transaction.getCategoryId()
+            : resolveCategory(userId, account, type, amount, imported.category(), transaction);
     UUID relatedId =
         transaction == null ? findOriginalTransaction(userId, account, type, amount) : null;
 
@@ -277,6 +284,15 @@ public class TransactionImportService {
       return Outcome.CREATED;
     }
 
+    boolean amountEdited = transaction.hasEdited("amount");
+    boolean descriptionEdited = transaction.hasEdited("description");
+    boolean postedOnEdited = transaction.hasEdited("postedOn");
+    boolean categoryEdited = transaction.hasEdited("category");
+    byte[] preservedAmount = transaction.getAmountEffectiveEnc();
+    byte[] preservedDescription = transaction.getDescriptionEffectiveEnc();
+    LocalDate preservedPostedOn = transaction.getPostedOn();
+    TransactionType preservedType = transaction.getType();
+
     transaction.applyImported(
         type,
         status,
@@ -290,6 +306,37 @@ public class TransactionImportService {
         hmacService.externalIdHash(SOURCE, imported.externalId()),
         dedupKey,
         fingerprint);
+    if (amountEdited) {
+      transaction.setAmountEffectiveEnc(preservedAmount);
+      transaction.setType(preservedType);
+    }
+    if (descriptionEdited) {
+      transaction.setDescriptionEffectiveEnc(preservedDescription);
+    }
+    if (postedOnEdited) {
+      transaction.setPostedOn(preservedPostedOn);
+    }
+    if (amountEdited || descriptionEdited || postedOnEdited || categoryEdited) {
+      java.util.List<String> preservedFields = new java.util.ArrayList<>();
+      if (amountEdited) {
+        preservedFields.add("amount");
+      }
+      if (descriptionEdited) {
+        preservedFields.add("description");
+      }
+      if (postedOnEdited) {
+        preservedFields.add("postedOn");
+      }
+      if (categoryEdited) {
+        preservedFields.add("category");
+      }
+      auditService.record(
+          userId,
+          AuditEventType.TRANSACTION_SOURCE_PRESERVED,
+          "transaction",
+          transaction.getId(),
+          java.util.Map.of("fields", String.join(",", preservedFields)));
+    }
     if (transaction.getReconciliationState() == ReconciliationState.SOURCE_REMOVED) {
       // A origem voltou a trazer o registro: restauração automática sem duplicar a linha.
       transaction.setReconciliationState(ReconciliationState.NONE);
