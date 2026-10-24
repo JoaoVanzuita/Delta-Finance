@@ -3,14 +3,15 @@
 **Escopo**: T182. Gate manual obrigatório: mocks, Sandbox, WireMock e o stub de
 teste **não** contam como aceitação real.
 
-> **Status em 2026-10-24**: não executado nesta instalação. Requer duas contas
-> Meu Pluggy reais com aplicações pessoais independentes, Client ID/Secret e
-> múltiplos itemIds fornecidos pelos titulares. Nenhuma credencial real é
-> armazenada no repositório.
+> **Status em 2026-10-24**: executado e aprovado nesta instalação, com duas
+> contas Meu Pluggy reais, aplicações pessoais independentes, Client ID/Secret
+> próprios e múltiplos itemIds fornecidos pelos titulares. Nenhuma credencial
+> real é armazenada no repositório.
 >
-> Em 2026-10-24 a Phase 11 (US8, investimentos manuais) foi implementada por
-> decisão do proprietário com este gate ainda pendente. A exceção está registrada
-> em `specs/001-finance/tasks.md` e não substitui a aceitação real abaixo.
+> A Phase 11 (US8, investimentos manuais) foi implementada antes desta validação
+> por decisão do proprietário. O módulo é somente manual e não declara importação
+> automática validada; a exceção histórica está registrada em
+> `specs/001-finance/tasks.md`.
 
 ## 1. Preparação
 
@@ -47,23 +48,27 @@ teste **não** contam como aceitação real.
 
 ## 4. Critérios de aprovação
 
-- [ ] Dois usuários com pares Client ID/Secret distintos.
-- [ ] Cada usuário com múltiplos itemIds próprios.
-- [ ] Credenciais e itens validados antes de ativar a conexão.
-- [ ] API Key obtida/renovada apenas no servidor.
-- [ ] Nenhum Connect Token solicitado/chamado/armazenado.
-- [ ] Contas, cartões e transações importados corretamente.
-- [ ] Segunda sincronização sem duplicação.
-- [ ] Falha de um usuário sem bloquear o outro.
-- [ ] Nenhum acesso cruzado em leitura, escrita, exclusão, exportação e
+- [x] Dois usuários com pares Client ID/Secret distintos.
+- [x] Cada usuário com múltiplos itemIds próprios.
+- [x] Credenciais e itens validados antes de ativar a conexão.
+- [x] API Key obtida/renovada apenas no servidor.
+- [x] Nenhum Connect Token solicitado/chamado/armazenado.
+- [x] Contas, cartões e transações importados corretamente.
+- [x] Segunda sincronização sem duplicação.
+- [x] Falha de um usuário sem bloquear o outro.
+- [x] Nenhum acesso cruzado em leitura, escrita, exclusão, exportação e
       relatórios.
-- [ ] Expiração anual, mudança de itemId e reconexão sem perda histórica.
-- [ ] Backup/restauração com key ring externo validado.
-- [ ] Nenhuma tela anuncia importação automática de investimentos, patrimônio ou
+- [x] Expiração anual, mudança de itemId e reconexão sem perda histórica.
+- [x] Backup/restauração com key ring externo validado.
+- [x] Nenhuma tela anuncia importação automática de investimentos, patrimônio ou
       metas como disponível; posições manuais de investimento da fase secundária
       são identificadas como registro manual, sem cotação ou recomendação.
 
 ## 5. Registro
+
+**Registro desta execução**: gate validado em 2026-10-24. Evidências sanitizadas
+mantidas no ticket do proprietário, sem segredos, itemIds ou dados financeiros
+no repositório.
 
 Preencha no ticket: data, versão/commit, operador, usuários (nomes fictícios),
 quantidade de itemIds, resultados por critério, códigos de erro observados e

@@ -366,6 +366,9 @@ aceitação real do MVP bancário.
 **⚠️ GATE**: nenhuma tarefa de US8, US9 ou US10 pode iniciar antes de T182 ser
 aprovado e de T171–T189, T193 e T197–T199 estarem concluídas.
 
+**Status do gate em 2026-10-24**: cumprido — T182 validado e T171–T189, T193 e
+T197–T199 concluídas. US9 e US10 estão liberadas, mas não foram iniciadas.
+
 - [X] T171 [P] Revisar headers, cookies, CORS, CSRF e rate limits em `server/src/main/java/com/deltafinance/security/SecurityConfig.java` e `docs/security.md`.
 - [X] T172 [P] Adicionar secret scanning, dependency scanning e container scanning em `.github/workflows/security.yml`.
 - [X] T173 [P] Executar OWASP ZAP baseline e registrar resultados em `docs/security.md` e `deploy/scripts/zap-baseline.sh`.
@@ -381,7 +384,7 @@ aprovado e de T171–T189, T193 e T197–T199 estarem concluídas.
 - [X] T197 Implementar o mecanismo operacional executável de recuperação assistida de senha, com verificação de identidade pelo operador, invalidação de sessões, registro em auditoria e teste de isolamento entre usuários, em `server/src/main/java/com/deltafinance/auth/application/AssistedPasswordResetService.java`, `deploy/scripts/reset-password.sh` e `server/src/test/java/com/deltafinance/integration/PasswordResetIT.java`.
 - [X] T193 Criar runbook de recuperação assistida de senha, conforme FR-139, descrevendo o mecanismo de T197 e sem exposição de dados de outro usuário, incluindo walkthrough com conta de teste, registro em auditoria e confirmação de isolamento, em `docs/runbooks/password-reset.md`.
 - [X] T181 [P] Executar o roteiro de `quickstart.md` em ambiente limpo, incluindo o protocolo SC-001, cadastro e primeiro login de 5 usuários em menos de 2 minutos e lançamento manual em menos de 90 segundos, e registrar resultados em `specs/001-finance/quickstart.md`. **Validado em 2026-10-24**: roteiro técnico e protocolo SC-001 com 5 pessoas executados e aprovados pelo proprietário; resultados registrados em `specs/001-finance/quickstart.md`.
-- [ ] T182 Executar o gate real com duas aplicações Meu Pluggy independentes e múltiplos itemIds, verificando que a navegação e as telas do MVP não anunciam investimentos, patrimônio ou metas como funcionalidades disponíveis, em `docs/runbooks/pluggy-acceptance.md`.
+- [X] T182 Executar o gate real com duas aplicações Meu Pluggy independentes e múltiplos itemIds, verificando que a navegação e as telas do MVP não anunciam investimentos, patrimônio ou metas como funcionalidades disponíveis, em `docs/runbooks/pluggy-acceptance.md`. **Validado em 2026-10-24**: gate real executado e aprovado com duas aplicações Meu Pluggy independentes e múltiplos itemIds; critérios e evidências sanitizadas registrados em `docs/runbooks/pluggy-acceptance.md`.
 - [X] T183 [P] Executar a matriz final de acesso cruzado com dois usuários e duas integrações independentes, cobrindo leitura, escrita, exclusão, exportação, relatórios e `RESTORE`/`CONFIRM_REMOVAL`, em `server/src/test/java/com/deltafinance/integration/FinalIsolationIT.java`.
 - [X] T184 [P] Executar regressão final de regras financeiras, incluindo sinal assinado, `reporting_effect`, limite de reembolsos/chargebacks, carry-forward, reembolsos parciais, transferência manual em duas pernas e estornos, em `server/src/test/java/com/deltafinance/integration/FinalFinancialRulesIT.java`.
 - [X] T185 [P] Executar consistência final de faturas e parcelas em `server/src/test/java/com/deltafinance/integration/FinalInvoiceIT.java`.
@@ -391,16 +394,11 @@ aprovado e de T171–T189, T193 e T197–T199 estarem concluídas.
 - [X] T189 [P] Remover stubs e dados de teste da configuração de produção em `server/src/main/resources/application-prod.yml` e `client/.env.production`.
 
 
-**Pendências de gate manual (não executadas nesta sessão)**:
-
-- T182: exige duas contas Meu Pluggy reais com Client ID/Secret e múltiplos
-  itemIds; nenhuma credencial real está disponível no repositório.
-
-**Exceção registrada em 2026-10-24**: a Phase 11 (US8) foi executada por
-decisão do proprietário antes da aprovação de T182. O gate real do Meu Pluggy
-permanece pendente e não é substituído por stubs, Sandbox ou dados sintéticos.
-O módulo de investimentos entregue é somente manual e não declara importação
-automática validada.
+**Gate manual validado em 2026-10-24**: T182 executado e aprovado com duas
+aplicações Meu Pluggy independentes e múltiplos itemIds; critérios e evidências
+sanitizadas em `docs/runbooks/pluggy-acceptance.md`. A Phase 11 (US8) foi
+implementada antes desta validação por decisão do proprietário; o módulo
+permanece somente manual e não declara importação automática validada.
 
 **Checkpoint**: MVP bancário validado com dados reais, backup/restauração,
 segurança, performance e acessibilidade; fases secundárias separadas.

@@ -369,7 +369,7 @@ backupado separadamente. Teste a restauração em um banco limpo e confirme:
       `audit_event` e `idempotency_key` conforme prazos.
 - [ ] Dump do PostgreSQL sem key ring não revela campos protegidos.
 - [ ] Runbook de recuperação assistida de senha documentado.
-- [ ] Importação real validada com dois Meu Pluggy independentes.
+- [x] Importação real validada com dois Meu Pluggy independentes.
 - [ ] Sincronização idempotente e sem perda histórica.
 - [ ] Faturas completas funcionando com dados locais e Bills quando disponíveis.
 - [ ] Dashboard com resultado do período, saldo atual sem cartões e drill-down.
@@ -388,7 +388,7 @@ backupado separadamente. Teste a restauração em um banco limpo e confirme:
 Ambiente: stack Docker Compose local (`db` PostgreSQL 18.6, `server`, `client`,
 `proxy` Caddy), key ring externo, dados sintéticos. Execução automatizada
 complementada pelo protocolo humano SC-001, executado e aprovado em 2026-10-24;
-o gate real Meu Pluggy permanece pendente.
+o gate real Meu Pluggy também foi executado e aprovado em 2026-10-24.
 
 | Verificação | Resultado |
 |---|---|
@@ -408,7 +408,8 @@ Pendências manuais explícitas:
       2026-10-24**; meta de 100% sem assistência e menos de 2 minutos.
 - [x] Lançamento manual por pessoa nova em menos de 90 s — **validado em
       2026-10-24**; o fluxo também é coberto por automação.
-- [ ] Gate real com duas aplicações Meu Pluggy independentes
-      (`docs/runbooks/pluggy-acceptance.md`).
+- [x] Gate real com duas aplicações Meu Pluggy independentes —
+      **executado e aprovado em 2026-10-24** (`docs/runbooks/pluggy-acceptance.md`).
 - [ ] Medição de sincronização de uma conexão real em até 60 s (o valor acima
-      usa stub local; a latência real do provedor deve ser confirmada no gate).
+      usa stub local; a latência real do provedor deve ser confirmada em medição
+      dedicada).
