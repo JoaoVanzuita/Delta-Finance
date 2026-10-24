@@ -584,7 +584,10 @@ ausência de movimentação financeira.
   mensagens de erro.
 - **FR-021**: O sistema DEVE permitir múltiplos itemIds por usuário, mantendo
   cada um vinculado à integração e ao proprietário corretos, mesmo que
-  identificadores externos coincidam entre usuários.
+  identificadores externos coincidam entre usuários. Um itemId só DEVE ser
+  aceito se existir na aplicação Meu Pluggy do próprio usuário; item inexistente
+  ou malformado DEVE ser recusado como erro de validação do campo `itemId`, sem
+  registrar conexão.
 - **FR-022**: O sistema DEVE exibir a quantidade de conexões configuradas,
   informar o limite da modalidade em configuração versionada e datada (atualmente
   5 conexões por conta pessoal), registrar a data da última verificação e alertar
@@ -595,7 +598,8 @@ ausência de movimentação financeira.
   salvo exclusão explícita do usuário.
 - **FR-024**: Após nova autorização, o usuário DEVE poder atualizar o itemId; o
   sistema DEVE validar a nova conexão, reconciliar o histórico e impedir
-  duplicação ou perda de dados.
+  duplicação ou perda de dados. Se o novo itemId não existir na aplicação do
+  usuário, a atualização DEVE ser recusada sem alterar o vínculo anterior.
 - **FR-025**: A atualização de Client ID ou Client Secret só DEVE substituir a
   configuração anterior após validação bem-sucedida; em caso de falha, a
   configuração anterior DEVE permanecer e o usuário DEVE ser informado.

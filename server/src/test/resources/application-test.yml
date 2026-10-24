@@ -16,3 +16,5 @@ delta:
     jitter: 0s
   pluggy:
     webhooks-enabled: false
+  security:
+    operator-reset-token: test-operator-reset-token

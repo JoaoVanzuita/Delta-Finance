@@ -122,7 +122,6 @@ public class IntegrationService {
     integrationRepository.save(entity);
     // Módulos não se conhecem: connections reage ao evento para interromper syncs.
     eventPublisher.publishEvent(new IntegrationDisconnectedEvent(userId, entity.getId()));
-    auditService.record(userId, AuditEventType.DISCONNECTED, "pluggy_integration", entity.getId());
   }
 
   /** Persistência interna para serviços do mesmo fluxo (conexão/sincronização). */

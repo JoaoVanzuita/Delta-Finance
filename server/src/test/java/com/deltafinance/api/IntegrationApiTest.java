@@ -104,6 +104,20 @@ class IntegrationApiTest extends PostgresTestBase {
   }
 
   @Test
+  void credenciaisRecusadasCom400DoProvedorRetornamAuthFailed() throws Exception {
+    // A Pluggy real responde 400 quando o Client ID não é um UUID; isso é falha de
+    // credencial, não indisponibilidade do provedor.
+    PLUGGY.failPath("/auth", 400, 1);
+
+    client
+        .put(
+            "/api/v1/integrations/pluggy",
+            Map.of("clientId", "client-invalido", "clientSecret", "segredo-invalido"))
+        .andExpect(status().isBadGateway())
+        .andExpect(jsonPath("$.code").value("PROVIDER_AUTH_FAILED"));
+  }
+
+  @Test
   void validaCredenciaisSemPersistirSegredo() throws Exception {
     client
         .post(

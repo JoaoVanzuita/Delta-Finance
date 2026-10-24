@@ -107,7 +107,10 @@ public class PluggyAuthClient {
               .body(String.class);
     } catch (RestClientResponseException exception) {
       int status = exception.getStatusCode().value();
-      if (status == 401 || status == 403) {
+      // A Pluggy responde 400 (não 401) quando o Client ID não é um UUID ou veio
+      // malformado; 422 cobre o mesmo caso em validações de corpo. Ambos são falha
+      // de credencial, não indisponibilidade do provedor.
+      if (status == 400 || status == 401 || status == 403 || status == 422) {
         throw new PluggyCredentialException();
       }
       if (status == 429) {

@@ -107,6 +107,22 @@ public class TransactionQueryService {
         .toList();
   }
 
+  /** Estornos/chargebacks vinculados anteriores a {@code toExclusive}, já decifrados. */
+  public List<TransactionView> listLinkedReductionsBefore(
+      UUID userId,
+      UUID relatedTransactionId,
+      LocalDate toExclusive,
+      Collection<TransactionStatus> statuses) {
+    if (statuses == null || statuses.isEmpty()) {
+      return List.of();
+    }
+    return transactionRepository
+        .findLinkedReductionsBefore(userId, relatedTransactionId, toExclusive, statuses)
+        .stream()
+        .map(this::toView)
+        .toList();
+  }
+
   private TransactionView toView(Transaction transaction) {
     String categoryName = null;
     if (transaction.getCategoryId() != null) {

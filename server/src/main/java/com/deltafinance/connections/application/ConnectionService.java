@@ -11,6 +11,7 @@ import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyCredentialException;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
 import com.deltafinance.integrations.infrastructure.PluggyException;
+import com.deltafinance.integrations.infrastructure.PluggyItemInvalidException;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyProperties;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
@@ -27,7 +28,9 @@ import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.application.TransactionImportService;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Cadastro e manutenção de conexões (itemIds).
@@ -54,6 +57,8 @@ public class ConnectionService {
   private final IndexHmacService hmacService;
   private final AuditService auditService;
   private final ItemReconciliationService itemReconciliationService;
+  private final SyncJobService syncJobService;
+  private final JdbcTemplate jdbcTemplate;
   private final Clock clock;
 
   public ConnectionService(
@@ -69,6 +74,8 @@ public class ConnectionService {
       IndexHmacService hmacService,
       AuditService auditService,
       ItemReconciliationService itemReconciliationService,
+      SyncJobService syncJobService,
+      JdbcTemplate jdbcTemplate,
       Clock clock) {
     this.connectionRepository = connectionRepository;
     this.integrationService = integrationService;
@@ -82,6 +89,8 @@ public class ConnectionService {
     this.hmacService = hmacService;
     this.auditService = auditService;
     this.itemReconciliationService = itemReconciliationService;
+    this.syncJobService = syncJobService;
+    this.jdbcTemplate = jdbcTemplate;
     this.clock = clock;
   }
 
@@ -142,18 +151,24 @@ public class ConnectionService {
       integration.recordSyncSuccess(clock.now());
       integrationService.save(integration);
     } catch (PluggyException exception) {
-      ConnectionStatus status =
-          exception instanceof PluggyCredentialException
-                  || exception instanceof PluggyUnauthorizedException
-              ? ConnectionStatus.CREDENTIAL_FAILURE
-              : ConnectionStatus.ACTION_REQUIRED;
+      ConnectionStatus status;
+      if (exception instanceof PluggyCredentialException
+          || exception instanceof PluggyUnauthorizedException) {
+        status = ConnectionStatus.CREDENTIAL_FAILURE;
+      } else if (exception instanceof PluggyItemInvalidException) {
+        status = ConnectionStatus.ITEM_UNAVAILABLE;
+      } else {
+        status = ConnectionStatus.ACTION_REQUIRED;
+      }
       connection.recordError("IMPORT_FAILED", status);
       connectionRepository.save(connection);
       integration.recordError(
           "IMPORT_FAILED",
           status == ConnectionStatus.CREDENTIAL_FAILURE
               ? com.deltafinance.integrations.domain.IntegrationStatus.CREDENTIAL_FAILURE
-              : com.deltafinance.integrations.domain.IntegrationStatus.ACTION_REQUIRED);
+              : status == ConnectionStatus.ITEM_UNAVAILABLE
+                  ? com.deltafinance.integrations.domain.IntegrationStatus.ITEM_UNAVAILABLE
+                  : com.deltafinance.integrations.domain.IntegrationStatus.ACTION_REQUIRED);
       integrationService.save(integration);
       throw exception;
     }
@@ -168,13 +183,48 @@ public class ConnectionService {
     return toView(connection);
   }
 
-  public void remove(UUID userId, UUID connectionId) {
+  /**
+   * Remove uma conexão. Por padrão preserva contas, transações e histórico operacional; com {@code
+   * deleteHistory} apaga os dados financeiros vinculados e os registros operacionais da conexão.
+   */
+  @Transactional
+  public void remove(UUID userId, UUID connectionId, boolean deleteHistory) {
     PluggyConnection connection =
         connectionRepository
             .findByIdAndUserId(connectionId, userId)
             .orElseThrow(NotFoundException::new);
-    connection.markUnavailable();
-    connectionRepository.save(connection);
+    syncJobService.cancelActiveForConnection(userId, connectionId);
+
+    int deletedAccounts = 0;
+    if (deleteHistory) {
+      deletedAccounts =
+          jdbcTemplate.update(
+              "delete from financial_account where user_id = ? and connection_id = ?",
+              userId,
+              connectionId);
+      jdbcTemplate.update(
+          "delete from webhook_event where user_id = ? and connection_id = ?",
+          userId,
+          connectionId);
+      jdbcTemplate.update(
+          "delete from sync_run where user_id = ? and connection_id = ?", userId, connectionId);
+      jdbcTemplate.update(
+          "delete from sync_job where user_id = ? and connection_id = ?", userId, connectionId);
+      jdbcTemplate.update(
+          "delete from pluggy_connection where user_id = ? and id = ?", userId, connectionId);
+    } else {
+      connection.markUnavailable();
+      connectionRepository.save(connection);
+      // A conexão deixa de sincronizar; as contas importadas permanecem para histórico, mas saem
+      // dos saldos correntes para não duplicar valores de uma conta já coberta por outra conexão.
+      jdbcTemplate.update(
+          "update financial_account set status = 'UNAVAILABLE', updated_at = ?"
+              + " where user_id = ? and connection_id = ?",
+          java.sql.Timestamp.from(clock.now()),
+          userId,
+          connectionId);
+    }
+
     integrationService
         .findMeuPluggy(userId)
         .ifPresent(
@@ -194,7 +244,12 @@ public class ConnectionService {
               }
             });
     auditService.record(
-        userId, AuditEventType.CONNECTION_REMOVED, "pluggy_connection", connection.getId());
+        userId,
+        AuditEventType.CONNECTION_REMOVED,
+        "pluggy_connection",
+        connection.getId(),
+        java.util.Map.of(
+            "deleteHistory", deleteHistory, "deletedAccounts", Math.max(0, deletedAccounts)));
   }
 
   private PluggyModels.PluggyItem fetchItem(PluggyIntegration integration, String itemId) {

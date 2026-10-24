@@ -143,7 +143,9 @@ class ItemIdChangeIT extends PostgresTestBase {
 
     alice
         .patch("/api/v1/connections/" + connectionId, Map.of("itemId", "item-inexistente"))
-        .andExpect(status().isBadGateway());
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.errors[0].field").value("itemId"));
 
     JsonNode connections = connections();
     assertThat(connections.path("items")).hasSize(1);

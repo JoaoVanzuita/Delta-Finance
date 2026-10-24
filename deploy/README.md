@@ -9,7 +9,9 @@ Este diretório contém a configuração de borda e os scripts operacionais. O
 Internet ──▶ proxy (Caddy :80/:443, TLS) ──▶ client (Caddy :80, SPA + /api) ──▶ server (:8080) ──▶ db (:5432)
 ```
 
-- Apenas `proxy` publica portas no host.
+- Apenas `proxy` publica portas no host. A exceção é o desenvolvimento local,
+  onde `compose.dev.yaml` publica o `db` em `127.0.0.1:${DELTA_DB_PORT}` para o
+  backend rodar fora do Compose (uso: `-f compose.yaml -f compose.dev.yaml`).
 - `server` e `db` ficam na rede interna `backend`.
 - `/api/*` é encaminhado pelo `client` para `server:8080` (mesma origem, sem CORS
   aberto em produção).

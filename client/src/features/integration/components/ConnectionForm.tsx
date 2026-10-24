@@ -24,11 +24,15 @@ export function ConnectionForm({ disabled }: ConnectionFormProps) {
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['integration'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
     },
     onError: (caught) => {
       setError(
         caught instanceof ApiError
-          ? caught.message
+          ? (caught.fieldMessage('itemId') ?? caught.message)
           : 'Não foi possível validar a conexão. Tente novamente.',
       )
     },
@@ -53,7 +57,9 @@ export function ConnectionForm({ disabled }: ConnectionFormProps) {
         </label>
         <p id="connection-item-id-hint" className="mt-1 text-xs text-ink-muted">
           Copie o itemId da conexão autorizada na sua conta Meu Pluggy. A validação é feita no
-          servidor antes de salvar.
+          servidor antes de salvar. Uma mesma conta deve aparecer em apenas uma conexão; se você
+          reconectou a instituição e o itemId mudou, use <strong>Atualizar itemId</strong> na
+          conexão existente em vez de adicionar outra.
         </p>
         <input
           id="connection-item-id"

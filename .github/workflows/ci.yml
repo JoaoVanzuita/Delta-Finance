@@ -34,7 +34,7 @@ jobs:
           cache: maven
           cache-dependency-path: server/pom.xml
 
-      - name: Build, lint e testes (unitários + integração)
+      - name: Build, lint e testes (unitários + integração, incluindo MigrationIT)
         run: ./mvnw -B --no-transfer-progress verify
 
       - name: Publicar relatórios de teste
@@ -69,6 +69,9 @@ jobs:
 
       - name: Instalar dependências
         run: npm ci --no-audit --no-fund
+
+      - name: Lint do contrato OpenAPI, tipos gerados e sincronização
+        run: npm run openapi:check
 
       - name: Lint
         run: npm run lint

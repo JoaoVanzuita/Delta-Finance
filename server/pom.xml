@@ -216,6 +216,48 @@
               <goal>report</goal>
             </goals>
           </execution>
+          <execution>
+            <id>check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <haltOnFailure>true</haltOnFailure>
+              <rules>
+                <!-- Regra de domínio: 80% de linhas agregadas em todos os módulos. -->
+                <rule>
+                  <element>BUNDLE</element>
+                  <includes>
+                    <include>com/deltafinance/*/domain/*</include>
+                  </includes>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>0.80</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+                <!-- Caminhos críticos de dinheiro e autorização: cobertura integral. -->
+                <rule>
+                  <element>CLASS</element>
+                  <includes>
+                    <include>com/deltafinance/shared/money/Money</include>
+                    <include>com/deltafinance/security/OwnershipGuard</include>
+                    <include>com/deltafinance/security/AuthenticatedUser</include>
+                  </includes>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>1.00</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
 

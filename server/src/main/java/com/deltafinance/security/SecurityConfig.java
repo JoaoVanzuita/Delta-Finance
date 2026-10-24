@@ -73,6 +73,9 @@ public class SecurityConfig {
                     .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                     // Webhook usa segredo próprio e não sessão/CSRF de navegador.
                     .ignoringRequestMatchers("/api/v1/webhooks/**"))
+        // A SPA é servida na mesma origem (proxy reverso); não há CORS habilitado.
+        // Requisições cross-origin não recebem cabeçalhos de permissão.
+        .cors(AbstractHttpConfigurer::disable)
         .securityContext(
             context ->
                 context

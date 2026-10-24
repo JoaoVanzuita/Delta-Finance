@@ -782,9 +782,11 @@ export interface components {
             accountCount?: number;
         };
         ConnectionCreateRequest: {
+            /** @description UUID do item exibido em Itens Conectados na página Demo da aplicação no Dashboard Pluggy, criado pela mesma aplicação Meu Pluggy do Client ID autenticado. Não use o UUID da página de detalhes da conta (`accountId`). Item de outra aplicação, removido ou com formato inválido retorna 422. */
             itemId: string;
         };
         ConnectionUpdateRequest: {
+            /** @description Novo UUID do item após reconexão, pertencente à mesma aplicação Meu Pluggy (não o UUID da conta). Não altera o ID local da conexão; item inválido/inexistente retorna 422 e mantém o vínculo anterior. */
             itemId: string;
         };
         ConnectionPage: {
@@ -1312,7 +1314,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Provedor externo indisponível ou recusou a operação. */
+        /** @description Falha sanitizada do provedor externo. Códigos possíveis: `PROVIDER_AUTH_FAILED` (Client ID/Secret recusados, inclusive 400 por Client ID fora do formato UUID), `PROVIDER_RATE_LIMITED` (429; respeitar `Retry-After`) e `PROVIDER_UNAVAILABLE` (demais falhas de comunicação ou respostas inesperadas). Nenhum corpo bruto do provedor é repassado. */
         BadGateway: {
             headers: {
                 [name: string]: unknown;
@@ -1622,8 +1624,18 @@ export interface operations {
                     "application/json": components["schemas"]["Connection"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description Configuração incompleta ou itemId inválido/inexistente para a aplicação Meu Pluggy (campo `itemId` em `errors`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            502: components["responses"]["BadGateway"];
         };
     };
     deleteConnectionsId: {
@@ -1673,8 +1685,18 @@ export interface operations {
                     "application/json": components["schemas"]["Connection"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description itemId inválido/inexistente para a aplicação Meu Pluggy (campo `itemId` em `errors`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            502: components["responses"]["BadGateway"];
         };
     };
     postConnectionsIdSync: {
@@ -1700,7 +1722,17 @@ export interface operations {
                     "application/json": components["schemas"]["SyncAccepted"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /** @description Conexão sem itemId válido (código `CONNECTION_UNAVAILABLE`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getAccounts: {

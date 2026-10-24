@@ -290,10 +290,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Connection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '409':
           $ref: '#/components/responses/Conflict'
         '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+          description: Configuração incompleta ou itemId inválido/inexistente para a
+            aplicação Meu Pluggy (campo `itemId` em `errors`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
+        '502':
+          $ref: '#/components/responses/BadGateway'
       operationId: postConnections
   /connections/{id}:
     parameters:
@@ -318,10 +327,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Connection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+          description: itemId inválido/inexistente para a aplicação Meu Pluggy
+            (campo `itemId` em `errors`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
+        '502':
+          $ref: '#/components/responses/BadGateway'
       operationId: patchConnectionsId
     delete:
       tags:
@@ -365,8 +383,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SyncAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conexão sem itemId válido (código `CONNECTION_UNAVAILABLE`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
       operationId: postConnectionsIdSync
   /accounts:
     get:
@@ -1440,7 +1466,11 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     BadGateway:
-      description: Provedor externo indisponível ou recusou a operação.
+      description: 'Falha sanitizada do provedor externo. Códigos possíveis:
+        `PROVIDER_AUTH_FAILED` (Client ID/Secret recusados, inclusive 400 por
+        Client ID fora do formato UUID), `PROVIDER_RATE_LIMITED` (429; respeitar
+        `Retry-After`) e `PROVIDER_UNAVAILABLE` (demais falhas de comunicação ou
+        respostas inesperadas). Nenhum corpo bruto do provedor é repassado.'
       content:
         application/problem+json:
           schema:
@@ -1639,6 +1669,11 @@ components:
       properties:
         itemId:
           type: string
+          description: UUID do item exibido em Itens Conectados na página Demo da
+            aplicação no Dashboard Pluggy, criado pela mesma aplicação Meu Pluggy do
+            Client ID autenticado. Não use o UUID da página de detalhes da conta
+            (`accountId`). Item de outra aplicação, removido ou com formato inválido
+            retorna 422.
     ConnectionUpdateRequest:
       type: object
       required:
@@ -1646,6 +1681,10 @@ components:
       properties:
         itemId:
           type: string
+          description: Novo UUID do item após reconexão, pertencente à mesma
+            aplicação Meu Pluggy (não o UUID da conta). Não altera o ID local da
+            conexão; item inválido/inexistente retorna 422 e mantém o vínculo
+            anterior.
     ConnectionPage:
       type: object
       required:
@@ -2194,6 +2233,10 @@ components:
         then:
           required:
           - transactionId
+          properties:
+            transactionId:
+              type: string
+              format: uuid
     InvoiceItemCorrection:
       type: object
       required:
@@ -2275,6 +2318,10 @@ components:
         then:
           required:
           - transactionId
+          properties:
+            transactionId:
+              type: string
+              format: uuid
     InvoicePayment:
       type: object
       required:

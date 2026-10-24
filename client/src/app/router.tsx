@@ -13,6 +13,7 @@ import { AccountSettingsPage } from '@/features/auth/pages/AccountSettingsPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { RegisterPage } from '@/features/auth/pages/RegisterPage'
 import { IntegrationSetupPage } from '@/features/integration/pages/IntegrationSetupPage'
+import { PrivacySettingsPage } from '@/features/privacy/pages/PrivacySettingsPage'
 import { TransactionsPage } from '@/features/transactions/pages/TransactionsPage'
 
 import { HomePage } from './HomePage'
@@ -137,6 +138,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <IntegrationSetupPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'settings/privacy',
+        element: (
+          <ProtectedRoute>
+            <PrivacySettingsPage />
           </ProtectedRoute>
         ),
       },

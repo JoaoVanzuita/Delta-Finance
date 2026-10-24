@@ -173,6 +173,29 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
   return (await response.json()) as T
 }
 
+/** Baixa um recurso binário (ex.: ZIP de exportação) com tratamento de erro da API. */
+async function download(path: string): Promise<Blob> {
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/zip' },
+    })
+  } catch (cause) {
+    throw ApiError.network(cause)
+  }
+
+  if (!response.ok) {
+    const error = await toApiError(response)
+    if (error.status === 401 && sessionEstablished && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT))
+    }
+    throw error
+  }
+  return response.blob()
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? 'GET'
   const unsafe = method !== 'GET'
@@ -199,6 +222,7 @@ export const api = {
   put: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
+  download: (path: string) => download(path),
 }
 
 export { UNAUTHENTICATED_EVENT }

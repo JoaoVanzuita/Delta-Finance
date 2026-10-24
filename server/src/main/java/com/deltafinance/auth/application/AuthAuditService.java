@@ -57,4 +57,8 @@ public class AuthAuditService {
   public void passwordChanged(UUID userId) {
     auditService.record(userId, AuditEventType.PASSWORD_CHANGED, TARGET_TYPE, userId);
   }
+
+  public void accountDeletionRequested(UUID userId) {
+    auditService.record(userId, AuditEventType.ACCOUNT_DELETION_REQUESTED, TARGET_TYPE, userId);
+  }
 }

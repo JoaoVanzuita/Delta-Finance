@@ -33,6 +33,10 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
     void queryClient.invalidateQueries({ queryKey: ['integration'] })
     void queryClient.invalidateQueries({ queryKey: ['syncStatus'] })
     void queryClient.invalidateQueries({ queryKey: ['syncRuns'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
   }
 
   const sync = useMutation({
@@ -69,11 +73,16 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
   })
 
   const remove = useMutation({
-    mutationFn: (id: string) => financeApi.removeConnection(id),
-    onSuccess: () => {
+    mutationFn: (input: { id: string; deleteHistory: boolean }) =>
+      financeApi.removeConnection(input.id, input.deleteHistory),
+    onSuccess: (_result, input) => {
       setConfirmingRemoveId(null)
       setError(null)
-      setMessage('Conexão removida. O histórico importado foi preservado.')
+      setMessage(
+        input.deleteHistory
+          ? 'Conexão e dados importados removidos. Contas manuais e categorias foram preservadas.'
+          : 'Conexão desativada. O histórico importado foi preservado e saiu dos saldos correntes.',
+      )
       invalidate()
     },
     onError: (caught) => {
@@ -94,8 +103,9 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
           Conexões
         </h2>
         <p className="mt-1 text-sm text-ink-muted">
-          Cada itemId corresponde a uma autorização bancária. Remover interrompe novas
-          sincronizações e preserva o histórico.
+          Cada itemId corresponde a uma autorização bancária. Desativar interrompe novas
+          sincronizações e preserva o histórico; excluir remove também as contas e transações
+          importadas por esta conexão.
         </p>
       </div>
 
@@ -191,17 +201,25 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => remove.mutate(connection.id)}
+                          onClick={() => remove.mutate({ id: connection.id, deleteHistory: false })}
+                          className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted disabled:opacity-60"
+                        >
+                          Desativar e manter dados
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => remove.mutate({ id: connection.id, deleteHistory: true })}
                           className="inline-flex min-h-11 items-center justify-center rounded-card border border-expense/50 bg-expense/5 px-3 text-sm font-semibold text-expense disabled:opacity-60"
                         >
-                          Confirmar remoção
+                          Excluir conexão e dados
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmingRemoveId(null)}
                           className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink"
                         >
-                          Manter
+                          Cancelar
                         </button>
                       </>
                     ) : (
@@ -220,6 +238,15 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
                     )}
                   </div>
                 </div>
+
+                {confirming ? (
+                  <p className="text-xs leading-relaxed text-ink-muted">
+                    <strong className="text-ink">Desativar</strong> interrompe novas sincronizações
+                    e tira as contas importadas dos saldos correntes, preservando o histórico.{' '}
+                    <strong className="text-ink">Excluir</strong> apaga também as contas e
+                    transações importadas por esta conexão; contas manuais e categorias permanecem.
+                  </p>
+                ) : null}
 
                 {editing ? (
                   <form

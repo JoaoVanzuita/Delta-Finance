@@ -82,4 +82,27 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       @Param("type") TransactionType type,
       @Param("source") TransactionSource source,
       @Param("statuses") Collection<TransactionStatus> statuses);
+
+  /**
+   * Estornos/chargebacks vinculados a uma transação, anteriores a uma data.
+   *
+   * <p>Usado para limitar a redução acumulada de despesas ao valor efetivo do original (FR-057).
+   * Valores são cifrados, então a soma é feita após a decifragem no serviço.
+   */
+  @Query(
+      """
+      select t from Transaction t
+      where t.userId = :userId
+        and t.relatedTransactionId = :relatedId
+        and t.type in (com.deltafinance.transactions.domain.TransactionType.REFUND,
+                       com.deltafinance.transactions.domain.TransactionType.CHARGEBACK)
+        and t.status in :statuses
+        and t.postedOn < :toExclusive
+      order by t.postedOn asc, t.id asc
+      """)
+  List<Transaction> findLinkedReductionsBefore(
+      @Param("userId") UUID userId,
+      @Param("relatedId") UUID relatedId,
+      @Param("toExclusive") LocalDate toExclusive,
+      @Param("statuses") Collection<TransactionStatus> statuses);
 }

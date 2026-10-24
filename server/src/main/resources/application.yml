@@ -99,6 +99,9 @@ delta:
     key-file: ${DELTA_CRYPTO_KEY_FILE:./secrets/crypto-keys.json}
     active-version: ${DELTA_CRYPTO_ACTIVE_VERSION:1}
     index-key-version: ${DELTA_INDEX_KEY_VERSION:1}
+    rotation:
+      # Execução única via key-rotation; nunca agendada por padrão.
+      run: ${DELTA_KEY_ROTATION_RUN:false}
   pluggy:
     base-url: ${DELTA_PLUGGY_BASE_URL:https://api.pluggy.ai}
     connection-limit: ${DELTA_PLUGGY_CONNECTION_LIMIT:5}
@@ -118,9 +121,18 @@ delta:
     retry-base: ${DELTA_SYNC_RETRY_BASE:30s}
     retry-max: ${DELTA_SYNC_RETRY_MAX:1h}
     batch-size: ${DELTA_SYNC_BATCH_SIZE:10}
+  privacy:
+    retention:
+      # Expurgo diário: login_attempt 30 d, sync_run/webhook_event 90 d,
+      # audit_event 1 ano e idempotency_key 24 h.
+      enabled: ${DELTA_PRIVACY_RETENTION_ENABLED:true}
+      cron: ${DELTA_PRIVACY_RETENTION_CRON:0 30 3 * * *}
   security:
     sessions:
       absolute-timeout: 12h
+    # Token exclusivo do operador para recuperação assistida de senha (T197).
+    # Vazio desabilita o mecanismo. Nunca é exposto por HTTP.
+    operator-reset-token: ${DELTA_OPERATOR_RESET_TOKEN:}
     login:
       max-failures: 5
       window: 15m

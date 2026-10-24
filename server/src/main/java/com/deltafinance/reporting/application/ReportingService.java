@@ -11,6 +11,7 @@ import com.deltafinance.reconciliation.application.InternalMatchService;
 import com.deltafinance.reporting.application.ReportEntry.Direction;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.application.TransactionQueryService;
 import com.deltafinance.transactions.application.TransactionView;
@@ -179,9 +180,28 @@ public class ReportingService {
     return entries(userId, resolve(userId, query));
   }
 
+  /** Limite restante de redução de despesa para um estorno/chargeback vinculado (FR-057). */
+  private BigDecimal remainingReduction(UUID userId, UUID originalId, LocalDate from) {
+    TransactionView original;
+    try {
+      original = transactionQueryService.get(userId, originalId);
+    } catch (NotFoundException exception) {
+      return null;
+    }
+    BigDecimal originalAmount = MoneyAggregator.parse(original.amount()).abs();
+    BigDecimal prior =
+        transactionQueryService
+            .listLinkedReductionsBefore(userId, originalId, from, EFFECTIVE_STATUSES)
+            .stream()
+            .map(view -> MoneyAggregator.parse(view.amount()).abs())
+            .reduce(MoneyAggregator.zero(), MoneyAggregator::sum);
+    return originalAmount.subtract(prior).max(MoneyAggregator.zero());
+  }
+
   private List<ReportEntry> entries(UUID userId, Resolved resolved) {
     List<ReportEntry> entries = new ArrayList<>();
     List<InvoiceReportItem> decreases = new ArrayList<>();
+    Map<UUID, BigDecimal> remainingReductions = new HashMap<>();
 
     UUID effectiveCategoryId =
         ReportingService.UNCATEGORIZED_ID.equals(resolved.categoryId())
@@ -210,6 +230,25 @@ public class ReportingService {
       if ("REFUND".equals(transaction.type()) || "CHARGEBACK".equals(transaction.type())) {
         direction = Direction.EXPENSE_REDUCTION;
         reportAmount = amount.abs();
+        UUID relatedId = transaction.relatedTransactionId();
+        if (relatedId != null) {
+          BigDecimal remaining = remainingReductions.get(relatedId);
+          if (remaining == null && !remainingReductions.containsKey(relatedId)) {
+            remaining = remainingReduction(userId, relatedId, resolved.from());
+            if (remaining != null) {
+              remainingReductions.put(relatedId, remaining);
+            }
+          }
+          if (remaining != null) {
+            if (remaining.signum() <= 0) {
+              // Excedente ao valor efetivo do original não reduz despesas novamente (FR-057).
+              continue;
+            }
+            BigDecimal applied = reportAmount.min(remaining).setScale(Money.SCALE);
+            remainingReductions.put(relatedId, remaining.subtract(applied));
+            reportAmount = applied;
+          }
+        }
       } else if (amount.signum() > 0) {
         direction = Direction.INCOME;
         reportAmount = amount;

@@ -71,8 +71,10 @@ docker compose ps
 curl -fsS https://SEU_DOMINIO/healthz
 ```
 
-O health do `server` aparece no `docker compose ps`. Em desenvolvimento, se a
-porta 8080 estiver publicada apenas em localhost, use:
+O health do `server` aparece no `docker compose ps`. O stack completo não publica
+a porta 8080 no host; para executar o backend fora do Compose (`./mvnw
+spring-boot:run`), suba o banco com o override de desenvolvimento
+(`docker compose -f compose.yaml -f compose.dev.yaml up -d db`) e use:
 
 ```bash
 curl -fsS http://localhost:8080/actuator/health/liveness
@@ -80,7 +82,8 @@ curl -fsS http://localhost:8080/actuator/health/readiness
 ```
 
 Em produção, use o domínio configurado e HTTPS. Em desenvolvimento local, o
-cookie `Secure` pode ser desativado apenas no perfil local.
+cookie `Secure` pode ser desativado com `DELTA_COOKIE_SECURE=false`; o perfil
+local não altera esse valor sozinho.
 
 ## 4. Validar conta e isolamento
 
@@ -106,14 +109,29 @@ exportação, relatórios e faturas.
 
 ## 5. Configurar o Meu Pluggy pessoal
 
-Para cada usuário, repetir a configuração oficial:
+Para cada usuário, repetir a configuração oficial. São dois sites com papéis
+diferentes:
+
+- **meu.pluggy.ai** (Meu Pluggy): produto pessoal onde os bancos são autorizados
+  e os consentimentos ficam; não fornece Client ID/Secret nem itemId de API.
+- **dashboard.pluggy.ai** (Dashboard Pluggy): onde ficam a aplicação, o Client
+  ID/Secret e a página Demo que expõe as conexões do Meu Pluggy como itens da
+  API.
+
+O aviso de **trial de 15 dias** no Dashboard é do plano empresarial. O caminho
+pessoal com o conector **MeuPluggy** é gratuito, não exige due diligence e não
+expira com o trial (limite de 5 conexões e uso não comercial).
 
 1. Entrar no Meu Pluggy e conectar as instituições.
-2. No Dashboard Pluggy, usar a mesma conta, habilitar o conector **MeuPluggy**
-   e conectar pelo fluxo Demo → Conectar Conta → MeuPluggy.
-3. Copiar o Client ID, o Client Secret e o itemId de cada conexão.
+2. No Dashboard Pluggy, entrar com a **mesma conta** do Meu Pluggy, habilitar o
+   conector **MeuPluggy** (Customização → Conectores) e conectar pelo fluxo
+   Demo → Conectar Conta → MeuPluggy. Não escolha o banco diretamente nem o
+   Sandbox.
+3. Copiar o Client ID, o Client Secret e o itemId (UUID) de cada conexão. O
+   itemId precisa ter sido criado pela mesma aplicação Meu Pluggy do Client ID;
+   item de outra aplicação ou removido é recusado com 422 no campo `itemId`.
 4. No sistema, abrir Configurações → Integração e informar Client ID e Client
-   Secret.
+   Secret. A API Key é obtida no servidor e nunca é configurada no `.env`.
 5. Adicionar cada itemId separadamente.
 6. Validar credenciais e ao menos uma conexão.
 7. Confirmar que o Client Secret não é exibido novamente e que nenhuma API Key
@@ -309,9 +327,12 @@ backupado separadamente. Teste a restauração em um banco limpo e confirme:
 |---|---|
 | Dados não atualizam imediatamente | Meu Pluggy atualiza a origem a cada 24 h; a consulta manual não força atualização. |
 | Item com lista vazia | Verificar `consentExpiresAt`, `status` e `lastErrorCode`; não apagar histórico. |
+| `PROVIDER_AUTH_FAILED` (HTTP 502) | Client ID/Secret recusados pelo provedor (inclusive 400 por Client ID fora do formato UUID). Revisar os valores e validar novamente; a configuração anterior é preservada. |
 | `USER_AUTHORIZATION_EXPIRED` | Renovar no Dashboard Pluggy, revisar itemIds e reconciliar. |
 | `LOGIN_ERROR` | Validar credenciais e reconectar; não expor detalhes do provedor. |
-| `429` | Respeitar `RateLimit-Reset`/`Retry-After`; reduzir concorrência. |
+| `429` / `PROVIDER_RATE_LIMITED` | Respeitar `RateLimit-Reset`/`Retry-After`; reduzir concorrência. |
+| `itemId` inválido/inexistente (HTTP 422) | Copiar o UUID do **item** em Itens Conectados (Dashboard → sua aplicação → Demo), não o UUID da página da conta (`accountId`). O item precisa ter sido criado pela mesma aplicação Meu Pluggy do Client ID e não ter sido removido. |
+| `ITEM_UNAVAILABLE` | Reconectar o item na origem e atualizar o itemId; a falha exige ação do usuário e não é retentada automaticamente. |
 | `itemId` mudou | Atualizar o vínculo local e reconciliar por IDs locais/fingerprint. |
 | Webhook não chega | Verificar HTTPS público, segredo, status da inscrição e logs sanitizados. |
 | Fatura divergente | Conferir ciclo, `billId`, parcelas, pagamentos e itens manuais; não inventar valores. |
@@ -361,3 +382,32 @@ backupado separadamente. Teste a restauração em um banco limpo e confirme:
 - [ ] Backup/restauração, key ring e expiração de backup em 30 dias testados.
 - [ ] Responsividade e acessibilidade verificadas.
 - [ ] Documentação de operação, riscos e limitações atualizada.
+
+## 18. Resultados de execução (2026-10-24)
+
+Ambiente: stack Docker Compose local (`db` PostgreSQL 18.6, `server`, `client`,
+`proxy` Caddy), key ring externo, dados sintéticos. Execução automatizada; não
+substitui o protocolo humano SC-001 nem o gate real Meu Pluggy.
+
+| Verificação | Resultado |
+|---|---|
+| Health `client`/Caddy | `ok` |
+| `GET /api/v1/auth/csrf` | `204` |
+| 5 cadastros + primeiro login (Playwright) | 0,25–0,31 s por usuário no ambiente automatizado |
+| Lançamento manual (Playwright) | 0,16 s no ambiente automatizado |
+| k6 dashboard/filtros/drill-down (3 VUs, 30 s) | p95 ≈ 365 ms; meta ≤ 2 s |
+| k6 login/logout (1 VU, 20 s) | p95 ≈ 32 ms / 4 ms; meta ≤ 1 s |
+| k6 CRUD/listas (2 VUs, 20 s) | p95 ≈ 6–9 ms; meta ≤ 500 ms |
+| Sincronização de conexão (stub local, 1.000 transações) | p95 ≈ 58 ms; meta ≤ 60 s |
+| Exportação/desconexão/exclusão | cobertas por `ExportIT`, `AccountLifecycleIT`, `privacy.spec.ts` |
+
+Pendências manuais explícitas:
+
+- [x] Protocolo SC-001 com 5 pessoas reais — **dispensado em 2026-10-24 pelo
+      proprietário**; os tempos acima são automação, não medição humana.
+- [x] Lançamento manual por pessoa nova em menos de 90 s — **dispensado em
+      2026-10-24**; o fluxo foi validado por automação, não por usuário novo.
+- [ ] Gate real com duas aplicações Meu Pluggy independentes
+      (`docs/runbooks/pluggy-acceptance.md`).
+- [ ] Medição de sincronização de uma conexão real em até 60 s (o valor acima
+      usa stub local; a latência real do provedor deve ser confirmada no gate).

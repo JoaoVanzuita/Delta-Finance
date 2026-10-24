@@ -68,13 +68,39 @@ O roteiro de validação ponta a ponta (incluindo o gate real da Pluggy) está e
 > com JDKs mais novos. O arquivo `server/.mvn/jvm.config` já habilita os
 > `--add-exports` necessários.
 
-Backend (PostgreSQL via Compose):
+Backend (PostgreSQL via Compose, publicado apenas em `127.0.0.1`):
 
 ```bash
-docker compose up -d db
+# compose.dev.yaml publica o banco na porta DELTA_DB_PORT (padrão 5432)
+docker compose -f compose.yaml -f compose.dev.yaml up -d db
+
 cd server
-./mvnw spring-boot:run       # profile local, porta 8080
+set -a; . ../.env; set +a    # credenciais do .env
+DELTA_CRYPTO_KEY_FILE=../secrets/crypto-keys.json \
+  ./mvnw spring-boot:run     # profile local, porta 8080
 ```
+
+O backend **não lê o `.env` sozinho**: sem exportar as variáveis, ele cai nos
+valores padrão (`delta`/`delta`) e o Postgres responde
+`password authentication failed for user "delta"`. O `DELTA_CRYPTO_KEY_FILE`
+é sobrescrito porque o `.env` aponta para `/run/secrets`, caminho existente
+apenas dentro do container.
+
+Se `DELTA_DB_PORT` já estiver ocupada por outro serviço local, ajuste-a no
+`.env`: o override do Compose e o backend usam a mesma variável.
+
+O `POSTGRES_PASSWORD` só é aplicado quando o volume `pgdata` é criado. Se você
+trocou `DELTA_DB_PASSWORD` depois do primeiro `up`, a senha do volume continua a
+antiga e a autenticação falha. Sem perder dados, realinhe a senha:
+
+```bash
+set -a; . ./.env; set +a
+docker compose exec db psql -U "$DELTA_DB_USER" -d "$DELTA_DB_NAME" \
+  -c "ALTER ROLE $DELTA_DB_USER PASSWORD '$DELTA_DB_PASSWORD'"
+```
+
+Alternativa destrutiva (apaga o banco de desenvolvimento):
+`docker compose down -v && docker compose -f compose.yaml -f compose.dev.yaml up -d db`.
 
 Frontend (proxy de `/api` para `http://localhost:8080`):
 

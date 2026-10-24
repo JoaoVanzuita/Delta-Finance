@@ -23,7 +23,8 @@
     "openapi:lint": "redocly lint ../specs/001-finance/contracts/openapi.yaml",
     "openapi:types": "openapi-typescript ../specs/001-finance/contracts/openapi.yaml -o src/lib/api/schema.d.ts",
     "prebuild": "npm run openapi:lint && npm run openapi:types",
-    "pretypecheck": "npm run openapi:types"
+    "pretypecheck": "npm run openapi:types",
+    "openapi:check": "npm run openapi:lint && npm run openapi:types && git diff --exit-code -- src/lib/api/schema.d.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "5.104.4",

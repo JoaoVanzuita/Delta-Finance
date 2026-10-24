@@ -5,16 +5,16 @@ os arquivos abaixo são criados quando o procedimento correspondente é validado
 
 | Runbook | Quando usar | Status |
 |---|---|---|
-| `connection.md` | configurar uma conexão Meu Pluggy e validar credenciais | T180 |
-| `reconnect.md` | autorização anual expirada, itemId alterado ou conexão removida | T180 |
-| `key-rotation.md` | rotacionar chaves de criptografia/índice com reencriptação | T176 |
-| `backup.md` | rotina diária de backup, verificação e retenção de 30 dias | T175 |
-| `restore.md` | restaurar em banco limpo após incidente ou perda | T175 |
-| `update-rollback.md` | atualizar o stack e reverter com segurança | T187 |
-| `incident.md` | indisponibilidade, vazamento suspeito ou falha de sync | T180 |
-| `deletion.md` | exclusão de conta, retenção e tombstone | T147 |
-| `password-reset.md` | recuperação assistida de senha (sem e-mail transacional) | T193 |
-| `pluggy-acceptance.md` | gate real com duas aplicações Meu Pluggy independentes | T182 |
+| `connection.md` | configurar uma conexão Meu Pluggy e validar credenciais | disponível |
+| `reconnect.md` | autorização anual expirada, itemId alterado ou conexão removida | disponível |
+| `key-rotation.md` | rotacionar chaves de criptografia/índice com reencriptação | disponível |
+| `backup.md` | rotina diária de backup, verificação e retenção de 30 dias | disponível |
+| `restore.md` | restaurar em banco limpo após incidente ou perda | disponível |
+| `update-rollback.md` | atualizar o stack e reverter com segurança | disponível |
+| `incident.md` | indisponibilidade, vazamento suspeito ou falha de sync | disponível |
+| `deletion.md` | exclusão de conta, retenção e tombstone | disponível |
+| `password-reset.md` | recuperação assistida de senha (sem e-mail transacional) | disponível |
+| `pluggy-acceptance.md` | gate real com duas aplicações Meu Pluggy independentes | disponível; execução real pendente |
 
 ## Princípios
 

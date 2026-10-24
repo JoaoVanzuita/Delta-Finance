@@ -1,0 +1,91 @@
+name: Security
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (histórico completo)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # Necessário apenas para repositórios privados; em repositórios públicos
+          # o gitleaks roda sem licença.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+
+  dependency-scan:
+    name: Dependency scanning (Trivy filesystem)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Trivy (Maven, npm e Dockerfiles)
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+  container-scan:
+    name: Container scanning (Trivy image)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Preparar ambiente de build
+        run: |
+          cp .env.example .env
+          mkdir -p secrets
+
+      - name: Build das imagens do backend e do frontend
+        run: |
+          docker build -t delta-finance/server:scan ./server
+          docker build -t delta-finance/client:scan -f client/Dockerfile .
+
+      - name: Escanear imagem do backend
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: delta-finance/server:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: Escanear imagem do frontend
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: delta-finance/client:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table

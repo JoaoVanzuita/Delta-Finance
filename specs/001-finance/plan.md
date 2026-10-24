@@ -361,7 +361,10 @@ duplicação, falha de um usuário não bloqueia os demais.
 - Implementar estados de integração/conexão, última tentativa, último sucesso,
   `consentExpiresAt`, `nextAutoSyncAt` e códigos de erro sanitizados.
 - Implementar detecção de `USER_AUTHORIZATION_EXPIRED`, `LOGIN_ERROR`, timeout,
-  `429`, lista vazia e indisponibilidade sem excluir dados.
+  `429`, lista vazia, itemId inválido/inexistente e indisponibilidade sem excluir
+  dados. Falha de credencial (`400/401/403` no `POST /auth`) é
+  `PROVIDER_AUTH_FAILED`; item inexistente é `ITEM_UNAVAILABLE`, exige ação do
+  usuário e não é retentado automaticamente.
 - Implementar atualização de itemId e reconciliação sem perda histórica.
 - Implementar revisão explícita de transações `SOURCE_REMOVED`, com restaurar ou
   confirmar remoção e histórico preservado.

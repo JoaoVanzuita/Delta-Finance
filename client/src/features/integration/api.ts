@@ -69,13 +69,15 @@ export const financeApi = {
   saveCredentials: (input: CredentialsInput) => api.put<Integration>('/integrations/pluggy', input),
   validateCredentials: (input: CredentialsInput) =>
     api.post<ValidationResult>('/integrations/pluggy/validate', input),
-  disconnect: () => api.delete<void>('/integrations/pluggy'),
+  disconnect: (deleteImportedData = false) =>
+    api.delete<void>(`/integrations/pluggy?deleteImportedData=${deleteImportedData}`),
 
   connections: () => api.get<ConnectionPage>('/connections'),
   addConnection: (itemId: string) => api.post<Connection>('/connections', { itemId }),
   updateConnection: (id: string, itemId: string) =>
     api.patch<Connection>(`/connections/${id}`, { itemId }),
-  removeConnection: (id: string) => api.delete<void>(`/connections/${id}`),
+  removeConnection: (id: string, deleteHistory = false) =>
+    api.delete<void>(`/connections/${id}?deleteHistory=${deleteHistory}`),
   syncConnection: (id: string) => api.post<SyncAccepted>(`/connections/${id}/sync`),
 
   syncStatus: () => api.get<SyncStatus>('/sync/status'),

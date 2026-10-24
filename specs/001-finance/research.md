@@ -244,7 +244,9 @@ do dashboard com dados sintéticos.
 
 ### Limites operacionais
 
-- `GET /v2/transactions` com paginação por cursor e página de 500.
+- `GET /v2/transactions` com paginação por cursor; o padrão da API é 500 e o
+  parâmetro `pageSize` não deve ser enviado (a API o recusa com `400`). Use
+  `dateFrom`/`dateTo`; `next` é uma query string pronta e o `after` é opaco.
 - `GET /accounts?itemId=` com paginação.
 - `GET /items/{id}` para status, `consentExpiresAt`, `nextAutoSyncAt`,
   `lastUpdatedAt` e erro.

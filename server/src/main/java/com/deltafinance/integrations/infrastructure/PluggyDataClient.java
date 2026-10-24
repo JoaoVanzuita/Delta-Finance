@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -13,6 +15,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -20,12 +23,14 @@ import tools.jackson.databind.json.JsonMapper;
  * Leitura de dados no provedor.
  *
  * <p>Endpoints usados: {@code GET /items/{id}}, {@code GET /accounts?itemId} e {@code GET
- * /v2/transactions} com cursor. Nenhuma resposta bruta é propagada ao cliente; erros são
- * sanitizados.
+ * /v2/transactions} com cursor. Em transações a API usa {@code dateFrom}/{@code dateTo} e o {@code
+ * next} é uma query string; não envie {@code pageSize} (a API recusa com 400 e usa 500 por padrão).
+ * Nenhuma resposta bruta é propagada ao cliente; erros são sanitizados.
  */
 @Component
 public class PluggyDataClient {
 
+  private static final Logger LOG = LoggerFactory.getLogger(PluggyDataClient.class);
   private static final int PAGE_SIZE = 500;
   private static final int MAX_PAGES = 100;
 
@@ -103,9 +108,10 @@ public class PluggyDataClient {
     for (int page = 0; page < MAX_PAGES; page++) {
       MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
       params.add("accountId", accountId);
-      params.add("pageSize", String.valueOf(PAGE_SIZE));
       if (from != null) {
-        params.add("from", from.toString());
+        // A API v2 usa dateFrom/dateTo; "from" era ignorado e fazia cada sincronização
+        // percorrer todo o histórico disponível.
+        params.add("dateFrom", from.toString());
       }
       if (cursor != null && !cursor.isBlank()) {
         params.add("after", cursor);
@@ -137,9 +143,28 @@ public class PluggyDataClient {
       if (next == null || next.isBlank()) {
         break;
       }
-      cursor = next;
+      // "next" é uma query string pronta (ex.: "?accountId=...&after=..."); enviar o
+      // valor inteiro em "after" gera 400. Extraímos somente o cursor opaco.
+      cursor = extractAfter(next);
+      if (cursor == null || cursor.isBlank()) {
+        break;
+      }
     }
     return new PluggyModels.PluggyTransactionPage(transactions, next);
+  }
+
+  private static String extractAfter(String next) {
+    try {
+      String encoded =
+          UriComponentsBuilder.fromUriString(next).build().getQueryParams().getFirst("after");
+      // A documentação pede o valor de "after" já decodificado; o builder da requisição
+      // volta a codificá-lo como parâmetro normal.
+      return encoded == null
+          ? null
+          : UriUtils.decode(encoded, java.nio.charset.StandardCharsets.UTF_8);
+    } catch (RuntimeException exception) {
+      return null;
+    }
   }
 
   private JsonNode getJson(
@@ -167,6 +192,13 @@ public class PluggyDataClient {
       return jsonMapper.readTree(body);
     } catch (RestClientResponseException exception) {
       int status = exception.getStatusCode().value();
+      // Diagnóstico sanitizado: endpoint e status apenas, nunca corpo ou credenciais.
+      LOG.warn("Falha do provedor: endpoint={} status={}", endpoint, status);
+      // 400/404 em /items/{id} significa itemId malformado ou inexistente para
+      // esta aplicação Meu Pluggy — não é indisponibilidade do provedor.
+      if (path.startsWith("/items/") && (status == 400 || status == 404)) {
+        throw new PluggyItemInvalidException();
+      }
       if (status == 401 || status == 403) {
         throw new PluggyUnauthorizedException();
       }
@@ -179,6 +211,10 @@ public class PluggyDataClient {
       throw new PluggyException("Provedor indisponível.", exception);
     } catch (RestClientException exception) {
       rateLimiter.onTransientFailure(endpoint);
+      LOG.warn(
+          "Falha de comunicação com o provedor: endpoint={} tipo={}",
+          endpoint,
+          exception.getClass().getSimpleName());
       throw new PluggyException("Falha de comunicação com o provedor.", exception);
     } catch (RuntimeException exception) {
       if (exception instanceof PluggyException pluggyException) {

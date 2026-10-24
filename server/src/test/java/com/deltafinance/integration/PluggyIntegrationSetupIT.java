@@ -157,6 +157,37 @@ class PluggyIntegrationSetupIT extends PostgresTestBase {
   }
 
   @Test
+  void itemIdInexistenteRetornaValidacaoDeCampoSemCriarConexao() throws Exception {
+    configure(alice, ALICE_CLIENT, "secret-alice");
+
+    alice
+        .post("/api/v1/connections", Map.of("itemId", "item-inexistente"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.errors[0].field").value("itemId"))
+        .andExpect(
+            jsonPath("$.errors[0].message")
+                .value(org.hamcrest.Matchers.containsString("não encontrado")));
+
+    alice
+        .get("/api/v1/connections")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items").isEmpty());
+  }
+
+  @Test
+  void itemIdMalformadoNoProvedorRetornaValidacaoDeCampo() throws Exception {
+    configure(alice, ALICE_CLIENT, "secret-alice");
+    PLUGGY.failPath("/items/", 400, 1);
+
+    alice
+        .post("/api/v1/connections", Map.of("itemId", "item-alice-1"))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.errors[0].field").value("itemId"));
+  }
+
+  @Test
   void acessoCruzadoANomeDeContaDeOutroUsuarioRetorna404() throws Exception {
     configure(alice, ALICE_CLIENT, "secret-alice");
     configure(bob, BOB_CLIENT, "secret-bob");

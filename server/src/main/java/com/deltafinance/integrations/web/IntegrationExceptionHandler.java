@@ -2,10 +2,12 @@ package com.deltafinance.integrations.web;
 
 import com.deltafinance.integrations.infrastructure.PluggyCredentialException;
 import com.deltafinance.integrations.infrastructure.PluggyException;
+import com.deltafinance.integrations.infrastructure.PluggyItemInvalidException;
 import com.deltafinance.integrations.infrastructure.PluggyRateLimitedException;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
 import com.deltafinance.shared.errors.ErrorCode;
 import com.deltafinance.shared.errors.ProblemFactory;
+import com.deltafinance.shared.errors.ValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -37,6 +39,16 @@ public class IntegrationExceptionHandler {
         "Não foi possível validar as credenciais com o provedor.",
         request,
         null);
+  }
+
+  @ExceptionHandler(PluggyItemInvalidException.class)
+  public ResponseEntity<ProblemDetail> itemInvalid(
+      PluggyItemInvalidException exception, HttpServletRequest request) {
+    ProblemDetail problem =
+        problemFactory.validation(
+            new ValidationException("itemId", PluggyItemInvalidException.USER_MESSAGE),
+            request.getRequestURI());
+    return ResponseEntity.unprocessableEntity().body(problem);
   }
 
   @ExceptionHandler(PluggyRateLimitedException.class)

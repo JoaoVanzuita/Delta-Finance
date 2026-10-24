@@ -178,6 +178,59 @@ public class AuthService {
     authAuditService.passwordChanged(user.getId());
   }
 
+  /**
+   * Confirma a senha do titular para uma operação destrutiva e devolve o nome normalizado usado nos
+   * índices de tentativas de login.
+   */
+  public String verifyPasswordForDestructiveAction(UUID userId, String password) {
+    AppUser user =
+        userRepository
+            .findById(userId)
+            .filter(AppUser::isActive)
+            .orElseThrow(UnauthenticatedException::new);
+    if (!passwordEncoder.matches(password == null ? "" : password, user.getPasswordHash())) {
+      throw new ValidationException("password", "Senha incorreta.");
+    }
+    return user.getUsernameNormalized();
+  }
+
+  /** Marca a solicitação de exclusão no tombstone de identidade. */
+  public void requestDeletion(UUID userId) {
+    AppUser user = userRepository.findById(userId).orElseThrow(UnauthenticatedException::new);
+    if (user.getStatus() == com.deltafinance.auth.domain.UserStatus.DELETED) {
+      return;
+    }
+    user.requestDeletion(clock.now());
+    userRepository.save(user);
+    authAuditService.accountDeletionRequested(user.getId());
+  }
+
+  /**
+   * Finaliza a exclusão: apaga a credencial de senha e mantém apenas o tombstone de identidade. O
+   * evento {@code ACCOUNT_DELETED} é registrado pelo serviço de privacidade com contagens
+   * sanitizadas.
+   */
+  public void completeDeletion(UUID userId) {
+    AppUser user = userRepository.findById(userId).orElseThrow(UnauthenticatedException::new);
+    if (user.getStatus() == com.deltafinance.auth.domain.UserStatus.DELETED) {
+      return;
+    }
+    // Hash substituto válido para que tentativas futuras de login falhem como credencial inválida,
+    // sem preservar a senha original e sem quebrar o verificador Argon2id.
+    user.changePasswordHash(passwordEncoder.encode("deleted-account-" + randomBytesHex(16)));
+    user.markDeleted(clock.now());
+    userRepository.save(user);
+  }
+
+  /** Revoga todas as sessões do usuário, inclusive a atual. */
+  public void revokeAllSessions(UUID userId) {
+    AppUser user = userRepository.findById(userId).orElseThrow(UnauthenticatedException::new);
+    for (String sessionId :
+        sessionRepository.findByPrincipalName(user.getUsernameNormalized()).keySet()) {
+      sessionRepository.deleteById(sessionId);
+    }
+  }
+
   private void establishSession(
       AppUser user, HttpServletRequest request, HttpServletResponse response) {
     HttpSession existing = request.getSession(false);
@@ -233,5 +286,9 @@ public class AuthService {
     byte[] bytes = new byte[length];
     new SecureRandom().nextBytes(bytes);
     return bytes;
+  }
+
+  private static String randomBytesHex(int length) {
+    return HexFormat.of().formatHex(randomBytes(length));
   }
 }

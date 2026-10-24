@@ -1,0 +1,14 @@
+# Override exclusivo de desenvolvimento local.
+#
+# O stack de produção (`compose.yaml`) não publica o banco no host. Para rodar
+# o backend fora do Compose (`./mvnw spring-boot:run`), o `db` precisa ser
+# acessível em 127.0.0.1. Este override nunca é carregado automaticamente:
+# use sempre `-f compose.yaml -f compose.dev.yaml`.
+#
+# A porta publicada é `DELTA_DB_PORT` (a mesma que o backend local usa),
+# limitada ao loopback para não expor o banco na rede.
+
+services:
+  db:
+    ports:
+      - '127.0.0.1:${DELTA_DB_PORT:-5432}:5432'

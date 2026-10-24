@@ -194,6 +194,31 @@ class SyncRecoveryIT extends PostgresTestBase {
   }
 
   @Test
+  void itemInexistenteMarcaItemIndisponivelSemRetentar() throws Exception {
+    syncAndProcess();
+    PLUGGY.failPath("/items/", 404, 1);
+
+    syncAndProcess();
+
+    JsonNode run = syncRuns().path("items").get(0);
+    assertThat(run.path("status").asString()).isEqualTo("FAILED");
+    assertThat(run.path("errorCode").asString()).isEqualTo("ITEM_UNAVAILABLE");
+
+    JsonNode status =
+        jsonMapper.readTree(
+            alice
+                .get("/api/v1/sync/status")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(status.path("connections").get(0).path("status").asString())
+        .isEqualTo("ITEM_UNAVAILABLE");
+    assertThat(syncJobService.pendingCount(userId())).isZero();
+    assertThat(transactions().path("items").size()).isEqualTo(2);
+  }
+
+  @Test
   void pendingViraPostedNoMesmoRegistro() throws Exception {
     PLUGGY.addTransaction(
         "acc-alice",

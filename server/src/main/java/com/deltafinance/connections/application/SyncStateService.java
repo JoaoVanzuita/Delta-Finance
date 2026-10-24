@@ -7,6 +7,7 @@ import com.deltafinance.integrations.domain.IntegrationStatus;
 import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.infrastructure.PluggyCredentialException;
 import com.deltafinance.integrations.infrastructure.PluggyException;
+import com.deltafinance.integrations.infrastructure.PluggyItemInvalidException;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyRateLimitedException;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
@@ -41,6 +42,7 @@ public class SyncStateService {
   public static final String RATE_LIMITED = "RATE_LIMITED";
   public static final String TIMEOUT = "TIMEOUT";
   public static final String PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE";
+  public static final String ITEM_UNAVAILABLE = "ITEM_UNAVAILABLE";
   public static final String IMPORT_FAILED = "IMPORT_FAILED";
 
   /** Decisão de estado para uma falha ou estado de item. */
@@ -126,6 +128,15 @@ public class SyncStateService {
     }
     if (isTimeout(throwable)) {
       return new SyncFailure(SyncRunStatus.TIMEOUT, TIMEOUT, false, true, null, null, null);
+    }
+    if (throwable instanceof PluggyItemInvalidException) {
+      // itemId inexistente/removido na origem: exige ação do usuário e não deve
+      // ser retentado automaticamente.
+      return actionRequired(
+          SyncRunStatus.FAILED,
+          ITEM_UNAVAILABLE,
+          IntegrationStatus.ITEM_UNAVAILABLE,
+          ConnectionStatus.ITEM_UNAVAILABLE);
     }
     if (throwable instanceof PluggyException) {
       return new SyncFailure(

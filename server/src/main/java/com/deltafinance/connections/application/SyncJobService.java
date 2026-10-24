@@ -123,6 +123,44 @@ public class SyncJobService {
     }
   }
 
+  /**
+   * Cancela jobs ativos de um usuário (exclusão de conta ou desconexão total).
+   *
+   * <p>O job é marcado como falho com código sanitizado. Jobs já em execução terminam no próximo
+   * ponto seguro; conexões removidas fazem as escritas seguintes falhar por integridade
+   * referencial.
+   */
+  public int cancelActiveForUser(UUID userId) {
+    return cancel(jobRepository.findActiveByUserId(userId), userId);
+  }
+
+  /** Cancela jobs ativos de uma integração do usuário. */
+  public int cancelActiveForIntegration(UUID userId, UUID integrationId) {
+    return cancel(jobRepository.findActiveByIntegrationId(integrationId), userId);
+  }
+
+  /** Cancela jobs ativos de uma conexão do usuário. */
+  public int cancelActiveForConnection(UUID userId, UUID connectionId) {
+    return cancel(
+        jobRepository.findActiveByUserId(userId).stream()
+            .filter(job -> connectionId.equals(job.getConnectionId()))
+            .toList(),
+        userId);
+  }
+
+  private int cancel(List<SyncJob> jobs, UUID userId) {
+    int cancelled = 0;
+    for (SyncJob job : jobs) {
+      if (!userId.equals(job.getUserId()) || !job.isActive()) {
+        continue;
+      }
+      job.markFailed("DISCONNECTED");
+      jobRepository.save(job);
+      cancelled++;
+    }
+    return cancelled;
+  }
+
   /** Claim + processamento de um job. Retorna vazio quando a fila está sem trabalho vencido. */
   public Optional<UUID> processNext(String worker, String correlationId) {
     UUID claimed = claimNext(worker);

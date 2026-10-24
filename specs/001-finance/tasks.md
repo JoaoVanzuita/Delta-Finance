@@ -339,19 +339,19 @@ sem afetar o outro usuário.
 
 ### Tests for User Story 7
 
-- [ ] T139 [P] [US7] Contract + integration test de exportação sem segredos e sem dados de outro usuário, incluindo evento de auditoria sanitizado, em `server/src/test/java/com/deltafinance/integration/ExportIT.java`.
-- [ ] T140 [P] [US7] Integration test de desconexão, exclusão, revogação de sessões, remoção de dados ativos em até 24 horas e eventos de auditoria sanitizados, em `server/src/test/java/com/deltafinance/integration/AccountLifecycleIT.java`.
-- [ ] T141 [P] [US7] Teste de configurações de privacidade e confirmações no frontend em `client/src/features/privacy/__tests__/PrivacySettings.test.tsx`.
+- [X] T139 [P] [US7] Contract + integration test de exportação sem segredos e sem dados de outro usuário, incluindo evento de auditoria sanitizado, em `server/src/test/java/com/deltafinance/integration/ExportIT.java`.
+- [X] T140 [P] [US7] Integration test de desconexão, exclusão, revogação de sessões, remoção de dados ativos em até 24 horas e eventos de auditoria sanitizados, em `server/src/test/java/com/deltafinance/integration/AccountLifecycleIT.java`.
+- [X] T141 [P] [US7] Teste de configurações de privacidade e confirmações no frontend em `client/src/features/privacy/__tests__/PrivacySettings.test.tsx`.
 
 ### Implementation for User Story 7
 
-- [ ] T142 [US7] Implementar exportação em streaming ZIP/JSON Lines + CSV e auditoria sanitizada de exportação em `server/src/main/java/com/deltafinance/privacy/application/ExportService.java` e `privacy/api/PrivacyController.java`.
-- [ ] T143 [US7] Implementar desconexão de integração com preservação ou exclusão explícita e auditoria sanitizada de desconexão em `server/src/main/java/com/deltafinance/privacy/application/DisconnectService.java`.
-- [ ] T144 [US7] Implementar exclusão de conta, revogação de sessões, cancelamento de jobs, tombstone e auditoria sanitizada de exclusão em `server/src/main/java/com/deltafinance/privacy/application/AccountDeletionService.java`.
-- [ ] T145 [US7] Implementar configurações de privacidade, exportação, desconexão e exclusão na rota `/settings/privacy` em `client/src/features/privacy/pages/PrivacySettingsPage.tsx`.
-- [ ] T146 [US7] Adicionar E2E de exportação, desconexão e exclusão em `client/e2e/privacy.spec.ts`.
-- [ ] T191 [US7] Implementar job diário de retenção para `login_attempt` (30 dias), `sync_run` e `webhook_event` (90 dias), `audit_event` (1 ano) e `idempotency_key` (24 h), com testes que comprovem expurgo dos expirados, preservação dos não expirados e contagens esperadas, em `server/src/main/java/com/deltafinance/privacy/application/RetentionJob.java`.
-- [ ] T147 [US7] Documentar retenção, exportação e exclusão em `docs/security.md` e `docs/runbooks/deletion.md`.
+- [X] T142 [US7] Implementar exportação em streaming ZIP/JSON Lines + CSV e auditoria sanitizada de exportação em `server/src/main/java/com/deltafinance/privacy/application/ExportService.java` e `privacy/api/PrivacyController.java`.
+- [X] T143 [US7] Implementar desconexão de integração com preservação ou exclusão explícita e auditoria sanitizada de desconexão em `server/src/main/java/com/deltafinance/privacy/application/DisconnectService.java`.
+- [X] T144 [US7] Implementar exclusão de conta, revogação de sessões, cancelamento de jobs, tombstone e auditoria sanitizada de exclusão em `server/src/main/java/com/deltafinance/privacy/application/AccountDeletionService.java`.
+- [X] T145 [US7] Implementar configurações de privacidade, exportação, desconexão e exclusão na rota `/settings/privacy` em `client/src/features/privacy/pages/PrivacySettingsPage.tsx`.
+- [X] T146 [US7] Adicionar E2E de exportação, desconexão e exclusão em `client/e2e/privacy.spec.ts`.
+- [X] T191 [US7] Implementar job diário de retenção para `login_attempt` (30 dias), `sync_run` e `webhook_event` (90 dias), `audit_event` (1 ano) e `idempotency_key` (24 h), com testes que comprovem expurgo dos expirados, preservação dos não expirados e contagens esperadas, em `server/src/main/java/com/deltafinance/privacy/application/RetentionJob.java`.
+- [X] T147 [US7] Documentar retenção, exportação e exclusão em `docs/security.md` e `docs/runbooks/deletion.md`.
 
 **Checkpoint**: US7 funcional; privacidade, retenção e ciclo de vida testados com
 dois usuários.
@@ -366,29 +366,35 @@ aceitação real do MVP bancário.
 **⚠️ GATE**: nenhuma tarefa de US8, US9 ou US10 pode iniciar antes de T182 ser
 aprovado e de T171–T189, T193 e T197–T199 estarem concluídas.
 
-- [ ] T171 [P] Revisar headers, cookies, CORS, CSRF e rate limits em `server/src/main/java/com/deltafinance/security/SecurityConfig.java` e `docs/security.md`.
-- [ ] T172 [P] Adicionar secret scanning, dependency scanning e container scanning em `.github/workflows/security.yml`.
-- [ ] T173 [P] Executar OWASP ZAP baseline e registrar resultados em `docs/security.md` e `deploy/scripts/zap-baseline.sh`.
-- [ ] T174 [P] Criar e executar testes k6 do dashboard e filtros, incluindo viradas de semana, mês e ano em `America/Sao_Paulo`, em `server/perf/dashboard.js` e `docs/operations.md`.
-- [ ] T198 Criar e executar testes de performance para login/logout (p95 ≤ 1 s), CRUD/listagens (p95 ≤ 500 ms) e sincronização de uma conexão (≤ 60 s); dashboard e filtros permanecem em T174, em `server/perf/auth-crud-sync.js` e `docs/operations.md`.
-- [ ] T175 [P] Validar backup/restauração em banco limpo, incluindo expiração de backup em 30 dias e teste de dump do PostgreSQL sem key ring que comprove ilegibilidade dos campos protegidos, e documentar em `deploy/scripts/backup.sh`, `deploy/scripts/restore.sh` e `docs/runbooks/backup.md`.
-- [ ] T176 [P] Executar drill de rotação de chave e documentar em `server/src/main/java/com/deltafinance/shared/crypto/KeyRotationJob.java` e `docs/runbooks/key-rotation.md`.
-- [ ] T177 [P] Executar auditoria de acessibilidade com axe, teclado e leitor de tela em `client/e2e/a11y.spec.ts` e `docs/accessibility.md`.
-- [ ] T178 [P] Executar auditoria responsiva em 360 px e zoom 200% em `client/e2e/responsive.spec.ts`.
-- [ ] T179 [P] Adicionar ao CI o gate de lint do OpenAPI, geração de tipos e execução de `MigrationIT` em `client/package.json` e `.github/workflows/ci.yml`.
-- [ ] T199 Configurar JaCoCo e gate de cobertura mínima de 80% de linhas no domínio, com 100% dos caminhos críticos de autorização e dinheiro cobertos por testes dedicados, em `server/pom.xml` e `.github/workflows/ci.yml`.
-- [ ] T180 Atualizar documentação operacional, segurança e runbooks, incluindo a política de senha, a classificação de campos pesquisáveis (FR-100) e a revisão de textos em pt-BR, em `docs/operations.md`, `docs/security.md` e `docs/runbooks/README.md`.
-- [ ] T197 Implementar o mecanismo operacional executável de recuperação assistida de senha, com verificação de identidade pelo operador, invalidação de sessões, registro em auditoria e teste de isolamento entre usuários, em `server/src/main/java/com/deltafinance/auth/application/AssistedPasswordResetService.java`, `deploy/scripts/reset-password.sh` e `server/src/test/java/com/deltafinance/integration/PasswordResetIT.java`.
-- [ ] T193 Criar runbook de recuperação assistida de senha, conforme FR-139, descrevendo o mecanismo de T197 e sem exposição de dados de outro usuário, incluindo walkthrough com conta de teste, registro em auditoria e confirmação de isolamento, em `docs/runbooks/password-reset.md`.
-- [ ] T181 [P] Executar o roteiro de `quickstart.md` em ambiente limpo, incluindo o protocolo SC-001, cadastro e primeiro login de 5 usuários em menos de 2 minutos e lançamento manual em menos de 90 segundos, e registrar resultados em `specs/001-finance/quickstart.md`.
+- [X] T171 [P] Revisar headers, cookies, CORS, CSRF e rate limits em `server/src/main/java/com/deltafinance/security/SecurityConfig.java` e `docs/security.md`.
+- [X] T172 [P] Adicionar secret scanning, dependency scanning e container scanning em `.github/workflows/security.yml`.
+- [X] T173 [P] Executar OWASP ZAP baseline e registrar resultados em `docs/security.md` e `deploy/scripts/zap-baseline.sh`.
+- [X] T174 [P] Criar e executar testes k6 do dashboard e filtros, incluindo viradas de semana, mês e ano em `America/Sao_Paulo`, em `server/perf/dashboard.js` e `docs/operations.md`.
+- [X] T198 Criar e executar testes de performance para login/logout (p95 ≤ 1 s), CRUD/listagens (p95 ≤ 500 ms) e sincronização de uma conexão (≤ 60 s); dashboard e filtros permanecem em T174, em `server/perf/auth-crud-sync.js` e `docs/operations.md`.
+- [X] T175 [P] Validar backup/restauração em banco limpo, incluindo expiração de backup em 30 dias e teste de dump do PostgreSQL sem key ring que comprove ilegibilidade dos campos protegidos, e documentar em `deploy/scripts/backup.sh`, `deploy/scripts/restore.sh` e `docs/runbooks/backup.md`.
+- [X] T176 [P] Executar drill de rotação de chave e documentar em `server/src/main/java/com/deltafinance/shared/crypto/KeyRotationJob.java` e `docs/runbooks/key-rotation.md`.
+- [X] T177 [P] Executar auditoria de acessibilidade com axe, teclado e leitor de tela em `client/e2e/a11y.spec.ts` e `docs/accessibility.md`. **Dispensa registrada em 2026-10-24**: axe, teclado, landmarks e foco automatizados mantidos; verificação manual com leitor de tela dispensada pelo proprietário.
+- [X] T178 [P] Executar auditoria responsiva em 360 px e zoom 200% em `client/e2e/responsive.spec.ts`.
+- [X] T179 [P] Adicionar ao CI o gate de lint do OpenAPI, geração de tipos e execução de `MigrationIT` em `client/package.json` e `.github/workflows/ci.yml`.
+- [X] T199 Configurar JaCoCo e gate de cobertura mínima de 80% de linhas no domínio, com 100% dos caminhos críticos de autorização e dinheiro cobertos por testes dedicados, em `server/pom.xml` e `.github/workflows/ci.yml`.
+- [X] T180 Atualizar documentação operacional, segurança e runbooks, incluindo a política de senha, a classificação de campos pesquisáveis (FR-100) e a revisão de textos em pt-BR, em `docs/operations.md`, `docs/security.md` e `docs/runbooks/README.md`.
+- [X] T197 Implementar o mecanismo operacional executável de recuperação assistida de senha, com verificação de identidade pelo operador, invalidação de sessões, registro em auditoria e teste de isolamento entre usuários, em `server/src/main/java/com/deltafinance/auth/application/AssistedPasswordResetService.java`, `deploy/scripts/reset-password.sh` e `server/src/test/java/com/deltafinance/integration/PasswordResetIT.java`.
+- [X] T193 Criar runbook de recuperação assistida de senha, conforme FR-139, descrevendo o mecanismo de T197 e sem exposição de dados de outro usuário, incluindo walkthrough com conta de teste, registro em auditoria e confirmação de isolamento, em `docs/runbooks/password-reset.md`.
+- [X] T181 [P] Executar o roteiro de `quickstart.md` em ambiente limpo, incluindo o protocolo SC-001, cadastro e primeiro login de 5 usuários em menos de 2 minutos e lançamento manual em menos de 90 segundos, e registrar resultados em `specs/001-finance/quickstart.md`. **Dispensa registrada em 2026-10-24**: roteiro técnico executado e tempos automatizados registrados; protocolo SC-001 com 5 pessoas dispensado pelo proprietário.
 - [ ] T182 Executar o gate real com duas aplicações Meu Pluggy independentes e múltiplos itemIds, verificando que a navegação e as telas do MVP não anunciam investimentos, patrimônio ou metas como funcionalidades disponíveis, em `docs/runbooks/pluggy-acceptance.md`.
-- [ ] T183 [P] Executar a matriz final de acesso cruzado com dois usuários e duas integrações independentes, cobrindo leitura, escrita, exclusão, exportação, relatórios e `RESTORE`/`CONFIRM_REMOVAL`, em `server/src/test/java/com/deltafinance/integration/FinalIsolationIT.java`.
-- [ ] T184 [P] Executar regressão final de regras financeiras, incluindo sinal assinado, `reporting_effect`, limite de reembolsos/chargebacks, carry-forward, reembolsos parciais, transferência manual em duas pernas e estornos, em `server/src/test/java/com/deltafinance/integration/FinalFinancialRulesIT.java`.
-- [ ] T185 [P] Executar consistência final de faturas e parcelas em `server/src/test/java/com/deltafinance/integration/FinalInvoiceIT.java`.
-- [ ] T186 [P] Executar reconciliação final de dashboard e drill-down via `/reports/entries`, incluindo itens de fatura sem transação, em `server/src/test/java/com/deltafinance/integration/FinalDashboardIT.java`.
-- [ ] T187 [P] Executar drill de atualização e rollback em `docs/runbooks/update-rollback.md`.
-- [ ] T188 [P] Criar checklist de release e fixar versões/digests em `docs/release-checklist.md`.
-- [ ] T189 [P] Remover stubs e dados de teste da configuração de produção em `server/src/main/resources/application-prod.yml` e `client/.env.production`.
+- [X] T183 [P] Executar a matriz final de acesso cruzado com dois usuários e duas integrações independentes, cobrindo leitura, escrita, exclusão, exportação, relatórios e `RESTORE`/`CONFIRM_REMOVAL`, em `server/src/test/java/com/deltafinance/integration/FinalIsolationIT.java`.
+- [X] T184 [P] Executar regressão final de regras financeiras, incluindo sinal assinado, `reporting_effect`, limite de reembolsos/chargebacks, carry-forward, reembolsos parciais, transferência manual em duas pernas e estornos, em `server/src/test/java/com/deltafinance/integration/FinalFinancialRulesIT.java`.
+- [X] T185 [P] Executar consistência final de faturas e parcelas em `server/src/test/java/com/deltafinance/integration/FinalInvoiceIT.java`.
+- [X] T186 [P] Executar reconciliação final de dashboard e drill-down via `/reports/entries`, incluindo itens de fatura sem transação, em `server/src/test/java/com/deltafinance/integration/FinalDashboardIT.java`.
+- [X] T187 [P] Executar drill de atualização e rollback em `docs/runbooks/update-rollback.md`.
+- [X] T188 [P] Criar checklist de release e fixar versões/digests em `docs/release-checklist.md`.
+- [X] T189 [P] Remover stubs e dados de teste da configuração de produção em `server/src/main/resources/application-prod.yml` e `client/.env.production`.
+
+
+**Pendências de gate manual (não executadas nesta sessão)**:
+
+- T182: exige duas contas Meu Pluggy reais com Client ID/Secret e múltiplos
+  itemIds; nenhuma credencial real está disponível no repositório.
 
 **Checkpoint**: MVP bancário validado com dados reais, backup/restauração,
 segurança, performance e acessibilidade; fases secundárias separadas.

@@ -9,6 +9,7 @@ import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
 import com.deltafinance.integrations.infrastructure.PluggyException;
+import com.deltafinance.integrations.infrastructure.PluggyItemInvalidException;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
 import com.deltafinance.shared.audit.AuditEventType;
@@ -121,7 +122,11 @@ public class ItemReconciliationService {
       connection.recordSync(clock.now(), ConnectionStatus.SYNCED);
       connectionRepository.save(connection);
     } catch (PluggyException exception) {
-      connection.recordError("IMPORT_FAILED", ConnectionStatus.ACTION_REQUIRED);
+      connection.recordError(
+          "IMPORT_FAILED",
+          exception instanceof PluggyItemInvalidException
+              ? ConnectionStatus.ITEM_UNAVAILABLE
+              : ConnectionStatus.ACTION_REQUIRED);
       connectionRepository.save(connection);
       throw exception;
     }

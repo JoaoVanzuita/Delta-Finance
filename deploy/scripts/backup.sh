@@ -23,6 +23,8 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
+# shellcheck source=lib/backup-retention.sh
+. "${SCRIPT_DIR}/lib/backup-retention.sh"
 ENV_FILE="${ENV_FILE:-${ROOT_DIR}/.env}"
 BACKUP_DIR="${BACKUP_DIR:-${ROOT_DIR}/backups}"
 RETENTION_DAYS="${DELTA_BACKUP_RETENTION_DAYS:-30}"
@@ -82,8 +84,6 @@ sha256sum "${final_file}" >"${final_file}.sha256"
 log "backup concluído: ${final_file}"
 
 log "aplicando retenção de ${RETENTION_DAYS} dias em ${BACKUP_DIR}"
-find "${BACKUP_DIR}" -maxdepth 1 -type f \
-  \( -name 'delta-*.dump' -o -name 'delta-*.dump.age' -o -name 'delta-*.dump.sha256' -o -name 'delta-*.dump.age.sha256' \) \
-  -mtime "+${RETENTION_DAYS}" -print -delete >&2 || true
+apply_backup_retention "${BACKUP_DIR}" "${RETENTION_DAYS}"
 
 log "lembrete: faça backup separado do key ring (secrets/crypto-keys.json). Sem ele o dump não é legível."
