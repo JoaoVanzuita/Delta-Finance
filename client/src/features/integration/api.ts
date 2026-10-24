@@ -36,6 +36,14 @@ export type CardProfile = components['schemas']['CardProfile']
 export type InvestmentPosition = components['schemas']['InvestmentPosition']
 export type InvestmentPositionPage = components['schemas']['InvestmentPositionPage']
 export type InvestmentPositionInput = components['schemas']['InvestmentPositionRequest']
+export type WealthOverview = components['schemas']['WealthOverview']
+export type WealthItem = components['schemas']['WealthItem']
+export type WealthManualItem = components['schemas']['WealthManualItem']
+export type WealthManualItemList = components['schemas']['WealthManualItemList']
+export type WealthManualItemInput = components['schemas']['WealthManualItemRequest']
+export type WealthSnapshot = components['schemas']['WealthSnapshot']
+export type WealthSnapshotList = components['schemas']['WealthSnapshotList']
+export type WealthSnapshotInput = components['schemas']['WealthSnapshotRequest']
 
 export interface CredentialsInput {
   readonly clientId: string
@@ -132,6 +140,17 @@ export const financeApi = {
   updatePosition: (id: string, input: InvestmentPositionInput) =>
     api.patch<InvestmentPosition>(`/investments/positions/${id}`, input),
   deletePosition: (id: string) => api.delete<void>(`/investments/positions/${id}`),
+
+  wealthOverview: () => api.get<WealthOverview>('/wealth/overview'),
+  wealthManualItems: () => api.get<WealthManualItemList>('/wealth/manual-items'),
+  createWealthManualItem: (input: WealthManualItemInput) =>
+    api.post<WealthManualItem>('/wealth/manual-items', input),
+  updateWealthManualItem: (id: string, input: WealthManualItemInput) =>
+    api.patch<WealthManualItem>(`/wealth/manual-items/${id}`, input),
+  deleteWealthManualItem: (id: string) => api.delete<void>(`/wealth/manual-items/${id}`),
+  wealthSnapshots: () => api.get<WealthSnapshotList>('/wealth/snapshots'),
+  createWealthSnapshot: (input: WealthSnapshotInput = {}) =>
+    api.post<WealthSnapshot>('/wealth/snapshots', input),
 
   updateCardProfile: (accountId: string, input: CardProfileInput) =>
     api.put<CardProfile>(`/cards/${accountId}/profile`, input),

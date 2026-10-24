@@ -20,6 +20,7 @@ const navigation: readonly NavigationItem[] = [
   { to: '/categories', label: 'Categorias' },
   { to: '/reconciliation', label: 'Reconciliação' },
   { to: '/investments', label: 'Investimentos' },
+  { to: '/wealth', label: 'Patrimônio' },
   { to: '/settings/integration', label: 'Integração' },
   { to: '/settings/privacy', label: 'Privacidade' },
   { to: '/account', label: 'Conta' },

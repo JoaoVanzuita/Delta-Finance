@@ -73,6 +73,31 @@ async function installStub(page: Page) {
         }),
       })
     }
+    if (path === '/wealth/overview') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          referenceDate: '2026-10-24',
+          grossAssets: '1250.00',
+          liabilities: '0.00',
+          netWorth: '1250.00',
+          completeness: 'PARTIAL',
+          hasData: true,
+          items: [
+            {
+              sourceType: 'ACCOUNT',
+              sourceId: 'acc-cash',
+              description: 'Carteira da família',
+              value: '1250.00',
+              included: true,
+              referenceDate: '2026-10-24',
+              stale: false,
+            },
+          ],
+        }),
+      })
+    }
     if (path === '/dashboard/categories' || path === '/dashboard/timeseries') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
     }
@@ -140,6 +165,7 @@ for (const viewport of [
       '/accounts',
       '/transactions',
       '/investments',
+      '/wealth',
       '/settings/privacy',
     ]) {
       await page.goto(path)

@@ -110,19 +110,36 @@ public class InvoiceReportingService {
     if (cardAccountIds == null || cardAccountIds.isEmpty()) {
       return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
     }
+    Map<UUID, BigDecimal> byCard = outstandingByCard(userId);
     BigDecimal total = BigDecimal.ZERO;
-    for (Invoice invoice : invoiceRepository.findByUserIdOrderByDueDateAsc(userId)) {
-      if (!cardAccountIds.contains(invoice.getCardAccountId())) {
-        continue;
-      }
-      total =
-          total.add(
-              new BigDecimal(
-                  cryptoService.decryptString(
-                      invoice.getOutstandingEnc(),
-                      new CryptoContext(userId, INVOICE_TABLE, "outstanding", invoice.getId()))));
+    for (UUID cardAccountId : cardAccountIds) {
+      total = total.add(byCard.getOrDefault(cardAccountId, BigDecimal.ZERO));
     }
     return total.setScale(2, RoundingMode.HALF_EVEN);
+  }
+
+  /**
+   * Saldo devedor por cartão, somando as faturas existentes.
+   *
+   * <p>Cartões sem fatura não aparecem no mapa: o módulo de patrimônio trata isso como lacuna, em
+   * vez de presumir saldo zero.
+   */
+  public Map<UUID, BigDecimal> outstandingByCard(UUID userId) {
+    Map<UUID, BigDecimal> result = new HashMap<>();
+    for (Invoice invoice : invoiceRepository.findByUserIdOrderByDueDateAsc(userId)) {
+      BigDecimal value = decryptOutstanding(invoice);
+      result.merge(invoice.getCardAccountId(), value, BigDecimal::add);
+    }
+    return result;
+  }
+
+  private BigDecimal decryptOutstanding(Invoice invoice) {
+    return new BigDecimal(
+            cryptoService.decryptString(
+                invoice.getOutstandingEnc(),
+                new CryptoContext(
+                    invoice.getUserId(), INVOICE_TABLE, "outstanding", invoice.getId())))
+        .setScale(2, RoundingMode.HALF_EVEN);
   }
 
   private Map<UUID, UUID> cardAccountsByInvoice(UUID userId) {

@@ -12,6 +12,7 @@ teclado e leitor de tela, sem depender de cor ou de mouse.
 - `/dashboard`, `/accounts`, `/accounts/new`
 - `/transactions`, `/transactions/new`, `/categories`, `/reconciliation`
 - `/investments`
+- `/wealth`
 - `/settings/integration`, `/settings/privacy`, `/account`
 
 Além do axe, o teste verifica:

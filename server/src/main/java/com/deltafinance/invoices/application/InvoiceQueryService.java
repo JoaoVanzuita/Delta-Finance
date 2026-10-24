@@ -54,8 +54,7 @@ public class InvoiceQueryService {
   }
 
   public CursorPage<InvoiceView> list(UUID userId, UUID cardAccountId, String cursor, int limit) {
-    cardCycleService.requireCard(userId, cardAccountId);
-    generationService.ensureInvoices(userId, cardAccountId);
+    ensureInvoices(userId, cardAccountId);
     List<Invoice> all =
         invoiceRepository.findByUserIdAndCardAccountIdOrderByCycleStartDesc(userId, cardAccountId);
     Cursor decoded = decode(cursor);
@@ -79,6 +78,17 @@ public class InvoiceQueryService {
             ? encode(page.getLast().getCycleStart(), page.getLast().getId())
             : null;
     return hasMore ? CursorPage.of(views, nextCursor) : CursorPage.last(views);
+  }
+
+  /**
+   * Garante que as faturas locais do cartão existam.
+   *
+   * <p>Usado pela visão patrimonial para que o saldo devedor reflita transações já importadas. Um
+   * cartão sem ciclo configurado continua sendo uma lacuna sinalizada, não um erro fatal.
+   */
+  public void ensureInvoices(UUID userId, UUID cardAccountId) {
+    cardCycleService.requireCard(userId, cardAccountId);
+    generationService.ensureInvoices(userId, cardAccountId);
   }
 
   public InvoiceDetailView detail(UUID userId, UUID invoiceId) {

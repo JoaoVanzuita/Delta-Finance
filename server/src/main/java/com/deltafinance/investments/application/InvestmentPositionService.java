@@ -76,6 +76,13 @@ public class InvestmentPositionService {
     return toView(requirePosition(userId, positionId));
   }
 
+  /** Todas as posições do usuário, para consolidação patrimonial (sem paginação). */
+  public List<InvestmentPositionView> listAll(UUID userId) {
+    return positionRepository.findByUserIdOrderByReferenceDateDescIdDesc(userId).stream()
+        .map(this::toView)
+        .toList();
+  }
+
   public InvestmentPositionView create(UUID userId, InvestmentPositionRequest request) {
     Amounts amounts = calculate(request);
     InvestmentPosition position = new InvestmentPosition(userId, parseBroker(request.broker()));

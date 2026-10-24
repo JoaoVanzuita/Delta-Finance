@@ -8,9 +8,11 @@ info:
 
     monetários trafegam como strings decimais para evitar ponto flutuante. O
 
-    contrato cobre 37 caminhos do MVP e 2 caminhos de investimentos da fase
+    contrato cobre 37 caminhos do MVP, 2 de investimentos da fase secundária
 
-    secundária (US8).
+    (US8) e 4 de patrimônio da fase posterior (US9); metas (US10) entram em
+
+    T163.
 
     '
   license:
@@ -43,6 +45,8 @@ tags:
   description: Exportação, desconexão e exclusão de conta.
 - name: Investments
   description: Posições manuais de investimentos (fase secundária pós-MVP).
+- name: Wealth
+  description: Patrimônio consolidado, ativos/passivos manuais e snapshots datados.
 - name: Webhooks
   description: Recepção opcional de eventos Pluggy.
 security:
@@ -1305,6 +1309,196 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
       operationId: deleteInvestmentsPositionsId
+  /wealth/overview:
+    x-phase: post-mvp
+    get:
+      tags:
+      - Wealth
+      summary: Visão consolidada de patrimônio
+      description: 'Combina contas ativas, saldo devedor de cartões, posições de
+        investimento e ativos/passivos manuais. O mesmo valor não é contado duas
+        vezes. Valores manuais usam a data de referência informada e não são
+        cotação de mercado.
+
+        '
+      responses:
+        '200':
+          description: Patrimônio bruto, passivos, líquido e composição.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthOverview'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getWealthOverview
+  /wealth/manual-items:
+    x-phase: post-mvp
+    get:
+      tags:
+      - Wealth
+      summary: Lista ativos e passivos manuais
+      responses:
+        '200':
+          description: Itens manuais.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthManualItemList'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getWealthManualItems
+    post:
+      tags:
+      - Wealth
+      summary: Cria ativo ou passivo manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WealthManualItemRequest'
+      responses:
+        '201':
+          description: Item criado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthManualItem'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: postWealthManualItems
+  /wealth/manual-items/{id}:
+    x-phase: post-mvp
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    get:
+      tags:
+      - Wealth
+      summary: Consulta ativo ou passivo manual
+      responses:
+        '200':
+          description: Item manual.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthManualItem'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getWealthManualItemsId
+    patch:
+      tags:
+      - Wealth
+      summary: Edita ativo ou passivo manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WealthManualItemRequest'
+      responses:
+        '200':
+          description: Item atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthManualItem'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: patchWealthManualItemsId
+    delete:
+      tags:
+      - Wealth
+      summary: Exclui ativo ou passivo manual
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '204':
+          description: Item excluído.
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: deleteWealthManualItemsId
+  /wealth/snapshots:
+    x-phase: post-mvp
+    get:
+      tags:
+      - Wealth
+      summary: Lista snapshots patrimoniais datados
+      description: Retorna apenas snapshots registrados; nunca infere saldos
+        passados a partir dos dados atuais.
+      responses:
+        '200':
+          description: Histórico de snapshots.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthSnapshotList'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getWealthSnapshots
+    post:
+      tags:
+      - Wealth
+      summary: Registra snapshot patrimonial de hoje
+      description: Usa os dados atuais e a data de hoje em America/Sao_Paulo. No
+        mesmo dia, o snapshot é atualizado de forma idempotente.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WealthSnapshotRequest'
+      responses:
+        '201':
+          description: Snapshot registrado ou atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthSnapshot'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: postWealthSnapshots
   /webhooks/pluggy/{webhookToken}:
     post:
       tags:
@@ -2798,3 +2992,196 @@ components:
           type: string
         hasMore:
           type: boolean
+    WealthOverview:
+      type: object
+      required:
+      - referenceDate
+      - grossAssets
+      - liabilities
+      - netWorth
+      - completeness
+      - hasData
+      - items
+      properties:
+        referenceDate:
+          type: string
+          format: date
+        grossAssets:
+          type: string
+          description: Soma dos ativos incluídos; nunca inclui compras de cartão ou faturas como ativo.
+        liabilities:
+          type: string
+          description: Soma de cartões e passivos manuais incluídos.
+        netWorth:
+          type: string
+          description: grossAssets − liabilities.
+        completeness:
+          type: string
+          enum:
+          - COMPLETE
+          - PARTIAL
+          - ESTIMATED
+        hasData:
+          type: boolean
+          description: Indica se há ao menos uma fonte incluída na consolidação.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WealthItem'
+    WealthItem:
+      type: object
+      required:
+      - sourceType
+      - sourceId
+      - description
+      - value
+      - included
+      - stale
+      properties:
+        sourceType:
+          type: string
+          enum:
+          - ACCOUNT
+          - CARD
+          - INVESTMENT
+          - MANUAL_ASSET
+          - MANUAL_LIABILITY
+        sourceId:
+          type: string
+          format: uuid
+        description:
+          type: string
+        value:
+          type: string
+          description: Valor de referência; não é cotação de mercado.
+        included:
+          type: boolean
+        exclusionReason:
+          type: string
+          description: Motivo quando o item não compõe os totais, por exemplo saldo ausente ou moeda não suportada.
+        referenceDate:
+          type: string
+          format: date
+        stale:
+          type: boolean
+          description: Indica referência com mais de 30 dias em relação à data da visão.
+    WealthManualItem:
+      type: object
+      required:
+      - id
+      - kind
+      - type
+      - description
+      - referenceValue
+      - referenceDate
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+        type:
+          type: string
+          maxLength: 60
+        description:
+          type: string
+        referenceValue:
+          type: string
+        referenceDate:
+          type: string
+          format: date
+        notes:
+          type: string
+    WealthManualItemRequest:
+      type: object
+      required:
+      - kind
+      - type
+      - description
+      - referenceValue
+      - referenceDate
+      properties:
+        kind:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+        type:
+          type: string
+          maxLength: 60
+        description:
+          type: string
+          maxLength: 200
+        referenceValue:
+          type: string
+        referenceDate:
+          type: string
+          format: date
+        notes:
+          type: string
+          maxLength: 2000
+    WealthManualItemList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WealthManualItem'
+    WealthSnapshot:
+      type: object
+      required:
+      - id
+      - referenceDate
+      - grossAssets
+      - liabilities
+      - netWorth
+      - completeness
+      - items
+      properties:
+        id:
+          type: string
+          format: uuid
+        referenceDate:
+          type: string
+          format: date
+        grossAssets:
+          type: string
+        liabilities:
+          type: string
+        netWorth:
+          type: string
+        completeness:
+          type: string
+          enum:
+          - COMPLETE
+          - PARTIAL
+          - ESTIMATED
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WealthItem'
+    WealthSnapshotRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+          maxLength: 2000
+    WealthSnapshotList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WealthSnapshot'

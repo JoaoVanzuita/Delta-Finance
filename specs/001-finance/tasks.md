@@ -440,17 +440,17 @@ gerar snapshots e conferir cálculos, datas, lacunas e ausência de dupla contag
 
 ### Tests for User Story 9
 
-- [ ] T155 [P] [US9] Estender `specs/001-finance/contracts/openapi.yaml` com os endpoints de patrimônio e escrever contract + integration test de patrimônio líquido, snapshots e dupla contagem em `server/src/test/java/com/deltafinance/integration/WealthIT.java`.
-- [ ] T156 [P] [US9] Teste de visão patrimonial, lacunas e histórico insuficiente sem inferência de saldos passados em `client/src/features/wealth/__tests__/WealthOverview.test.tsx`.
+- [X] T155 [P] [US9] Estender `specs/001-finance/contracts/openapi.yaml` com os endpoints de patrimônio e escrever contract + integration test de patrimônio líquido, snapshots e dupla contagem em `server/src/test/java/com/deltafinance/integration/WealthIT.java`.
+- [X] T156 [P] [US9] Teste de visão patrimonial, lacunas e histórico insuficiente sem inferência de saldos passados em `client/src/features/wealth/__tests__/WealthOverview.test.tsx`.
 
 ### Implementation for User Story 9
 
-- [ ] T157 [US9] Criar a migração `V008__wealth.sql` para `manual_asset_liability` (kind `ASSET|LIABILITY`), `wealth_snapshot` (único `(user_id, reference_date)`, completeness `COMPLETE|PARTIAL|ESTIMATED`) e `wealth_snapshot_item` em `server/src/main/resources/db/migration/V008__wealth.sql`.
-- [ ] T158 [US9] Implementar entidades e repositórios de patrimônio em `server/src/main/java/com/deltafinance/wealth/domain/ManualAssetLiability.java`, `server/src/main/java/com/deltafinance/wealth/domain/WealthSnapshot.java` e `server/src/main/java/com/deltafinance/wealth/domain/WealthSnapshotItem.java`.
-- [ ] T159 [US9] Implementar `WealthService` para ativos, passivos, patrimônio líquido e snapshots em `server/src/main/java/com/deltafinance/wealth/application/WealthService.java`.
-- [ ] T160 [US9] Implementar controllers e DTOs de patrimônio em `server/src/main/java/com/deltafinance/wealth/api/WealthController.java`.
-- [ ] T161 [US9] Implementar a visão patrimonial com data de referência, lacunas e estado de histórico insuficiente que não infere saldos passados em `client/src/features/wealth/pages/WealthPage.tsx`.
-- [ ] T162 [US9] Adicionar E2E de patrimônio em `client/e2e/wealth.spec.ts`.
+- [X] T157 [US9] Criar a migração `V008__wealth.sql` para `manual_asset_liability` (kind `ASSET|LIABILITY`), `wealth_snapshot` (único `(user_id, reference_date)`, completeness `COMPLETE|PARTIAL|ESTIMATED`) e `wealth_snapshot_item` em `server/src/main/resources/db/migration/V008__wealth.sql`.
+- [X] T158 [US9] Implementar entidades e repositórios de patrimônio em `server/src/main/java/com/deltafinance/wealth/domain/ManualAssetLiability.java`, `server/src/main/java/com/deltafinance/wealth/domain/WealthSnapshot.java` e `server/src/main/java/com/deltafinance/wealth/domain/WealthSnapshotItem.java`.
+- [X] T159 [US9] Implementar `WealthService` para ativos, passivos, patrimônio líquido e snapshots em `server/src/main/java/com/deltafinance/wealth/application/WealthService.java`.
+- [X] T160 [US9] Implementar controllers e DTOs de patrimônio em `server/src/main/java/com/deltafinance/wealth/api/WealthController.java`.
+- [X] T161 [US9] Implementar a visão patrimonial com data de referência, lacunas e estado de histórico insuficiente que não infere saldos passados em `client/src/features/wealth/pages/WealthPage.tsx`.
+- [X] T162 [US9] Adicionar E2E de patrimônio em `client/e2e/wealth.spec.ts`.
 
 **Checkpoint**: US9 funcional, sem ser pré-requisito do MVP bancário.
 

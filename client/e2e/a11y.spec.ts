@@ -56,6 +56,21 @@ async function installStub(page: Page) {
         body: JSON.stringify(SUMMARY),
       })
     }
+    if (path === '/wealth/overview') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          referenceDate: '2026-10-24',
+          grossAssets: '0.00',
+          liabilities: '0.00',
+          netWorth: '0.00',
+          completeness: 'PARTIAL',
+          hasData: false,
+          items: [],
+        }),
+      })
+    }
     if (path === '/dashboard/categories' || path === '/dashboard/timeseries') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
     }
@@ -116,6 +131,7 @@ const ROUTES: ReadonlyArray<{ path: string; name: string }> = [
   { path: '/categories', name: 'categorias' },
   { path: '/reconciliation', name: 'reconciliação' },
   { path: '/investments', name: 'investimentos' },
+  { path: '/wealth', name: 'patrimônio' },
   { path: '/settings/integration', name: 'integração' },
   { path: '/settings/privacy', name: 'privacidade' },
   { path: '/account', name: 'conta' },

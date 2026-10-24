@@ -685,6 +685,89 @@ export interface paths {
         patch: operations["patchInvestmentsPositionsId"];
         trace?: never;
     };
+    "/wealth/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Visão consolidada de patrimônio
+         * @description Combina contas ativas, saldo devedor de cartões, posições de investimento e ativos/passivos manuais. O mesmo valor não é contado duas vezes. Valores manuais usam a data de referência informada e não são cotação de mercado.
+         */
+        get: operations["getWealthOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wealth/manual-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista ativos e passivos manuais */
+        get: operations["getWealthManualItems"];
+        put?: never;
+        /** Cria ativo ou passivo manual */
+        post: operations["postWealthManualItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wealth/manual-items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Consulta ativo ou passivo manual */
+        get: operations["getWealthManualItemsId"];
+        put?: never;
+        post?: never;
+        /** Exclui ativo ou passivo manual */
+        delete: operations["deleteWealthManualItemsId"];
+        options?: never;
+        head?: never;
+        /** Edita ativo ou passivo manual */
+        patch: operations["patchWealthManualItemsId"];
+        trace?: never;
+    };
+    "/wealth/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lista snapshots patrimoniais datados
+         * @description Retorna apenas snapshots registrados; nunca infere saldos passados a partir dos dados atuais.
+         */
+        get: operations["getWealthSnapshots"];
+        put?: never;
+        /**
+         * Registra snapshot patrimonial de hoje
+         * @description Usa os dados atuais e a data de hoje em America/Sao_Paulo. No mesmo dia, o snapshot é atualizado de forma idempotente.
+         */
+        post: operations["postWealthSnapshots"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/pluggy/{webhookToken}": {
         parameters: {
             query?: never;
@@ -1271,6 +1354,83 @@ export interface components {
             items: components["schemas"]["InvestmentPosition"][];
             nextCursor?: string;
             hasMore: boolean;
+        };
+        WealthOverview: {
+            /** Format: date */
+            referenceDate: string;
+            /** @description Soma dos ativos incluídos; nunca inclui compras de cartão ou faturas como ativo. */
+            grossAssets: string;
+            /** @description Soma de cartões e passivos manuais incluídos. */
+            liabilities: string;
+            /** @description grossAssets − liabilities. */
+            netWorth: string;
+            /** @enum {string} */
+            completeness: "COMPLETE" | "PARTIAL" | "ESTIMATED";
+            /** @description Indica se há ao menos uma fonte incluída na consolidação. */
+            hasData: boolean;
+            items: components["schemas"]["WealthItem"][];
+        };
+        WealthItem: {
+            /** @enum {string} */
+            sourceType: "ACCOUNT" | "CARD" | "INVESTMENT" | "MANUAL_ASSET" | "MANUAL_LIABILITY";
+            /** Format: uuid */
+            sourceId: string;
+            description: string;
+            /** @description Valor de referência; não é cotação de mercado. */
+            value: string;
+            included: boolean;
+            /** @description Motivo quando o item não compõe os totais, por exemplo saldo ausente ou moeda não suportada. */
+            exclusionReason?: string;
+            /** Format: date */
+            referenceDate?: string;
+            /** @description Indica referência com mais de 30 dias em relação à data da visão. */
+            stale: boolean;
+        };
+        WealthManualItem: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "ASSET" | "LIABILITY";
+            type: string;
+            description: string;
+            referenceValue: string;
+            /** Format: date */
+            referenceDate: string;
+            notes?: string;
+        };
+        WealthManualItemRequest: {
+            /** @enum {string} */
+            kind: "ASSET" | "LIABILITY";
+            type: string;
+            description: string;
+            referenceValue: string;
+            /** Format: date */
+            referenceDate: string;
+            notes?: string;
+        };
+        WealthManualItemList: {
+            items: components["schemas"]["WealthManualItem"][];
+        };
+        WealthSnapshot: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            referenceDate: string;
+            grossAssets: string;
+            liabilities: string;
+            netWorth: string;
+            /** @enum {string} */
+            completeness: "COMPLETE" | "PARTIAL" | "ESTIMATED";
+            notes?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            items: components["schemas"]["WealthItem"][];
+        };
+        WealthSnapshotRequest: {
+            notes?: string;
+        };
+        WealthSnapshotList: {
+            items: components["schemas"]["WealthSnapshot"][];
         };
     };
     responses: {
@@ -2838,6 +2998,254 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvestmentPosition"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWealthOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Patrimônio bruto, passivos, líquido e composição. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthOverview"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWealthManualItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Itens manuais. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthManualItemList"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postWealthManualItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WealthManualItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Item criado. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthManualItem"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWealthManualItemsId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item manual. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthManualItem"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteWealthManualItemsId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item excluído. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    patchWealthManualItemsId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WealthManualItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Item atualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthManualItem"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWealthSnapshots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Histórico de snapshots. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthSnapshotList"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postWealthSnapshots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WealthSnapshotRequest"];
+            };
+        };
+        responses: {
+            /** @description Snapshot registrado ou atualizado. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthSnapshot"];
                 };
             };
             /** @description Erro do cliente. */
