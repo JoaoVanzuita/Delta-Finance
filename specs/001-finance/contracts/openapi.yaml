@@ -10,9 +10,7 @@ info:
 
     contrato cobre 37 caminhos do MVP, 2 de investimentos da fase secundária
 
-    (US8) e 4 de patrimônio da fase posterior (US9); metas (US10) entram em
-
-    T163.
+    (US8), 4 de patrimônio (US9) e 3 de metas (US10).
 
     '
   license:
@@ -47,6 +45,8 @@ tags:
   description: Posições manuais de investimentos (fase secundária pós-MVP).
 - name: Wealth
   description: Patrimônio consolidado, ativos/passivos manuais e snapshots datados.
+- name: Goals
+  description: Metas financeiras com alocações explícitas, progresso e histórico.
 - name: Webhooks
   description: Recepção opcional de eventos Pluggy.
 security:
@@ -1499,6 +1499,156 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
       operationId: postWealthSnapshots
+  /goals:
+    x-phase: post-mvp
+    get:
+      tags:
+      - Goals
+      summary: Lista metas com progresso calculado
+      responses:
+        '200':
+          description: Metas do usuário.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalList'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getGoals
+    post:
+      tags:
+      - Goals
+      summary: Cria meta financeira
+      description: Metas não movimentam dinheiro, não criam ordens e não executam
+        ações bancárias.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+      responses:
+        '201':
+          description: Meta criada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: postGoals
+  /goals/{id}:
+    x-phase: post-mvp
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    get:
+      tags:
+      - Goals
+      summary: Consulta meta com alocações e histórico
+      responses:
+        '200':
+          description: Meta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getGoalsId
+    patch:
+      tags:
+      - Goals
+      summary: Edita meta e alocações
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+      responses:
+        '200':
+          description: Meta atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: patchGoalsId
+    delete:
+      tags:
+      - Goals
+      summary: Exclui meta, alocações e histórico
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '204':
+          description: Meta excluída.
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: deleteGoalsId
+  /goals/{id}/status:
+    x-phase: post-mvp
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    post:
+      tags:
+      - Goals
+      summary: Pausa, arquiva ou reativa uma meta
+      description: 'PAUSED e ARCHIVED congelam o progresso e preservam o histórico.
+        ACTIVE reativa e reconhece alterações pendentes.
+
+        '
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalStatusRequest'
+      responses:
+        '200':
+          description: Estado atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: postGoalsIdStatus
   /webhooks/pluggy/{webhookToken}:
     post:
       tags:
@@ -3185,3 +3335,231 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WealthSnapshot'
+    Goal:
+      type: object
+      required:
+      - id
+      - name
+      - type
+      - targetAmount
+      - status
+      - progressRule
+      - currentValue
+      - percentage
+      - remainingAmount
+      - unallocatedAmount
+      - excessAmount
+      - allocations
+      - progressHistory
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum:
+          - EMERGENCY_FUND
+          - TRAVEL
+          - PLANNED_PURCHASE
+          - DEBT_REDUCTION
+          - NET_WORTH
+        targetAmount:
+          type: string
+        targetDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - ACHIEVED
+          - PAUSED
+          - ARCHIVED
+          - OVERDUE
+          - CHANGED
+        progressRule:
+          type: string
+          enum:
+          - ALLOCATIONS
+          - NET_WORTH
+          - DEBT_REDUCTION
+        initialValue:
+          type: string
+          description: Dívida inicial; obrigatória para DEBT_REDUCTION.
+        changedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        currentValue:
+          type: string
+        percentage:
+          type: string
+          description: Percentual de progresso limitado a 100.
+        remainingAmount:
+          type: string
+        unallocatedAmount:
+          type: string
+          description: Saldo do alvo não distribuído; nunca redistribuído automaticamente.
+        excessAmount:
+          type: string
+          description: Valor acima da meta; o progresso permanece limitado a 100%.
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoalAllocation'
+        progressHistory:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoalProgressEntry'
+    GoalAllocation:
+      type: object
+      required:
+      - id
+      - sourceType
+      - allocationMode
+      - contributionAmount
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceType:
+          type: string
+          enum:
+          - MANUAL
+          - ACCOUNT
+          - INVESTMENT
+          - MANUAL_ASSET
+          - MANUAL_LIABILITY
+        sourceId:
+          type: string
+          format: uuid
+        allocationMode:
+          type: string
+          enum:
+          - FIXED_AMOUNT
+          - PERCENTAGE
+        allocatedAmount:
+          type: string
+        percentage:
+          type: string
+        contributionAmount:
+          type: string
+          description: Contribuição efetiva após arredondamento e resíduo.
+    GoalProgressEntry:
+      type: object
+      required:
+      - referenceDate
+      - currentValue
+      - percentage
+      - remainingAmount
+      - ruleVersion
+      properties:
+        referenceDate:
+          type: string
+          format: date
+        currentValue:
+          type: string
+        percentage:
+          type: string
+        remainingAmount:
+          type: string
+        ruleVersion:
+          type: string
+    GoalRequest:
+      type: object
+      required:
+      - name
+      - type
+      - targetAmount
+      - progressRule
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 500
+        type:
+          type: string
+          enum:
+          - EMERGENCY_FUND
+          - TRAVEL
+          - PLANNED_PURCHASE
+          - DEBT_REDUCTION
+          - NET_WORTH
+        targetAmount:
+          type: string
+        targetDate:
+          type: string
+          format: date
+        progressRule:
+          type: string
+          enum:
+          - ALLOCATIONS
+          - NET_WORTH
+          - DEBT_REDUCTION
+        initialValue:
+          type: string
+          description: Obrigatório para DEBT_REDUCTION.
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoalAllocationRequest'
+    GoalAllocationRequest:
+      type: object
+      required:
+      - sourceType
+      - allocationMode
+      oneOf:
+      - required:
+        - allocatedAmount
+      - required:
+        - percentage
+      properties:
+        sourceType:
+          type: string
+          enum:
+          - MANUAL
+          - ACCOUNT
+          - INVESTMENT
+          - MANUAL_ASSET
+          - MANUAL_LIABILITY
+        sourceId:
+          type: string
+          format: uuid
+        allocationMode:
+          type: string
+          enum:
+          - FIXED_AMOUNT
+          - PERCENTAGE
+        allocatedAmount:
+          type: string
+        percentage:
+          type: string
+          description: Percentual do valor-alvo, entre 0 e 100; a soma não pode exceder 100.
+    GoalStatusRequest:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - PAUSED
+          - ARCHIVED
+    GoalList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Goal'

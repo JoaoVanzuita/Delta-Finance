@@ -132,6 +132,7 @@ const ROUTES: ReadonlyArray<{ path: string; name: string }> = [
   { path: '/reconciliation', name: 'reconciliação' },
   { path: '/investments', name: 'investimentos' },
   { path: '/wealth', name: 'patrimônio' },
+  { path: '/goals', name: 'metas' },
   { path: '/settings/integration', name: 'integração' },
   { path: '/settings/privacy', name: 'privacidade' },
   { path: '/account', name: 'conta' },

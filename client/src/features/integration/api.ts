@@ -44,6 +44,12 @@ export type WealthManualItemInput = components['schemas']['WealthManualItemReque
 export type WealthSnapshot = components['schemas']['WealthSnapshot']
 export type WealthSnapshotList = components['schemas']['WealthSnapshotList']
 export type WealthSnapshotInput = components['schemas']['WealthSnapshotRequest']
+export type Goal = components['schemas']['Goal']
+export type GoalList = components['schemas']['GoalList']
+export type GoalInput = components['schemas']['GoalRequest']
+export type GoalAllocation = components['schemas']['GoalAllocation']
+export type GoalAllocationInput = components['schemas']['GoalAllocationRequest']
+export type GoalProgressEntry = components['schemas']['GoalProgressEntry']
 
 export interface CredentialsInput {
   readonly clientId: string
@@ -151,6 +157,14 @@ export const financeApi = {
   wealthSnapshots: () => api.get<WealthSnapshotList>('/wealth/snapshots'),
   createWealthSnapshot: (input: WealthSnapshotInput = {}) =>
     api.post<WealthSnapshot>('/wealth/snapshots', input),
+
+  goals: () => api.get<GoalList>('/goals'),
+  goal: (id: string) => api.get<Goal>(`/goals/${id}`),
+  createGoal: (input: GoalInput) => api.post<Goal>('/goals', input),
+  updateGoal: (id: string, input: GoalInput) => api.patch<Goal>(`/goals/${id}`, input),
+  updateGoalStatus: (id: string, status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED') =>
+    api.post<Goal>(`/goals/${id}/status`, { status }),
+  deleteGoal: (id: string) => api.delete<void>(`/goals/${id}`),
 
   updateCardProfile: (accountId: string, input: CardProfileInput) =>
     api.put<CardProfile>(`/cards/${accountId}/profile`, input),

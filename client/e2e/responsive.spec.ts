@@ -166,6 +166,7 @@ for (const viewport of [
       '/transactions',
       '/investments',
       '/wealth',
+      '/goals',
       '/settings/privacy',
     ]) {
       await page.goto(path)

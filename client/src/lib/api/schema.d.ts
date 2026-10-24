@@ -768,6 +768,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista metas com progresso calculado */
+        get: operations["getGoals"];
+        put?: never;
+        /**
+         * Cria meta financeira
+         * @description Metas não movimentam dinheiro, não criam ordens e não executam ações bancárias.
+         */
+        post: operations["postGoals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Consulta meta com alocações e histórico */
+        get: operations["getGoalsId"];
+        put?: never;
+        post?: never;
+        /** Exclui meta, alocações e histórico */
+        delete: operations["deleteGoalsId"];
+        options?: never;
+        head?: never;
+        /** Edita meta e alocações */
+        patch: operations["patchGoalsId"];
+        trace?: never;
+    };
+    "/goals/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pausa, arquiva ou reativa uma meta
+         * @description PAUSED e ARCHIVED congelam o progresso e preservam o histórico. ACTIVE reativa e reconhece alterações pendentes.
+         */
+        post: operations["postGoalsIdStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/pluggy/{webhookToken}": {
         parameters: {
             query?: never;
@@ -1431,6 +1495,91 @@ export interface components {
         };
         WealthSnapshotList: {
             items: components["schemas"]["WealthSnapshot"][];
+        };
+        Goal: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            type: "EMERGENCY_FUND" | "TRAVEL" | "PLANNED_PURCHASE" | "DEBT_REDUCTION" | "NET_WORTH";
+            targetAmount: string;
+            /** Format: date */
+            targetDate?: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "ACHIEVED" | "PAUSED" | "ARCHIVED" | "OVERDUE" | "CHANGED";
+            /** @enum {string} */
+            progressRule: "ALLOCATIONS" | "NET_WORTH" | "DEBT_REDUCTION";
+            /** @description Dívida inicial; obrigatória para DEBT_REDUCTION. */
+            initialValue?: string;
+            /** Format: date-time */
+            changedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            currentValue: string;
+            /** @description Percentual de progresso limitado a 100. */
+            percentage: string;
+            remainingAmount: string;
+            /** @description Saldo do alvo não distribuído; nunca redistribuído automaticamente. */
+            unallocatedAmount: string;
+            /** @description Valor acima da meta; o progresso permanece limitado a 100%. */
+            excessAmount: string;
+            allocations: components["schemas"]["GoalAllocation"][];
+            progressHistory: components["schemas"]["GoalProgressEntry"][];
+        };
+        GoalAllocation: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            sourceType: "MANUAL" | "ACCOUNT" | "INVESTMENT" | "MANUAL_ASSET" | "MANUAL_LIABILITY";
+            /** Format: uuid */
+            sourceId?: string;
+            /** @enum {string} */
+            allocationMode: "FIXED_AMOUNT" | "PERCENTAGE";
+            allocatedAmount?: string;
+            percentage?: string;
+            /** @description Contribuição efetiva após arredondamento e resíduo. */
+            contributionAmount: string;
+        };
+        GoalProgressEntry: {
+            /** Format: date */
+            referenceDate: string;
+            currentValue: string;
+            percentage: string;
+            remainingAmount: string;
+            ruleVersion: string;
+        };
+        GoalRequest: {
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            type: "EMERGENCY_FUND" | "TRAVEL" | "PLANNED_PURCHASE" | "DEBT_REDUCTION" | "NET_WORTH";
+            targetAmount: string;
+            /** Format: date */
+            targetDate?: string;
+            /** @enum {string} */
+            progressRule: "ALLOCATIONS" | "NET_WORTH" | "DEBT_REDUCTION";
+            /** @description Obrigatório para DEBT_REDUCTION. */
+            initialValue?: string;
+            allocations?: components["schemas"]["GoalAllocationRequest"][];
+        };
+        GoalAllocationRequest: {
+            /** @enum {string} */
+            sourceType: "MANUAL" | "ACCOUNT" | "INVESTMENT" | "MANUAL_ASSET" | "MANUAL_LIABILITY";
+            /** Format: uuid */
+            sourceId?: string;
+            /** @enum {string} */
+            allocationMode: "FIXED_AMOUNT" | "PERCENTAGE";
+            allocatedAmount?: string;
+            /** @description Percentual do valor-alvo, entre 0 e 100; a soma não pode exceder 100. */
+            percentage?: string;
+        } & (unknown | unknown);
+        GoalStatusRequest: {
+            /** @enum {string} */
+            status: "ACTIVE" | "PAUSED" | "ARCHIVED";
+        };
+        GoalList: {
+            items: components["schemas"]["Goal"][];
         };
     };
     responses: {
@@ -3246,6 +3395,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WealthSnapshot"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getGoals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Metas do usuário. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalList"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postGoals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalRequest"];
+            };
+        };
+        responses: {
+            /** @description Meta criada. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Goal"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getGoalsId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Meta. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Goal"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteGoalsId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Meta excluída. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    patchGoalsId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalRequest"];
+            };
+        };
+        responses: {
+            /** @description Meta atualizada. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Goal"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postGoalsIdStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Estado atualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Goal"];
                 };
             };
             /** @description Erro do cliente. */

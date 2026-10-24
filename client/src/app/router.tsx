@@ -8,6 +8,7 @@ import { DashboardPage } from '@/features/dashboard/pages/DashboardPage'
 import { InvoiceDetailPage } from '@/features/invoices/pages/InvoiceDetailPage'
 import { InvoicesPage } from '@/features/invoices/pages/InvoicesPage'
 import { InvestmentsPage } from '@/features/investments/pages/InvestmentsPage'
+import { GoalsPage } from '@/features/goals/pages/GoalsPage'
 import { WealthPage } from '@/features/wealth/pages/WealthPage'
 import { ReconciliationPage } from '@/features/reconciliation/pages/ReconciliationPage'
 import { ManualEntryPage } from '@/features/transactions/pages/ManualEntryPage'
@@ -148,6 +149,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <WealthPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'goals',
+        element: (
+          <ProtectedRoute>
+            <GoalsPage />
           </ProtectedRoute>
         ),
       },

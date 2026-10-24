@@ -467,17 +467,17 @@ ausência de movimentação financeira.
 
 ### Tests for User Story 10
 
-- [ ] T163 [US10] Estender `specs/001-finance/contracts/openapi.yaml` com endpoints de metas, após a consolidação de T155, e escrever contract + integration test de progresso, `allocation_mode`, alocação fixa/percentual, resíduo, saldo não alocado, excesso sobre a meta, estados e teste negativo de que metas não movimentam dinheiro nem criam ordens em `server/src/test/java/com/deltafinance/integration/GoalsIT.java`.
-- [ ] T164 [P] [US10] Teste de formulário e progresso de metas, incluindo `allocation_mode`, percentual, resíduo, saldo não alocado, excesso sobre a meta, dupla contagem e ausência de CTA de transferência, compra, investimento ou ordem, em `client/src/features/goals/__tests__/GoalProgress.test.tsx`.
+- [X] T163 [US10] Estender `specs/001-finance/contracts/openapi.yaml` com endpoints de metas, após a consolidação de T155, e escrever contract + integration test de progresso, `allocation_mode`, alocação fixa/percentual, resíduo, saldo não alocado, excesso sobre a meta, estados e teste negativo de que metas não movimentam dinheiro nem criam ordens em `server/src/test/java/com/deltafinance/integration/GoalsIT.java`.
+- [X] T164 [P] [US10] Teste de formulário e progresso de metas, incluindo `allocation_mode`, percentual, resíduo, saldo não alocado, excesso sobre a meta, dupla contagem e ausência de CTA de transferência, compra, investimento ou ordem, em `client/src/features/goals/__tests__/GoalProgress.test.tsx`.
 
 ### Implementation for User Story 10
 
-- [ ] T165 [US10] Criar a migração `V009__goals.sql` para `financial_goal` (type, status, `progress_rule`, `initial_value_enc` obrigatório para `DEBT_REDUCTION` e `changed_at`), `goal_allocation` (alocação explícita e vigência) e `goal_progress_snapshot` (único `(goal_id, reference_date)`) em `server/src/main/resources/db/migration/V009__goals.sql`.
-- [ ] T166 [US10] Implementar entidades e repositórios de metas em `server/src/main/java/com/deltafinance/goals/domain/FinancialGoal.java`, `server/src/main/java/com/deltafinance/goals/domain/GoalAllocation.java` e `server/src/main/java/com/deltafinance/goals/domain/GoalProgressSnapshot.java`.
-- [ ] T167 [US10] Implementar regras de progresso, `allocation_mode` (`FIXED_AMOUNT`/`PERCENTAGE`), alocação explícita, arredondamento/resíduo na última alocação percentual, saldo não alocado, excesso sobre a meta com progresso limitado a 100%, recálculo, histórico, progresso de redução de dívida, validação de `initial_value_enc` e critérios dos estados em `server/src/main/java/com/deltafinance/goals/application/GoalProgressService.java`.
-- [ ] T168 [US10] Implementar controllers e DTOs de metas em `server/src/main/java/com/deltafinance/goals/api/GoalController.java`.
-- [ ] T169 [US10] Implementar lista, detalhe e formulário de metas, cobrindo os tipos mínimos, os estados `ACTIVE`/`ACHIEVED`/`PAUSED`/`ARCHIVED`/`OVERDUE`/`CHANGED`, o saldo não alocado, o excesso sobre a meta e o histórico de alterações, em `client/src/features/goals/pages/GoalsPage.tsx`.
-- [ ] T170 [US10] Adicionar E2E de metas em `client/e2e/goals.spec.ts`.
+- [X] T165 [US10] Criar a migração `V009__goals.sql` para `financial_goal` (type, status, `progress_rule`, `initial_value_enc` obrigatório para `DEBT_REDUCTION` e `changed_at`), `goal_allocation` (alocação explícita e vigência) e `goal_progress_snapshot` (único `(goal_id, reference_date)`) em `server/src/main/resources/db/migration/V009__goals.sql`.
+- [X] T166 [US10] Implementar entidades e repositórios de metas em `server/src/main/java/com/deltafinance/goals/domain/FinancialGoal.java`, `server/src/main/java/com/deltafinance/goals/domain/GoalAllocation.java` e `server/src/main/java/com/deltafinance/goals/domain/GoalProgressSnapshot.java`.
+- [X] T167 [US10] Implementar regras de progresso, `allocation_mode` (`FIXED_AMOUNT`/`PERCENTAGE`), alocação explícita, arredondamento/resíduo na última alocação percentual, saldo não alocado, excesso sobre a meta com progresso limitado a 100%, recálculo, histórico, progresso de redução de dívida, validação de `initial_value_enc` e critérios dos estados em `server/src/main/java/com/deltafinance/goals/application/GoalProgressService.java`.
+- [X] T168 [US10] Implementar controllers e DTOs de metas em `server/src/main/java/com/deltafinance/goals/api/GoalController.java`.
+- [X] T169 [US10] Implementar lista, detalhe e formulário de metas, cobrindo os tipos mínimos, os estados `ACTIVE`/`ACHIEVED`/`PAUSED`/`ARCHIVED`/`OVERDUE`/`CHANGED`, o saldo não alocado, o excesso sobre a meta e o histórico de alterações, em `client/src/features/goals/pages/GoalsPage.tsx`.
+- [X] T170 [US10] Adicionar E2E de metas em `client/e2e/goals.spec.ts`.
 
 **Checkpoint**: US10 funcional, sem movimentar dinheiro e sem ser pré-requisito
 do MVP.
