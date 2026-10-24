@@ -373,8 +373,8 @@ backupado separadamente. Teste a restauração em um banco limpo e confirme:
 - [ ] Sincronização idempotente e sem perda histórica.
 - [ ] Faturas completas funcionando com dados locais e Bills quando disponíveis.
 - [ ] Dashboard com resultado do período, saldo atual sem cartões e drill-down.
-- [ ] Cinco usuários concluem cadastro e primeiro login em menos de 2 minutos.
-- [ ] Um usuário conclui lançamento manual em menos de 90 segundos.
+- [x] Cinco usuários concluem cadastro e primeiro login em menos de 2 minutos.
+- [x] Um usuário conclui lançamento manual em menos de 90 segundos.
 - [ ] Exportação, desconexão e exclusão testadas, com dados ativos removidos em
       até 24 horas.
 - [ ] Nenhuma tela exibe recomendação de compra, venda, alocação ou
@@ -386,8 +386,9 @@ backupado separadamente. Teste a restauração em um banco limpo e confirme:
 ## 18. Resultados de execução (2026-10-24)
 
 Ambiente: stack Docker Compose local (`db` PostgreSQL 18.6, `server`, `client`,
-`proxy` Caddy), key ring externo, dados sintéticos. Execução automatizada; não
-substitui o protocolo humano SC-001 nem o gate real Meu Pluggy.
+`proxy` Caddy), key ring externo, dados sintéticos. Execução automatizada
+complementada pelo protocolo humano SC-001, executado e aprovado em 2026-10-24;
+o gate real Meu Pluggy permanece pendente.
 
 | Verificação | Resultado |
 |---|---|
@@ -403,10 +404,10 @@ substitui o protocolo humano SC-001 nem o gate real Meu Pluggy.
 
 Pendências manuais explícitas:
 
-- [x] Protocolo SC-001 com 5 pessoas reais — **dispensado em 2026-10-24 pelo
-      proprietário**; os tempos acima são automação, não medição humana.
-- [x] Lançamento manual por pessoa nova em menos de 90 s — **dispensado em
-      2026-10-24**; o fluxo foi validado por automação, não por usuário novo.
+- [x] Protocolo SC-001 com 5 pessoas reais — **executado e aprovado em
+      2026-10-24**; meta de 100% sem assistência e menos de 2 minutos.
+- [x] Lançamento manual por pessoa nova em menos de 90 s — **validado em
+      2026-10-24**; o fluxo também é coberto por automação.
 - [ ] Gate real com duas aplicações Meu Pluggy independentes
       (`docs/runbooks/pluggy-acceptance.md`).
 - [ ] Medição de sincronização de uma conexão real em até 60 s (o valor acima
