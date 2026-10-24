@@ -1,6 +1,7 @@
 package com.deltafinance.transactions.domain;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,4 +55,31 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
       @Param("cursorPostedOn") LocalDate cursorPostedOn,
       @Param("cursorId") UUID cursorId,
       Pageable pageable);
+
+  /**
+   * Candidatos para relatórios: apenas metadados claros são filtrados no banco; valor, descrição e
+   * faixa monetária são aplicados após a decifragem no módulo de relatórios.
+   */
+  @Query(
+      """
+      select t from Transaction t
+      where t.userId = :userId
+        and t.postedOn >= :from
+        and t.postedOn < :toExclusive
+        and (:accountId is null or t.accountId = :accountId)
+        and (:categoryId is null or t.categoryId = :categoryId)
+        and (:type is null or t.type = :type)
+        and (:source is null or t.source = :source)
+        and t.status in :statuses
+      order by t.postedOn asc, t.id asc
+      """)
+  List<Transaction> findForReporting(
+      @Param("userId") UUID userId,
+      @Param("from") LocalDate from,
+      @Param("toExclusive") LocalDate toExclusive,
+      @Param("accountId") UUID accountId,
+      @Param("categoryId") UUID categoryId,
+      @Param("type") TransactionType type,
+      @Param("source") TransactionSource source,
+      @Param("statuses") Collection<TransactionStatus> statuses);
 }

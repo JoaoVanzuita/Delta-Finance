@@ -90,6 +90,11 @@ public class InternalMatchService {
     return hasMore ? CursorPage.of(items, nextCursor) : CursorPage.last(items);
   }
 
+  /** Quantidade de movimentos internos aguardando decisão do usuário. */
+  public long countPending(UUID userId) {
+    return matchRepository.countByUserIdAndStatus(userId, InternalMatchStatus.PENDING);
+  }
+
   /** Gera sugestões PENDING ainda inexistentes, de forma idempotente. */
   @Transactional
   public int suggest(UUID userId) {

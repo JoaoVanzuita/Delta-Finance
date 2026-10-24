@@ -9,8 +9,10 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -61,6 +63,36 @@ public class SyncQueryService {
     String nextCursor =
         hasMore && !page.isEmpty() ? encode(page.getLast().startedAt(), page.getLast().id()) : null;
     return hasMore ? CursorPage.of(page, nextCursor) : CursorPage.last(page);
+  }
+
+  /**
+   * Sincronização bem-sucedida mais recente entre as conexões informadas.
+   *
+   * <p>{@code SUCCESS} e {@code EMPTY} contam como bem-sucedidas; falhas e execuções parciais não.
+   * Retorna {@code null} quando nenhuma conexão se aplica.
+   */
+  public Instant lastSuccessfulSyncAt(UUID userId, Collection<UUID> connectionIds) {
+    if (connectionIds == null || connectionIds.isEmpty()) {
+      return null;
+    }
+    String placeholders =
+        connectionIds.stream().map(ignored -> "?").collect(Collectors.joining(","));
+    List<Object> arguments = new ArrayList<>();
+    arguments.add(userId);
+    arguments.addAll(connectionIds);
+    Timestamp result =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT max(coalesce(finished_at, started_at))
+              FROM sync_run
+             WHERE user_id = ?
+               AND status IN ('SUCCESS', 'EMPTY')
+               AND connection_id IN (%s)
+            """
+                .formatted(placeholders),
+            Timestamp.class,
+            arguments.toArray());
+    return result == null ? null : result.toInstant();
   }
 
   private static SyncRunView toView(ResultSet rs) throws SQLException {

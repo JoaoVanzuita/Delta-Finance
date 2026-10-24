@@ -71,6 +71,11 @@ public class CategoryService {
 
   public List<CategoryView> list(UUID userId) {
     ensurePredefined(userId);
+    return listExisting(userId);
+  }
+
+  /** Categorias já existentes, sem criar as predefinidas (leitura para relatórios). */
+  public List<CategoryView> listExisting(UUID userId) {
     return categoryRepository.findByUserIdOrderByNameEncAsc(userId).stream()
         .map(this::toView)
         .sorted(Comparator.comparing(CategoryView::name, String.CASE_INSENSITIVE_ORDER))

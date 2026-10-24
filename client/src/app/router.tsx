@@ -4,6 +4,7 @@ import { AccountDetailPage } from '@/features/accounts/pages/AccountDetailPage'
 import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
 import { ManualAccountPage } from '@/features/accounts/pages/ManualAccountPage'
 import { CategoriesPage } from '@/features/categories/pages/CategoriesPage'
+import { DashboardPage } from '@/features/dashboard/pages/DashboardPage'
 import { InvoiceDetailPage } from '@/features/invoices/pages/InvoiceDetailPage'
 import { InvoicesPage } from '@/features/invoices/pages/InvoicesPage'
 import { ReconciliationPage } from '@/features/reconciliation/pages/ReconciliationPage'
@@ -38,6 +39,14 @@ export const router = createBrowserRouter([
       {
         path: 'login',
         element: <LoginPage />,
+      },
+      {
+        path: 'dashboard',
+        element: (
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: 'register',

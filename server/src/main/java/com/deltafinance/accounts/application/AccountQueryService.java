@@ -8,7 +8,9 @@ import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoException;
 import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.errors.NotFoundException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -43,6 +45,22 @@ public class AccountQueryService {
 
   public long countByConnection(UUID connectionId) {
     return accountRepository.findByConnectionIdOrderByCreatedAtAsc(connectionId).size();
+  }
+
+  /**
+   * Mapa {@code accountId -> connectionId} das contas importadas do usuário.
+   *
+   * <p>Usado por relatórios para descobrir quais conexões são relevantes ao filtro sem expor a
+   * entidade ou o repositório de contas a outro módulo.
+   */
+  public Map<UUID, UUID> connectionIdsByAccount(UUID userId) {
+    Map<UUID, UUID> result = new HashMap<>();
+    for (FinancialAccount account : accountRepository.findByUserIdOrderByCreatedAtAsc(userId)) {
+      if (account.getConnectionId() != null) {
+        result.put(account.getId(), account.getConnectionId());
+      }
+    }
+    return result;
   }
 
   private AccountView toView(FinancialAccount account) {

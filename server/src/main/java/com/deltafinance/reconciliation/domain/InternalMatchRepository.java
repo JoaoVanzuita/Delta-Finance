@@ -14,6 +14,8 @@ public interface InternalMatchRepository extends JpaRepository<InternalMatch, UU
   List<InternalMatch> findByUserIdAndStatusOrderByScoreDescCreatedAtAsc(
       UUID userId, InternalMatchStatus status);
 
+  long countByUserIdAndStatus(UUID userId, InternalMatchStatus status);
+
   boolean existsByUserIdAndKindAndDebitTransactionIdAndCreditTransactionId(
       UUID userId, InternalMatchKind kind, UUID debitTransactionId, UUID creditTransactionId);
 }

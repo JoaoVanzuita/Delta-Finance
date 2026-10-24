@@ -15,6 +15,7 @@ import com.deltafinance.transactions.domain.TransactionType;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
@@ -79,6 +80,31 @@ public class TransactionQueryService {
         .findByIdAndUserId(transactionId, userId)
         .map(this::toView)
         .orElseThrow(com.deltafinance.shared.errors.NotFoundException::new);
+  }
+
+  /**
+   * Candidatos de relatório no intervalo {@code [from, toExclusive)}, já decifrados.
+   *
+   * <p>A API pública existe para que o módulo {@code reporting} não dependa do repositório de
+   * transações. A faixa de valor é aplicada pelo consumidor após a decifragem.
+   */
+  public List<TransactionView> listForReporting(
+      UUID userId,
+      LocalDate from,
+      LocalDate toExclusive,
+      UUID accountId,
+      UUID categoryId,
+      TransactionType type,
+      TransactionSource source,
+      Collection<TransactionStatus> statuses) {
+    if (statuses == null || statuses.isEmpty()) {
+      return List.of();
+    }
+    return transactionRepository
+        .findForReporting(userId, from, toExclusive, accountId, categoryId, type, source, statuses)
+        .stream()
+        .map(this::toView)
+        .toList();
   }
 
   private TransactionView toView(Transaction transaction) {

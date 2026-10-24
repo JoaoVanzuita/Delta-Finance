@@ -163,7 +163,7 @@ test('cria conta manual e lançamento sem integração bancária', async ({ page
   await expect(page.getByRole('heading', { name: 'Carteira' })).toBeVisible()
 
   await page.goto('/transactions/new')
-  await page.getByLabel('Conta').selectOption('acc-manual')
+  await page.getByLabel(/^Conta/).selectOption('acc-manual')
   await page.getByLabel('Valor (R$)').fill('25,00')
   await page.getByLabel('Descrição').fill('Feira')
   await page.getByRole('button', { name: 'Registrar lançamento' }).click()

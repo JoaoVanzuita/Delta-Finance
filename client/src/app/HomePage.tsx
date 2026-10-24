@@ -45,9 +45,9 @@ export function HomePage() {
           Aplicação em construção
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          A base de identidade, sessão, criptografia e auditoria está pronta, e o cadastro e o login
-          já funcionam. A importação bancária e o dashboard entram nas próximas fases. Ainda não há
-          dados financeiros para cadastrar.
+          A base de identidade, sessão, criptografia e auditoria está pronta, e o cadastro, o login,
+          a importação bancária, os lançamentos manuais, as faturas e o dashboard já funcionam.
+          Novas fases continuam sendo adicionadas sem expor telas vazias.
         </p>
         <ul className="mt-4 space-y-2 text-sm text-ink">
           <li className="flex gap-2">
@@ -66,7 +66,17 @@ export function HomePage() {
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
             Isolamento entre usuários verificado no servidor
           </li>
+          <li className="flex gap-2">
+            <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
+            Dashboard com resultado do período e saldo atual em rótulos distintos
+          </li>
         </ul>
+        <Link
+          to="/dashboard"
+          className="mt-5 inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+        >
+          Abrir dashboard
+        </Link>
       </section>
 
       <p className="text-xs leading-relaxed text-ink-muted">

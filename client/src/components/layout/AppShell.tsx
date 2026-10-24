@@ -14,6 +14,7 @@ interface NavigationItem {
  */
 const navigation: readonly NavigationItem[] = [
   { to: '/', label: 'Início', end: true },
+  { to: '/dashboard', label: 'Dashboard' },
   { to: '/accounts', label: 'Contas' },
   { to: '/transactions', label: 'Transações' },
   { to: '/categories', label: 'Categorias' },

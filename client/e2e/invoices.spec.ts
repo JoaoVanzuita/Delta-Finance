@@ -235,7 +235,7 @@ test('configura ciclo, adiciona item manual e registra pagamento', async ({ page
   await page.getByLabel('Descrição').fill('Juros')
   await page.getByLabel('Valor (R$)').fill('20,00')
   await page.getByRole('button', { name: 'Salvar item' }).click()
-  await expect(page.getByText('Juros')).toBeVisible()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Juros' }).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Registrar pagamento' }).click()
   const dialog = page.getByRole('dialog')
