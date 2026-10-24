@@ -33,6 +33,9 @@ export type InvoicePayment = components['schemas']['InvoicePayment']
 export type InvoicePaymentInput = components['schemas']['InvoicePaymentRequest']
 export type CardProfileInput = components['schemas']['CardProfileRequest']
 export type CardProfile = components['schemas']['CardProfile']
+export type InvestmentPosition = components['schemas']['InvestmentPosition']
+export type InvestmentPositionPage = components['schemas']['InvestmentPositionPage']
+export type InvestmentPositionInput = components['schemas']['InvestmentPositionRequest']
 
 export interface CredentialsInput {
   readonly clientId: string
@@ -117,6 +120,18 @@ export const financeApi = {
     api.get<InternalMatchPage>(`/internal-matches?status=${status}&limit=50`),
   confirmMatch: (id: string) => api.post<InternalMatch>(`/internal-matches/${id}/confirm`),
   rejectMatch: (id: string) => api.post<InternalMatch>(`/internal-matches/${id}/reject`),
+
+  positions: (cursor?: string, limit = 50) => {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (cursor) params.set('cursor', cursor)
+    return api.get<InvestmentPositionPage>(`/investments/positions?${params.toString()}`)
+  },
+  position: (id: string) => api.get<InvestmentPosition>(`/investments/positions/${id}`),
+  createPosition: (input: InvestmentPositionInput) =>
+    api.post<InvestmentPosition>('/investments/positions', input),
+  updatePosition: (id: string, input: InvestmentPositionInput) =>
+    api.patch<InvestmentPosition>(`/investments/positions/${id}`, input),
+  deletePosition: (id: string) => api.delete<void>(`/investments/positions/${id}`),
 
   updateCardProfile: (accountId: string, input: CardProfileInput) =>
     api.put<CardProfile>(`/cards/${accountId}/profile`, input),

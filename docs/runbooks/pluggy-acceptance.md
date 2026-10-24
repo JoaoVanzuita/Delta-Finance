@@ -7,6 +7,10 @@ teste **não** contam como aceitação real.
 > Meu Pluggy reais com aplicações pessoais independentes, Client ID/Secret e
 > múltiplos itemIds fornecidos pelos titulares. Nenhuma credencial real é
 > armazenada no repositório.
+>
+> Em 2026-10-24 a Phase 11 (US8, investimentos manuais) foi implementada por
+> decisão do proprietário com este gate ainda pendente. A exceção está registrada
+> em `specs/001-finance/tasks.md` e não substitui a aceitação real abaixo.
 
 ## 1. Preparação
 
@@ -55,7 +59,9 @@ teste **não** contam como aceitação real.
       relatórios.
 - [ ] Expiração anual, mudança de itemId e reconexão sem perda histórica.
 - [ ] Backup/restauração com key ring externo validado.
-- [ ] Nenhuma tela anuncia investimentos, patrimônio ou metas como disponíveis.
+- [ ] Nenhuma tela anuncia importação automática de investimentos, patrimônio ou
+      metas como disponível; posições manuais de investimento da fase secundária
+      são identificadas como registro manual, sem cotação ou recomendação.
 
 ## 5. Registro
 

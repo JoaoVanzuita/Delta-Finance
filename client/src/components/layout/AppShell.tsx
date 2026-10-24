@@ -19,6 +19,7 @@ const navigation: readonly NavigationItem[] = [
   { to: '/transactions', label: 'Transações' },
   { to: '/categories', label: 'Categorias' },
   { to: '/reconciliation', label: 'Reconciliação' },
+  { to: '/investments', label: 'Investimentos' },
   { to: '/settings/integration', label: 'Integração' },
   { to: '/settings/privacy', label: 'Privacidade' },
   { to: '/account', label: 'Conta' },

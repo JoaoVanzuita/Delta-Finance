@@ -7,6 +7,7 @@ import { CategoriesPage } from '@/features/categories/pages/CategoriesPage'
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage'
 import { InvoiceDetailPage } from '@/features/invoices/pages/InvoiceDetailPage'
 import { InvoicesPage } from '@/features/invoices/pages/InvoicesPage'
+import { InvestmentsPage } from '@/features/investments/pages/InvestmentsPage'
 import { ReconciliationPage } from '@/features/reconciliation/pages/ReconciliationPage'
 import { ManualEntryPage } from '@/features/transactions/pages/ManualEntryPage'
 import { AccountSettingsPage } from '@/features/auth/pages/AccountSettingsPage'
@@ -130,6 +131,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <InvoiceDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'investments',
+        element: (
+          <ProtectedRoute>
+            <InvestmentsPage />
           </ProtectedRoute>
         ),
       },

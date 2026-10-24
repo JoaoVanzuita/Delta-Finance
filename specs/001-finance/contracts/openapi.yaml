@@ -1243,6 +1243,24 @@ paths:
     x-phase: post-mvp
     parameters:
     - $ref: '#/components/parameters/PathId'
+    get:
+      tags:
+      - Investments
+      summary: Consulta posição manual
+      responses:
+        '200':
+          description: Posição.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestmentPosition'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getInvestmentsPositionsId
     patch:
       tags:
       - Investments
@@ -2692,6 +2710,7 @@ components:
       - assetName
       - quantity
       - referencePrice
+      - total
       - referenceDate
       - origin
       properties:
@@ -2713,6 +2732,9 @@ components:
         referencePrice:
           type: string
           description: Preço unitário de referência; o total é quantity × referencePrice.
+        total:
+          type: string
+          description: quantity × referencePrice, arredondado para 2 casas decimais.
         referenceDate:
           type: string
           format: date
@@ -2728,8 +2750,12 @@ components:
       - broker
       - assetName
       - quantity
-      - referencePrice
       - referenceDate
+      oneOf:
+      - required:
+        - referencePrice
+      - required:
+        - totalValue
       properties:
         broker:
           type: string
@@ -2745,9 +2771,13 @@ components:
           maxLength: 20
         quantity:
           type: string
+          description: Quantidade positiva, com até 8 casas decimais.
         referencePrice:
           type: string
           description: Preço unitário de referência; o total é quantity × referencePrice.
+        totalValue:
+          type: string
+          description: Valor total informado pelo usuário; o preço unitário é derivado por total ÷ quantity, arredondado para 8 casas decimais.
         referenceDate:
           type: string
           format: date

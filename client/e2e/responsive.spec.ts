@@ -135,7 +135,13 @@ for (const viewport of [
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await installStub(page)
 
-    for (const path of ['/dashboard', '/accounts', '/transactions', '/settings/privacy']) {
+    for (const path of [
+      '/dashboard',
+      '/accounts',
+      '/transactions',
+      '/investments',
+      '/settings/privacy',
+    ]) {
       await page.goto(path)
       await page.waitForLoadState('networkidle')
       await expectNoHorizontalOverflow(page)

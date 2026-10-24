@@ -396,6 +396,12 @@ aprovado e de T171–T189, T193 e T197–T199 estarem concluídas.
 - T182: exige duas contas Meu Pluggy reais com Client ID/Secret e múltiplos
   itemIds; nenhuma credencial real está disponível no repositório.
 
+**Exceção registrada em 2026-10-24**: a Phase 11 (US8) foi executada por
+decisão do proprietário antes da aprovação de T182. O gate real do Meu Pluggy
+permanece pendente e não é substituído por stubs, Sandbox ou dados sintéticos.
+O módulo de investimentos entregue é somente manual e não declara importação
+automática validada.
+
 **Checkpoint**: MVP bancário validado com dados reais, backup/restauração,
 segurança, performance e acessibilidade; fases secundárias separadas.
 
@@ -411,16 +417,16 @@ data de referência e verificar que nenhuma importação automática é anunciad
 
 ### Tests for User Story 8
 
-- [ ] T148 [P] [US8] Contract + integration test de CRUD, totais e isolamento de posições em `server/src/test/java/com/deltafinance/integration/InvestmentIT.java`.
-- [ ] T149 [P] [US8] Teste de formulário, lista de posições e ausência de recomendação de compra/venda/alocação em `client/src/features/investments/__tests__/InvestmentPositions.test.tsx` e `client/src/features/investments/__tests__/NoAdvice.test.tsx`.
+- [X] T148 [P] [US8] Contract + integration test de CRUD, totais e isolamento de posições em `server/src/test/java/com/deltafinance/integration/InvestmentIT.java`.
+- [X] T149 [P] [US8] Teste de formulário, lista de posições e ausência de recomendação de compra/venda/alocação em `client/src/features/investments/__tests__/InvestmentPositions.test.tsx` e `client/src/features/investments/__tests__/NoAdvice.test.tsx`.
 
 ### Implementation for User Story 8
 
-- [ ] T150 [US8] Criar a migração `V007__investments.sql` para `investment_position` (broker `XP|SANTANDER|OTHER`, ativo/ticker/quantidade/preço cifrados, `reference_date` e `origin=MANUAL`) em `server/src/main/resources/db/migration/V007__investments.sql`.
-- [ ] T151 [US8] Implementar entidade, repositório, serviço e controller de posições manuais, com total `quantidade × preço` e derivação do preço quando apenas o total for informado, em `server/src/main/java/com/deltafinance/investments/domain/InvestmentPosition.java`, `server/src/main/java/com/deltafinance/investments/application/InvestmentPositionService.java` e `server/src/main/java/com/deltafinance/investments/api/InvestmentController.java`.
-- [ ] T152 [US8] Implementar lista e formulário de posições, exibindo total calculado e data de referência, em `client/src/features/investments/pages/InvestmentsPage.tsx`.
-- [ ] T153 [US8] Implementar aviso explícito de ausência de importação automática validada e ausência de recomendação de compra/venda/alocação, ranking ou linguagem de aconselhamento em `client/src/features/investments/components/AutoImportNotice.tsx`.
-- [ ] T154 [US8] Adicionar E2E de investimentos manuais em `client/e2e/investments.spec.ts`.
+- [X] T150 [US8] Criar a migração `V007__investments.sql` para `investment_position` (broker `XP|SANTANDER|OTHER`, ativo/ticker/quantidade/preço cifrados, `reference_date` e `origin=MANUAL`) em `server/src/main/resources/db/migration/V007__investments.sql`.
+- [X] T151 [US8] Implementar entidade, repositório, serviço e controller de posições manuais, com total `quantidade × preço` e derivação do preço quando apenas o total for informado, em `server/src/main/java/com/deltafinance/investments/domain/InvestmentPosition.java`, `server/src/main/java/com/deltafinance/investments/application/InvestmentPositionService.java` e `server/src/main/java/com/deltafinance/investments/api/InvestmentController.java`.
+- [X] T152 [US8] Implementar lista e formulário de posições, exibindo total calculado e data de referência, em `client/src/features/investments/pages/InvestmentsPage.tsx`.
+- [X] T153 [US8] Implementar aviso explícito de ausência de importação automática validada e ausência de recomendação de compra/venda/alocação, ranking ou linguagem de aconselhamento em `client/src/features/investments/components/AutoImportNotice.tsx`.
+- [X] T154 [US8] Adicionar E2E de investimentos manuais em `client/e2e/investments.spec.ts`.
 
 **Checkpoint**: US8 funcional e explicitamente secundária; não bloqueia o MVP
 bancário.

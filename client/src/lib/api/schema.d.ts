@@ -673,7 +673,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** Consulta posição manual */
+        get: operations["getInvestmentsPositionsId"];
         put?: never;
         post?: never;
         /** Exclui posição manual */
@@ -1243,6 +1244,8 @@ export interface components {
             quantity: string;
             /** @description Preço unitário de referência; o total é quantity × referencePrice. */
             referencePrice: string;
+            /** @description quantity × referencePrice, arredondado para 2 casas decimais. */
+            total: string;
             /** Format: date */
             referenceDate: string;
             notes?: string;
@@ -1254,13 +1257,16 @@ export interface components {
             broker: "XP" | "SANTANDER" | "OTHER";
             assetName: string;
             ticker?: string;
+            /** @description Quantidade positiva, com até 8 casas decimais. */
             quantity: string;
             /** @description Preço unitário de referência; o total é quantity × referencePrice. */
-            referencePrice: string;
+            referencePrice?: string;
+            /** @description Valor total informado pelo usuário; o preço unitário é derivado por total ÷ quantity, arredondado para 8 casas decimais. */
+            totalValue?: string;
             /** Format: date */
             referenceDate: string;
             notes?: string;
-        };
+        } & (unknown | unknown);
         InvestmentPositionPage: {
             items: components["schemas"]["InvestmentPosition"][];
             nextCursor?: string;
@@ -2732,6 +2738,37 @@ export interface operations {
         responses: {
             /** @description Posição criada. */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentPosition"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInvestmentsPositionsId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Posição. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
