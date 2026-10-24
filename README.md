@@ -5,10 +5,13 @@ Controle financeiro privado para uma família, operado em infraestrutura própri
 integrações e relatórios; a integração bancária é configurada individualmente no
 Meu Pluggy, sem compartilhamento de credenciais.
 
-> **Estado**: fase 4 (integração Meu Pluggy). Cadastro/login, configuração
-> pessoal da integração, conexões por itemId, importação de contas, cartões e
-> transações estão implementados. Sincronização programada, faturas e dashboard
-> ainda não; use apenas dados de teste.
+> **Estado**: escopo funcional de `specs/001-finance` implementado até a fase
+> posterior. O MVP bancário cobre identidade, contas e cartões manuais ou via Meu
+> Pluggy, transações, categorias, faturas, reconciliação, dashboard, relatórios,
+> privacidade e exportação. Investimentos manuais, patrimônio e metas estão
+> disponíveis como módulos secundário e posteriores. Nenhum módulo movimenta
+> dinheiro, cria ordens ou oferece recomendação de investimento; a validação de
+> release segue [`docs/release-checklist.md`](docs/release-checklist.md).
 
 ## Stack
 
@@ -28,7 +31,7 @@ completo está em [`specs/001-finance/plan.md`](specs/001-finance/plan.md).
 
 ```text
 server/                 Backend Spring Boot (monólito modular)
-  src/main/java/com/deltafinance/   módulos: auth, integrations, accounts, ...
+  src/main/java/com/deltafinance/   módulos: auth, integrations, accounts, investments, wealth, goals, ...
   src/main/resources/db/migration/  migrações Flyway
   src/test/java/com/deltafinance/   unit, integration, api, architecture, support
 client/                 SPA React + TypeScript + Vite
@@ -40,6 +43,24 @@ docs/                   operação, segurança e runbooks
 specs/001-finance/      especificação, plano, contrato OpenAPI e tarefas
 compose.yaml            stack self-hosted completa
 ```
+
+## Funcionalidades
+
+- **Identidade e privacidade**: cadastro/login, sessão com CSRF, isolamento por
+  usuário, exportação dos próprios dados e exclusão de conta.
+- **Contas e transações**: contas manuais, importação via Meu Pluggy, cartões,
+  faturas, categorias, correções, itens removidos na origem e reconciliação.
+- **Dashboard e relatórios**: resultado do período, saldo, categorias, série
+  temporal, drill-down paginado e exportação dos próprios dados na área de
+  privacidade.
+- **Investimentos (fase secundária)**: posições manuais de ações e FIIs, com total
+  calculado pela data de referência informada. Não há importação automática nem
+  recomendação de compra, venda ou alocação.
+- **Patrimônio (pós-MVP)**: ativos, passivos e snapshots datados, sem dupla
+  contagem e sem inferir saldos passados quando falta histórico.
+- **Metas (pós-MVP)**: progresso por alocações explícitas, patrimônio líquido ou
+  redução de dívida, com histórico diário. Metas não movimentam dinheiro, não
+  criam ordens e não executam ações bancárias.
 
 ## Pré-requisitos
 
@@ -142,13 +163,19 @@ automaticamente quando o Docker não está disponível. A base está em
   os campos cifrados são irrecuperáveis** — faça backup separado.
 - Client Secret e API Key da Pluggy nunca chegam ao navegador; a API Key é
   temporária e mantida apenas no servidor.
+- Além dos dados bancários, nomes, descrições e valores de investimentos,
+  patrimônio e metas são cifrados em repouso com o mesmo key ring.
 - Connect Token não faz parte do MVP.
 - Detalhes e limites da proteção: [`docs/security.md`](docs/security.md).
 
 ## Documentação
 
 - [`docs/operations.md`](docs/operations.md): operação, health checks, logs,
-  migrações e backups.
+  sincronização, investimentos, patrimônio, metas, migrações e backups.
+- [`docs/accessibility.md`](docs/accessibility.md): rotas cobertas e critérios de
+  acessibilidade.
+- [`docs/release-checklist.md`](docs/release-checklist.md): versões fixadas e
+  gates de release.
 - [`docs/runbooks/README.md`](docs/runbooks/README.md): índice de runbooks.
 - [`deploy/README.md`](deploy/README.md): TLS, key ring e scripts operacionais.
 - [`specs/001-finance/contracts/openapi.yaml`](specs/001-finance/contracts/openapi.yaml):

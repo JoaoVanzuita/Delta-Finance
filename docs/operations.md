@@ -89,6 +89,57 @@ tem acesso.
   falhas repetidas, fila acumulada, `AUTHORIZATION_EXPIRED`/`CONSENT_EXPIRED` e
   ausência de sincronização bem-sucedida no período esperado.
 
+## Investimentos manuais
+
+- Módulo da fase secundária (`/investments`, `/api/v1/investments/positions`).
+- Posições são registros manuais com corretora, ativo, ticker opcional,
+  quantidade, preço de referência **ou** valor total, data de referência e
+  observações.
+- O total é `quantidade × preço unitário`; quando apenas o total é informado, o
+  preço unitário é `total ÷ quantidade`, arredondado a 8 casas decimais. Valores e
+  datas são os informados pelo usuário, nunca cotação de mercado.
+- Não há importação automática, sincronização, webhook, recomendação de compra,
+  venda ou alocação, nem criação de ordens. A disponibilidade dos conectores
+  XP/Santander no Meu Pluggy permanece não validada até o gate real; o módulo não
+  depende do MVP bancário.
+- Posições manuais entram na visão patrimonial e podem ser fonte de alocação de
+  metas.
+
+## Patrimônio
+
+- Módulo pós-MVP (`/wealth`, `/api/v1/wealth/*`). A visão atual consolida contas,
+  cartões como passivos, posições de investimento e ativos/passivos manuais. Cada
+  origem entra uma única vez; exclusões aparecem com o motivo explícito e não
+  compõem o total.
+- Valores manuais e de referência são os informados pelo usuário, não cotação de
+  mercado.
+- Snapshots são **explícitos** (`POST /api/v1/wealth/snapshots`), datados e
+  incluem a composição item a item. Reenviar no mesmo dia atualiza o snapshot do
+  dia; não há reconstrução retroativa nem inferência de saldo passado.
+- `completeness` é `COMPLETE`, `PARTIAL` (dados ausentes) ou `ESTIMATED` (fonte com
+  referência há mais de 30 dias). Lacunas de histórico não são preenchidas.
+
+## Metas
+
+- Módulo pós-MVP (`/goals`, `/api/v1/goals`). Regras de progresso:
+  `ALLOCATIONS` (alocações explícitas), `NET_WORTH` (patrimônio líquido atual) e
+  `DEBT_REDUCTION` (dívida inicial obrigatória).
+- Alocações `FIXED_AMOUNT` são exatas; `PERCENTAGE` usa
+  `floor(valor-alvo × percentual ÷ 100, 2)`, com o resíduo na última alocação
+  percentual. Percentuais abaixo de 100% mantêm saldo não alocado visível, sem
+  redistribuição automática. O excesso é permitido, mas o progresso fica limitado
+  a 100%.
+- A soma das alocações de uma mesma conta, investimento ou item patrimonial entre
+  metas não pode exceder o saldo da fonte; alocações `MANUAL` não têm saldo
+  associado.
+- Estados: `ACTIVE`, `ACHIEVED`, `PAUSED`, `ARCHIVED`, `OVERDUE`, `CHANGED`.
+  `ACHIEVED` e `OVERDUE` são derivados; `PAUSED` e `ARCHIVED` congelam o
+  progresso; alteração material marca `CHANGED` e exige reconhecimento explícito.
+- O snapshot diário é único por meta e dia, gravado ao criar/consultar meta ativa;
+  pausar ou arquivar preserva o último snapshot. Não há job dedicado, movimento de
+  dinheiro nem criação de ordens.
+- Excluir uma meta remove suas alocações e seu histórico; a UI exige confirmação.
+
 ## Banco e migrações
 
 - PostgreSQL 18.6, volume `pgdata`.
@@ -96,6 +147,10 @@ tem acesso.
   start. Nunca edite uma migração já aplicada; crie a próxima versão.
 - `MigrationIT` valida banco vazio, snapshot da versão anterior e
   idempotência.
+- `V007__investments.sql`, `V008__wealth.sql` e `V009__goals.sql` criam as tabelas
+  dos módulos secundário e posteriores. Descrições, valores, dívida inicial e
+  composições de snapshot são cifrados; metadados de consulta (corretora, origem,
+  tipo, estado, percentual e datas) ficam em claro para consulta e ordenação.
 - Acesso administrativo local:
 
 ```bash

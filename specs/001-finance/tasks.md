@@ -486,7 +486,7 @@ do MVP.
 
 ## Phase 14: Documentação Final Pós-MVP
 
-- [ ] T190 [P] Atualizar README e documentação final, incluindo investimentos
+- [X] T190 [P] Atualizar README e documentação final, incluindo investimentos
   manuais, patrimônio e metas, em `README.md` e `docs/operations.md`.
 
 **Checkpoint**: documentação reflete o estado final após as fases secundária e
