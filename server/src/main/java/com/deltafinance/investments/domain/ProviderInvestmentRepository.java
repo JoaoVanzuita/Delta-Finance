@@ -13,4 +13,6 @@ public interface ProviderInvestmentRepository extends JpaRepository<ProviderInve
       UUID userId, UUID connectionId, byte[] externalInvestmentIdHash);
 
   List<ProviderInvestment> findByUserIdAndConnectionId(UUID userId, UUID connectionId);
+
+  List<ProviderInvestment> findByUserIdOrderByStatusAscTypeAscIdAsc(UUID userId);
 }

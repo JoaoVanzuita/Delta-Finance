@@ -41,6 +41,14 @@ export type CardOverviewItem = components['schemas']['CardOverviewItem']
 export type InvestmentPosition = components['schemas']['InvestmentPosition']
 export type InvestmentPositionPage = components['schemas']['InvestmentPositionPage']
 export type InvestmentPositionInput = components['schemas']['InvestmentPositionRequest']
+export type InvestmentOverview = components['schemas']['InvestmentOverview']
+export type InvestmentAllocation = components['schemas']['InvestmentAllocation']
+export type InvestmentHolding = components['schemas']['InvestmentHolding']
+export type InvestmentHoldingList = components['schemas']['InvestmentHoldingList']
+export type InvestmentSource = components['schemas']['InvestmentSource']
+export type InvestmentSourceList = components['schemas']['InvestmentSourceList']
+export type InvestmentIncome = components['schemas']['InvestmentIncome']
+export type InvestmentIncomeItem = components['schemas']['InvestmentIncomeItem']
 export type WealthOverview = components['schemas']['WealthOverview']
 export type WealthItem = components['schemas']['WealthItem']
 export type WealthManualItem = components['schemas']['WealthManualItem']
@@ -139,6 +147,24 @@ export const financeApi = {
     api.get<InternalMatchPage>(`/internal-matches?status=${status}&limit=50`),
   confirmMatch: (id: string) => api.post<InternalMatch>(`/internal-matches/${id}/confirm`),
   rejectMatch: (id: string) => api.post<InternalMatch>(`/internal-matches/${id}/reject`),
+
+  investmentOverview: () => api.get<InvestmentOverview>('/investments/overview'),
+  investmentHoldings: (status?: string, assetClass?: string) => {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (assetClass) params.set('assetClass', assetClass)
+    const query = params.toString()
+    return api.get<InvestmentHoldingList>(`/investments/holdings${query ? `?${query}` : ''}`)
+  },
+  investmentHolding: (id: string) => api.get<InvestmentHolding>(`/investments/holdings/${id}`),
+  investmentSources: () => api.get<InvestmentSourceList>('/investments/sources'),
+  investmentIncome: (from?: string, to?: string) => {
+    const params = new URLSearchParams()
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    const query = params.toString()
+    return api.get<InvestmentIncome>(`/investments/income${query ? `?${query}` : ''}`)
+  },
 
   positions: (cursor?: string, limit = 50) => {
     const params = new URLSearchParams({ limit: String(limit) })

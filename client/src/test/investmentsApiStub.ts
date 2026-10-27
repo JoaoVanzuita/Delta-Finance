@@ -1,0 +1,381 @@
+import { vi } from 'vitest'
+
+import type {
+  ConnectionPage,
+  InvestmentHolding,
+  InvestmentIncome,
+  InvestmentOverview,
+  InvestmentPosition,
+} from '@/features/integration/api'
+
+export const USER = {
+  id: 'user-1',
+  username: 'alice.invest',
+  createdAt: '2026-10-20T12:00:00Z',
+}
+
+const TODAY = '2026-10-27'
+
+export const HOLDINGS: InvestmentHolding[] = [
+  {
+    id: 'holding-1',
+    connectionId: 'connection-1',
+    name: 'FII Alfa',
+    code: 'AAAA11',
+    isin: 'BRAAAA',
+    type: 'EQUITY',
+    subtype: 'STOCK',
+    assetClass: 'FII',
+    classificationSource: 'CODE_HEURISTIC',
+    status: 'ACTIVE',
+    currency: 'BRL',
+    quantity: '10',
+    unitValue: '100.00',
+    amount: '1000.00',
+    balance: '1000.00',
+    amountOriginal: null,
+    amountProfit: null,
+    amountWithdrawal: '1000.00',
+    taxes: null,
+    taxes2: null,
+    rate: null,
+    rateType: null,
+    fixedAnnualRate: null,
+    lastMonthRate: null,
+    annualRate: null,
+    lastTwelveMonthsRate: null,
+    referenceDate: TODAY,
+    purchaseDate: null,
+    dueDate: null,
+    gracePeriodDate: null,
+    providerUpdatedAt: '2026-10-27T12:00:00Z',
+    syncedAt: '2026-10-27T12:00:00Z',
+    unavailableAt: null,
+    manualCostBasis: null,
+    userAssetClass: null,
+    profitSource: 'UNAVAILABLE',
+    stale: false,
+  },
+  {
+    id: 'holding-2',
+    connectionId: 'connection-1',
+    name: 'FII Beta',
+    code: 'BBBB11',
+    isin: 'BRBBBB',
+    type: 'EQUITY',
+    subtype: 'STOCK',
+    assetClass: 'FII',
+    classificationSource: 'CODE_HEURISTIC',
+    status: 'ACTIVE',
+    currency: 'BRL',
+    quantity: '5',
+    unitValue: '100.00',
+    amount: '500.00',
+    balance: '500.00',
+    amountOriginal: '450.00',
+    amountProfit: '50.00',
+    amountWithdrawal: '500.00',
+    taxes: null,
+    taxes2: null,
+    rate: null,
+    rateType: null,
+    fixedAnnualRate: null,
+    lastMonthRate: null,
+    annualRate: null,
+    lastTwelveMonthsRate: null,
+    referenceDate: TODAY,
+    purchaseDate: null,
+    dueDate: null,
+    gracePeriodDate: null,
+    providerUpdatedAt: '2026-10-27T12:00:00Z',
+    syncedAt: '2026-10-27T12:00:00Z',
+    unavailableAt: null,
+    manualCostBasis: null,
+    userAssetClass: null,
+    profitSource: 'PROVIDER',
+    stale: false,
+  },
+  {
+    id: 'holding-3',
+    connectionId: 'connection-1',
+    name: 'CDB Alfa',
+    code: 'CDB-1',
+    isin: null,
+    type: 'FIXED_INCOME',
+    subtype: 'CDB',
+    assetClass: 'RENDA_FIXA',
+    classificationSource: 'PROVIDER',
+    status: 'ACTIVE',
+    currency: 'BRL',
+    quantity: '1',
+    unitValue: '250.00',
+    amount: '250.00',
+    balance: '250.00',
+    amountOriginal: null,
+    amountProfit: null,
+    amountWithdrawal: '250.00',
+    taxes: null,
+    taxes2: null,
+    rate: '100',
+    rateType: 'CDI',
+    fixedAnnualRate: '2.00',
+    lastMonthRate: null,
+    annualRate: null,
+    lastTwelveMonthsRate: null,
+    referenceDate: TODAY,
+    purchaseDate: null,
+    dueDate: null,
+    gracePeriodDate: null,
+    providerUpdatedAt: '2026-10-27T12:00:00Z',
+    syncedAt: '2026-10-27T12:00:00Z',
+    unavailableAt: null,
+    manualCostBasis: null,
+    userAssetClass: null,
+    profitSource: 'UNAVAILABLE',
+    stale: false,
+  },
+  {
+    id: 'holding-4',
+    connectionId: 'connection-1',
+    name: 'FII Gama',
+    code: 'CCCC11',
+    isin: 'BRCCCC',
+    type: 'EQUITY',
+    subtype: 'STOCK',
+    assetClass: 'FII',
+    classificationSource: 'CODE_HEURISTIC',
+    status: 'CLOSED',
+    currency: 'BRL',
+    quantity: '0',
+    unitValue: '0',
+    amount: '0',
+    balance: '0',
+    amountOriginal: null,
+    amountProfit: null,
+    amountWithdrawal: '0',
+    taxes: null,
+    taxes2: null,
+    rate: null,
+    rateType: null,
+    fixedAnnualRate: null,
+    lastMonthRate: null,
+    annualRate: null,
+    lastTwelveMonthsRate: null,
+    referenceDate: TODAY,
+    purchaseDate: null,
+    dueDate: null,
+    gracePeriodDate: null,
+    providerUpdatedAt: '2026-10-27T12:00:00Z',
+    syncedAt: '2026-10-27T12:00:00Z',
+    unavailableAt: null,
+    manualCostBasis: null,
+    userAssetClass: null,
+    profitSource: 'UNAVAILABLE',
+    stale: false,
+  },
+]
+
+export const OVERVIEW: InvestmentOverview = {
+  referenceDate: TODAY,
+  providerValue: '1750.00',
+  manualValue: '125.00',
+  totalValue: '1875.00',
+  activeCount: 3,
+  closedCount: 1,
+  unavailableCount: 0,
+  manualCount: 1,
+  incomeLast12Months: '12.50',
+  incomeSource: 'PROVIDER',
+  profitReported: '50.00',
+  profitCoverageCount: 1,
+  lastSyncedAt: '2026-10-27T12:00:00Z',
+  stale: false,
+  allocation: [
+    { assetClass: 'FII', value: '1500.00', count: 2, percentage: '85.71' },
+    { assetClass: 'RENDA_FIXA', value: '250.00', count: 1, percentage: '14.29' },
+  ],
+  coverage: [
+    {
+      connectionId: 'connection-1',
+      scope: 'AVAILABLE',
+      resourceCount: 2,
+      availableResourceCount: 2,
+      pendingResourceCount: 0,
+      unavailableResourceCount: 0,
+      resourcesCollectedAt: '2026-10-27T12:00:00Z',
+      lastSyncedAt: '2026-10-27T12:00:00Z',
+      errorCode: null,
+    },
+    {
+      connectionId: 'connection-2',
+      scope: 'NOT_SHARED',
+      resourceCount: 0,
+      availableResourceCount: 0,
+      pendingResourceCount: 0,
+      unavailableResourceCount: 0,
+      resourcesCollectedAt: '2026-10-27T12:00:00Z',
+      lastSyncedAt: '2026-10-27T12:00:00Z',
+      errorCode: null,
+    },
+  ],
+  duplicates: [],
+}
+
+export const INCOME: InvestmentIncome = {
+  from: '2025-10-27',
+  to: TODAY,
+  total: '12.50',
+  source: 'PROVIDER',
+  byMonth: [{ month: '2026-10', amount: '12.50', count: 1 }],
+  items: [
+    {
+      date: '2026-10-26',
+      investmentId: 'holding-1',
+      investmentName: 'FII Alfa',
+      code: 'AAAA11',
+      type: 'EQUITY',
+      amount: '12.50',
+      description: 'Rendimento',
+      source: 'PROVIDER',
+    },
+  ],
+}
+
+export const POSITIONS: InvestmentPosition[] = [
+  {
+    id: 'pos-1',
+    broker: 'XP',
+    assetName: 'Petrobras PN',
+    ticker: 'PETR4',
+    quantity: '10',
+    referencePrice: '12.5',
+    total: '125.00',
+    referenceDate: '2026-10-20',
+    origin: 'MANUAL',
+  },
+]
+
+export const CONNECTIONS: ConnectionPage = {
+  items: [
+    {
+      id: 'connection-1',
+      itemIdMasked: 'item-…-1',
+      institutionName: 'XP Investimentos',
+      status: 'SYNCED',
+      consentExpiresAt: '2027-10-27T12:00:00Z',
+      lastSyncAt: '2026-10-27T12:00:00Z',
+      accountCount: 2,
+    },
+    {
+      id: 'connection-2',
+      itemIdMasked: 'item-…-2',
+      institutionName: 'Banco Beta',
+      status: 'SYNCED',
+      consentExpiresAt: '2027-10-27T12:00:00Z',
+      lastSyncAt: '2026-10-27T12:00:00Z',
+      accountCount: 1,
+    },
+  ],
+  hasMore: false,
+}
+
+interface StubOptions {
+  readonly holdings?: InvestmentHolding[]
+  readonly overview?: InvestmentOverview
+  readonly income?: InvestmentIncome
+  readonly positions?: InvestmentPosition[]
+  readonly connections?: ConnectionPage
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+export function stubInvestmentsApi(options: StubOptions = {}) {
+  let positions = [...(options.positions ?? POSITIONS)]
+  const holdings = options.holdings ?? HOLDINGS
+  const overview = options.overview ?? OVERVIEW
+  const income = options.income ?? INCOME
+  const connections = options.connections ?? CONNECTIONS
+
+  const mock = vi.fn((input: RequestInfo | URL, init: RequestInit = {}) => {
+    const url = String(input)
+    const method = init.method ?? 'GET'
+    const path = new URL(url, 'http://localhost').pathname.replace('/api/v1', '')
+
+    if (path === '/auth/me') return jsonResponse(USER)
+    if (path === '/auth/csrf') return new Response(null, { status: 204 })
+    if (path === '/connections') return jsonResponse(connections)
+    if (path === '/investments/overview') return jsonResponse(overview)
+    if (path === '/investments/income') return jsonResponse(income)
+    if (path === '/investments/holdings') {
+      const params = new URL(url, 'http://localhost').searchParams
+      const status = params.get('status') ?? 'ALL'
+      const assetClass = params.get('assetClass')
+      const filtered = holdings.filter((holding) => {
+        if (assetClass && holding.assetClass !== assetClass) return false
+        if (status === 'ALL') return true
+        if (status === 'ACTIVE') return holding.status !== 'CLOSED' && holding.unavailableAt == null
+        if (status === 'CLOSED') return holding.status === 'CLOSED'
+        if (status === 'UNAVAILABLE') return holding.unavailableAt != null
+        return holding.status === status
+      })
+      return jsonResponse({ items: filtered })
+    }
+    if (path.startsWith('/investments/holdings/') && method === 'GET') {
+      const id = path.split('/').pop()
+      const holding = holdings.find((item) => item.id === id)
+      return holding ? jsonResponse(holding) : jsonResponse({}, 404)
+    }
+    if (path === '/investments/positions' && method === 'GET') {
+      return jsonResponse({ items: positions, hasMore: false })
+    }
+    if (path === '/investments/positions' && method === 'POST') {
+      const body = JSON.parse(String(init.body)) as Record<string, string>
+      const created: InvestmentPosition = {
+        id: `pos-${positions.length + 1}`,
+        broker: body.broker as InvestmentPosition['broker'],
+        assetName: body.assetName ?? '',
+        ticker: body.ticker,
+        quantity: body.quantity ?? '0',
+        referencePrice: body.referencePrice ?? '33.33333333',
+        total: body.totalValue ?? '100.00',
+        referenceDate: body.referenceDate ?? '2026-10-22',
+        notes: body.notes,
+        origin: 'MANUAL',
+      }
+      positions = [created, ...positions]
+      return jsonResponse(created, 201)
+    }
+    if (path.startsWith('/investments/positions/') && method === 'PATCH') {
+      const id = path.split('/').pop() ?? ''
+      const body = JSON.parse(String(init.body)) as Record<string, string>
+      const updated: InvestmentPosition = {
+        id,
+        broker: body.broker as InvestmentPosition['broker'],
+        assetName: body.assetName ?? '',
+        ticker: body.ticker,
+        quantity: body.quantity ?? '0',
+        referencePrice: body.referencePrice ?? '0',
+        total: '200.00',
+        referenceDate: body.referenceDate ?? '2026-10-23',
+        notes: body.notes,
+        origin: 'MANUAL',
+      }
+      positions = positions.map((item) => (item.id === id ? updated : item))
+      return jsonResponse(updated)
+    }
+    if (path.startsWith('/investments/positions/') && method === 'DELETE') {
+      const id = path.split('/').pop() ?? ''
+      positions = positions.filter((item) => item.id !== id)
+      return new Response(null, { status: 204 })
+    }
+    return jsonResponse({}, 404)
+  })
+
+  vi.stubGlobal('fetch', mock)
+  return mock
+}

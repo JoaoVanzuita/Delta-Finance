@@ -1,0 +1,88 @@
+package com.deltafinance.investments.api;
+
+import com.deltafinance.investments.application.InvestmentHoldingView;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.UUID;
+
+/** Posição importada com valores decifrados e classificação de exibição. */
+public record InvestmentHoldingResponse(
+    UUID id,
+    UUID connectionId,
+    String name,
+    String code,
+    String isin,
+    String type,
+    String subtype,
+    String assetClass,
+    String classificationSource,
+    String status,
+    String currency,
+    String quantity,
+    String unitValue,
+    String amount,
+    String balance,
+    String amountOriginal,
+    String amountProfit,
+    String amountWithdrawal,
+    String taxes,
+    String taxes2,
+    String rate,
+    String rateType,
+    String fixedAnnualRate,
+    String lastMonthRate,
+    String annualRate,
+    String lastTwelveMonthsRate,
+    LocalDate referenceDate,
+    LocalDate purchaseDate,
+    LocalDate dueDate,
+    LocalDate gracePeriodDate,
+    Instant providerUpdatedAt,
+    Instant syncedAt,
+    Instant unavailableAt,
+    String manualCostBasis,
+    String userAssetClass,
+    String profitSource,
+    boolean stale) {
+
+  public static InvestmentHoldingResponse from(InvestmentHoldingView view) {
+    return new InvestmentHoldingResponse(
+        view.id(),
+        view.connectionId(),
+        view.name(),
+        view.code(),
+        view.isin(),
+        view.type(),
+        view.subtype(),
+        view.assetClass(),
+        view.classificationSource(),
+        view.status(),
+        view.currency(),
+        view.quantity(),
+        view.unitValue(),
+        view.amount(),
+        view.balance(),
+        view.amountOriginal(),
+        view.amountProfit(),
+        view.amountWithdrawal(),
+        view.taxes(),
+        view.taxes2(),
+        view.rate(),
+        view.rateType(),
+        view.fixedAnnualRate(),
+        view.lastMonthRate(),
+        view.annualRate(),
+        view.lastTwelveMonthsRate(),
+        view.referenceDate(),
+        view.purchaseDate(),
+        view.dueDate(),
+        view.gracePeriodDate(),
+        view.providerUpdatedAt(),
+        view.syncedAt(),
+        view.unavailableAt(),
+        view.manualCostBasis(),
+        view.userAssetClass(),
+        view.profitSource(),
+        view.stale());
+  }
+}

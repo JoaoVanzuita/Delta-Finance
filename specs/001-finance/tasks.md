@@ -453,12 +453,12 @@ investimentos sem afetar contas/transações.
 ### Documentação e contrato
 
 - [X] T200 [US8] Atualizar spec, plano, data-model, research, runbook de aceitação e documentação operacional para a importação de investimentos validada em 2026-10-27, incluindo cobertura por `resources`, limites de Open Finance, proventos/custo manual e ausência de snapshots históricos, em `specs/001-finance/*` e `docs/*`.
-- [ ] T201 [US8] Atualizar `contracts/openapi.yaml` e regenerar `client/src/lib/api/schema.d.ts` com overview, holdings, cobertura, proventos e custo informado; validar `openapi:check`.
+- [X] T201 [US8] Atualizar `contracts/openapi.yaml` e regenerar `client/src/lib/api/schema.d.ts` com overview, holdings, cobertura e proventos do provedor; validar `openapi:check`.
 
 ### Testes
 
 - [X] T202 [P] [US8] Testes de importação, dedup, posição encerrada, indisponível, `INTEREST`, cobertura `AVAILABLE/NOT_SHARED/PENDING/UNKNOWN/ERROR` e falha isolada em `server/src/test/java/com/deltafinance/integration/InvestmentImportIT.java`.
-- [ ] T203 [P] [US8] Testes de dashboard, estados vazios, cobertura, provento manual, custo informado, duplicidade e ausência de recomendação em `client/src/features/investments/__tests__/`.
+- [X] T203 [P] [US8] Testes de dashboard, estados vazios, cobertura, proventos do provedor, duplicidade e ausência de recomendação em `client/src/features/investments/__tests__/`.
 - [X] T204 [P] [US8] Fixtures de investimentos, recursos e transações no `PluggyStub` em `server/src/test/java/com/deltafinance/support/PluggyStub.java`.
 
 ### Implementação
@@ -467,11 +467,11 @@ investimentos sem afetar contas/transações.
 - [X] T206 [US8] Estender `PluggyModels`/`PluggyDataClient` com investimentos, transações, recursos do item e buckets de rate limit.
 - [X] T207 [US8] Implementar entidades, repositórios e `InvestmentImportService`, com normalização de tipo/status, upsert idempotente, marcação de indisponibilidade e auditoria.
 - [X] T208 [US8] Integrar a importação ao `PluggySyncService` sem bloquear contas/transações; ajustar status de sincronização e registrar cobertura por conexão.
-- [ ] T209 [US8] Implementar API de overview, holdings, cobertura, proventos manuais e custo informado.
-- [ ] T210 [US8] Redesenhar `/investments` como dashboard, incluindo resumo, alocação, classificação por tipo/código, posições ativas/encerradas, proventos, cobertura e posições manuais.
+- [X] T209 [US8] Implementar API de overview, holdings, cobertura e proventos do provedor.
+- [X] T210 [US8] Redesenhar `/investments` como dashboard, incluindo resumo, alocação, classificação por tipo/código, posições ativas/encerradas, proventos do provedor, cobertura e posições manuais.
 - [ ] T211 [US8] Incluir posições importadas ativas no patrimônio, com aviso de duplicidade e opção de excluir a manual do total.
 - [X] T212 [US8] Atualizar exportação, rotação de chaves, exclusão de conta, limpeza de testes e documentação de privacidade para as novas tabelas/campos.
-- [ ] T213 [US8] Adicionar E2E e acessibilidade de investimentos importados em `client/e2e/investments.spec.ts` e `client/e2e/a11y.spec.ts`.
+- [X] T213 [US8] Adicionar E2E e acessibilidade de investimentos importados em `client/e2e/investments.spec.ts` e `client/e2e/a11y.spec.ts`.
 - [ ] T214 [US8] Criar migração `V007__investment_income.sql` e implementar provento manual/custo informado na fase de proventos.
 
 **Checkpoint**: importação de investimentos funcional, isolada por usuário e

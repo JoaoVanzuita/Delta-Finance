@@ -664,6 +664,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/investments/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resumo dos investimentos importados e manuais */
+        get: operations["getInvestmentsOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/investments/holdings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista posições importadas */
+        get: operations["getInvestmentsHoldings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/investments/holdings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consulta uma posição importada */
+        get: operations["getInvestmentsHoldingsId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/investments/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista a cobertura de investimentos por conexão */
+        get: operations["getInvestmentsSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/investments/income": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista proventos informados pelo provedor */
+        get: operations["getInvestmentsIncome"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/investments/positions": {
         parameters: {
             query?: never;
@@ -1454,6 +1539,148 @@ export interface components {
             password: string;
             /** @enum {string} */
             confirmation: "EXCLUIR";
+        };
+        InvestmentOverview: {
+            /** Format: date */
+            referenceDate: string;
+            /** @description Soma do balance das posições importadas ativas em BRL. */
+            providerValue: string;
+            /** @description Soma das posições manuais; não é cotação de mercado. */
+            manualValue: string;
+            totalValue: string;
+            activeCount: number;
+            closedCount: number;
+            unavailableCount: number;
+            manualCount: number;
+            incomeLast12Months: string;
+            /** @enum {string} */
+            incomeSource: "PROVIDER" | "MANUAL" | "MIXED" | "UNAVAILABLE";
+            /** @description Soma de amountProfit informado pelo provedor; nulo quando nenhuma posição informa. */
+            profitReported?: string | null;
+            profitCoverageCount: number;
+            /** Format: date-time */
+            lastSyncedAt?: string | null;
+            /** @description Verdadeiro quando alguma posição ativa tem referência com mais de 30 dias. */
+            stale: boolean;
+            allocation: components["schemas"]["InvestmentAllocation"][];
+            coverage: components["schemas"]["InvestmentSource"][];
+            duplicates: components["schemas"]["InvestmentDuplicate"][];
+        };
+        InvestmentAllocation: {
+            /** @enum {string} */
+            assetClass: "FII" | "ACAO" | "BDR" | "DERIVATIVO" | "RENDA_FIXA" | "FUNDO" | "ETF" | "TITULO" | "COE" | "OUTRO";
+            value: string;
+            count: number;
+            percentage: string;
+        };
+        InvestmentSource: {
+            /** Format: uuid */
+            connectionId: string;
+            /** @enum {string} */
+            scope: "AVAILABLE" | "NOT_SHARED" | "PENDING_AUTHORIZATION" | "UNKNOWN" | "ERROR";
+            resourceCount: number;
+            availableResourceCount: number;
+            pendingResourceCount: number;
+            unavailableResourceCount: number;
+            /** Format: date-time */
+            resourcesCollectedAt?: string | null;
+            /** Format: date-time */
+            lastSyncedAt?: string | null;
+            errorCode?: string | null;
+        };
+        InvestmentSourceList: {
+            items: components["schemas"]["InvestmentSource"][];
+        };
+        InvestmentDuplicate: {
+            /** Format: uuid */
+            manualPositionId: string;
+            code: string;
+            /** Format: uuid */
+            providerInvestmentId: string;
+        };
+        InvestmentHolding: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            connectionId: string;
+            name?: string | null;
+            code?: string | null;
+            isin?: string | null;
+            type: string;
+            subtype?: string | null;
+            /** @enum {string} */
+            assetClass: "FII" | "ACAO" | "BDR" | "DERIVATIVO" | "RENDA_FIXA" | "FUNDO" | "ETF" | "TITULO" | "COE" | "OUTRO";
+            /** @enum {string} */
+            classificationSource: "PROVIDER" | "CODE_HEURISTIC" | "USER";
+            status: string;
+            currency: string;
+            quantity?: string | null;
+            unitValue?: string | null;
+            amount?: string | null;
+            balance?: string | null;
+            amountOriginal?: string | null;
+            amountProfit?: string | null;
+            amountWithdrawal?: string | null;
+            taxes?: string | null;
+            taxes2?: string | null;
+            rate?: string | null;
+            rateType?: string | null;
+            fixedAnnualRate?: string | null;
+            lastMonthRate?: string | null;
+            annualRate?: string | null;
+            lastTwelveMonthsRate?: string | null;
+            /** Format: date */
+            referenceDate?: string | null;
+            /** Format: date */
+            purchaseDate?: string | null;
+            /** Format: date */
+            dueDate?: string | null;
+            /** Format: date */
+            gracePeriodDate?: string | null;
+            /** Format: date-time */
+            providerUpdatedAt?: string | null;
+            /** Format: date-time */
+            syncedAt?: string | null;
+            /** Format: date-time */
+            unavailableAt?: string | null;
+            manualCostBasis?: string | null;
+            userAssetClass?: string | null;
+            /** @enum {string} */
+            profitSource: "PROVIDER" | "UNAVAILABLE";
+            stale: boolean;
+        };
+        InvestmentHoldingList: {
+            items: components["schemas"]["InvestmentHolding"][];
+        };
+        InvestmentIncome: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            total: string;
+            /** @enum {string} */
+            source: "PROVIDER" | "MANUAL" | "MIXED" | "UNAVAILABLE";
+            byMonth: components["schemas"]["InvestmentIncomeMonth"][];
+            items: components["schemas"]["InvestmentIncomeItem"][];
+        };
+        InvestmentIncomeMonth: {
+            /** @description Mês no formato YYYY-MM. */
+            month: string;
+            amount: string;
+            count: number;
+        };
+        InvestmentIncomeItem: {
+            /** Format: date */
+            date: string;
+            /** Format: uuid */
+            investmentId: string;
+            investmentName?: string | null;
+            code?: string | null;
+            type?: string | null;
+            amount: string;
+            description?: string | null;
+            /** @enum {string} */
+            source: "PROVIDER" | "MANUAL";
         };
         InvestmentPosition: {
             /** Format: uuid */
@@ -3093,6 +3320,164 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getInvestmentsOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Totais, alocação, cobertura, proventos e possíveis duplicidades. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentOverview"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInvestmentsHoldings: {
+        parameters: {
+            query?: {
+                /** @description Filtra por situação; ALL inclui encerradas e indisponíveis. */
+                status?: "ACTIVE" | "CLOSED" | "UNAVAILABLE" | "PENDING" | "ALL";
+                /** @description Filtra pela classe de exibição. */
+                assetClass?: "FII" | "ACAO" | "BDR" | "DERIVATIVO" | "RENDA_FIXA" | "FUNDO" | "ETF" | "TITULO" | "COE" | "OUTRO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Posições importadas. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentHoldingList"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInvestmentsHoldingsId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Posição importada. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentHolding"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInvestmentsSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cobertura por conexão. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentSourceList"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInvestmentsIncome: {
+        parameters: {
+            query?: {
+                /** @description Data inicial; o padrão é doze meses antes de hoje. */
+                from?: string;
+                /** @description Data final; o padrão é hoje. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proventos e agregação mensal. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentIncome"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getInvestmentsPositions: {

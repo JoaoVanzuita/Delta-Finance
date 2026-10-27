@@ -114,6 +114,52 @@ async function installStub(page: Page) {
     if (path === '/dashboard/categories' || path === '/dashboard/timeseries') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
     }
+    if (path === '/investments/overview') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          referenceDate: '2026-10-24',
+          providerValue: '0.00',
+          manualValue: '0.00',
+          totalValue: '0.00',
+          activeCount: 0,
+          closedCount: 0,
+          unavailableCount: 0,
+          manualCount: 0,
+          incomeLast12Months: '0.00',
+          incomeSource: 'UNAVAILABLE',
+          profitReported: null,
+          profitCoverageCount: 0,
+          lastSyncedAt: null,
+          stale: false,
+          allocation: [],
+          coverage: [],
+          duplicates: [],
+        }),
+      })
+    }
+    if (path === '/investments/holdings') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [] }),
+      })
+    }
+    if (path === '/investments/income') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          from: '2025-10-24',
+          to: '2026-10-24',
+          total: '0.00',
+          source: 'UNAVAILABLE',
+          byMonth: [],
+          items: [],
+        }),
+      })
+    }
     if (path === '/sync/status') {
       return route.fulfill({
         status: 200,

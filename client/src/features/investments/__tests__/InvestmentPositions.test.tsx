@@ -4,28 +4,12 @@ import { Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { InvestmentsPage } from '@/features/investments/pages/InvestmentsPage'
+import { OVERVIEW, stubInvestmentsApi } from '@/test/investmentsApiStub'
 import { renderWithProviders } from '@/test/render'
 
-const USER = {
-  id: 'user-1',
-  username: 'alice.invest',
-  createdAt: '2026-10-20T12:00:00Z',
-}
+import type { InvestmentPosition } from '@/features/integration/api'
 
-interface Position {
-  id: string
-  broker: 'XP' | 'SANTANDER' | 'OTHER'
-  assetName: string
-  ticker?: string
-  quantity: string
-  referencePrice: string
-  total: string
-  referenceDate: string
-  notes?: string
-  origin: 'MANUAL'
-}
-
-function position(overrides: Partial<Position> = {}): Position {
+function position(overrides: Partial<InvestmentPosition> = {}): InvestmentPosition {
   return {
     id: 'pos-1',
     broker: 'XP',
@@ -40,63 +24,6 @@ function position(overrides: Partial<Position> = {}): Position {
   }
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  })
-}
-
-function stubApi(initial: Position[]) {
-  let positions = initial
-  const mock = vi.fn((url: string, init: RequestInit = {}) => {
-    const method = init.method ?? 'GET'
-    if (url.includes('/auth/me')) return jsonResponse(USER)
-    if (url.includes('/investments/positions') && method === 'GET') {
-      return jsonResponse({ items: positions, hasMore: false })
-    }
-    if (url.endsWith('/investments/positions') && method === 'POST') {
-      const body = JSON.parse(String(init.body)) as Record<string, string>
-      const created = position({
-        id: 'pos-new',
-        broker: body.broker as Position['broker'],
-        assetName: body.assetName ?? '',
-        ticker: body.ticker,
-        quantity: body.quantity ?? '0',
-        referencePrice: body.referencePrice ?? '33.33333333',
-        total: body.totalValue ?? '100.00',
-        referenceDate: body.referenceDate ?? '2026-10-22',
-      })
-      positions = [created, ...positions]
-      return jsonResponse(created, 201)
-    }
-    if (url.includes('/investments/positions/') && method === 'PATCH') {
-      const id = url.split('/').pop() ?? ''
-      const body = JSON.parse(String(init.body)) as Record<string, string>
-      const updated = position({
-        id,
-        broker: body.broker as Position['broker'],
-        assetName: body.assetName ?? '',
-        ticker: body.ticker,
-        quantity: body.quantity ?? '0',
-        referencePrice: body.referencePrice ?? '0',
-        total: '200.00',
-        referenceDate: body.referenceDate ?? '2026-10-23',
-      })
-      positions = positions.map((item) => (item.id === id ? updated : item))
-      return jsonResponse(updated)
-    }
-    if (url.includes('/investments/positions/') && method === 'DELETE') {
-      const id = url.split('/').pop() ?? ''
-      positions = positions.filter((item) => item.id !== id)
-      return new Response(null, { status: 204 })
-    }
-    return jsonResponse({}, 404)
-  })
-  vi.stubGlobal('fetch', mock)
-  return mock
-}
-
 function renderPage() {
   return renderWithProviders(
     <Routes>
@@ -104,6 +31,10 @@ function renderPage() {
     </Routes>,
     { route: '/investments' },
   )
+}
+
+function manualSection(): HTMLElement {
+  return screen.getByRole('region', { name: 'Posições manuais' })
 }
 
 describe('posições manuais de investimento', () => {
@@ -117,54 +48,59 @@ describe('posições manuais de investimento', () => {
   })
 
   it('lista posições, total calculado e data de referência como dado do usuário', async () => {
-    stubApi([
-      position(),
-      position({
-        id: 'pos-2',
-        broker: 'SANTANDER',
-        assetName: 'Fundo imobiliário',
-        ticker: 'HGLG11',
-        quantity: '3',
-        referencePrice: '33.33333333',
-        total: '100.00',
-        referenceDate: '2026-10-21',
-      }),
-    ])
+    stubInvestmentsApi({
+      positions: [
+        position(),
+        position({
+          id: 'pos-2',
+          broker: 'SANTANDER',
+          assetName: 'Fundo imobiliário',
+          ticker: 'HGLG11',
+          quantity: '3',
+          referencePrice: '33.33333333',
+          total: '100.00',
+          referenceDate: '2026-10-21',
+        }),
+      ],
+      overview: {
+        ...OVERVIEW,
+        manualValue: '225.00',
+        totalValue: '1975.00',
+        manualCount: 2,
+      },
+    })
 
     renderPage()
 
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Investimentos' }),
-    ).toBeInTheDocument()
-    expect(await screen.findByText('Petrobras PN')).toBeInTheDocument()
-    expect(screen.getByText('PETR4')).toBeInTheDocument()
-    expect(screen.getByText(/10 × R\$\s*12,50/)).toBeInTheDocument()
-    expect(screen.getByText(/R\$\s*125,00/)).toBeInTheDocument()
-    expect(screen.getByText(/R\$\s*100,00/)).toBeInTheDocument()
-    expect(screen.getByText(/20\/10\/2026/)).toBeInTheDocument()
-    expect(screen.getAllByText(/21\/10\/2026/).length).toBeGreaterThan(0)
-    expect(screen.getByText(/Total informado/)).toBeInTheDocument()
-    expect(screen.getByText(/R\$\s*225,00/)).toBeInTheDocument()
-    expect(screen.getByText(/não é cotação de mercado/i)).toBeInTheDocument()
+    await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    const manual = manualSection()
+    expect(await within(manual).findByText('Petrobras PN')).toBeInTheDocument()
+    expect(within(manual).getByText('PETR4')).toBeInTheDocument()
+    expect(within(manual).getByText(/10 × R\$\s*12,50/)).toBeInTheDocument()
+    expect(within(manual).getAllByText(/R\$\s*125,00/).length).toBeGreaterThan(0)
+    expect(within(manual).getByText(/R\$\s*100,00/)).toBeInTheDocument()
+    expect(within(manual).getByText(/20\/10\/2026/)).toBeInTheDocument()
+    expect(within(manual).getAllByText(/21\/10\/2026/).length).toBeGreaterThan(0)
   })
 
   it('cria posição informando apenas o valor total', async () => {
-    const mock = stubApi([])
+    const mock = stubInvestmentsApi({ positions: [] })
     const user = userEvent.setup()
 
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
-    await user.selectOptions(screen.getByLabelText('Corretora'), 'SANTANDER')
-    await user.type(screen.getByLabelText('Ativo'), 'Fundo imobiliário')
-    await user.type(screen.getByLabelText('Ticker'), 'HGLG11')
-    await user.type(screen.getByLabelText('Quantidade'), '3')
-    await user.click(screen.getByLabelText('Valor total'))
-    await user.type(screen.getByLabelText('Valor total informado'), '100.00')
-    fireEvent.change(screen.getByLabelText('Data de referência'), {
+    const manual = manualSection()
+    await user.selectOptions(within(manual).getByLabelText('Corretora'), 'SANTANDER')
+    await user.type(within(manual).getByLabelText('Ativo'), 'Fundo imobiliário')
+    await user.type(within(manual).getByLabelText('Ticker'), 'HGLG11')
+    await user.type(within(manual).getByLabelText('Quantidade'), '3')
+    await user.click(within(manual).getByLabelText('Valor total'))
+    await user.type(within(manual).getByLabelText('Valor total informado'), '100.00')
+    fireEvent.change(within(manual).getByLabelText('Data de referência'), {
       target: { value: '2026-10-22' },
     })
-    await user.click(screen.getByRole('button', { name: 'Adicionar posição' }))
+    await user.click(within(manual).getByRole('button', { name: 'Adicionar posição' }))
 
     await waitFor(() => {
       const post = mock.mock.calls.find(
@@ -181,18 +117,19 @@ describe('posições manuais de investimento', () => {
       })
     })
 
-    expect(await screen.findByText('Fundo imobiliário')).toBeInTheDocument()
-    const createdRow = await screen.findByRole('listitem')
+    expect(await within(manualSection()).findByText('Fundo imobiliário')).toBeInTheDocument()
+    const createdRow = within(manualSection()).getAllByRole('listitem')[0]!
     expect(within(createdRow).getByText(/R\$\s*100,00/)).toBeInTheDocument()
   })
 
   it('edita e exclui uma posição com confirmação explícita', async () => {
-    const mock = stubApi([position()])
+    const mock = stubInvestmentsApi({ positions: [position()] })
     const user = userEvent.setup()
 
     renderPage()
 
-    const row = await screen.findByRole('listitem')
+    const manual = manualSection()
+    const row = await within(manual).findByRole('listitem')
     await user.click(within(row).getByRole('button', { name: 'Editar' }))
     const assetName = within(row).getByLabelText('Ativo')
     await user.clear(assetName)
@@ -207,9 +144,9 @@ describe('posições manuais de investimento', () => {
         referencePrice: '12.5',
       })
     })
-    expect(await screen.findByText('Petrobras ON')).toBeInTheDocument()
+    expect(await within(manualSection()).findByText('Petrobras ON')).toBeInTheDocument()
 
-    const updatedRow = screen.getByRole('listitem')
+    const updatedRow = within(manualSection()).getAllByRole('listitem')[0]!
     await user.click(within(updatedRow).getByRole('button', { name: 'Excluir' }))
     await user.click(within(updatedRow).getByRole('button', { name: 'Confirmar exclusão' }))
 
@@ -221,20 +158,44 @@ describe('posições manuais de investimento', () => {
     })
   })
 
+  it('mostra aviso de possível duplicidade com posição importada', async () => {
+    stubInvestmentsApi({
+      positions: [position({ id: 'pos-dup', assetName: 'Duplicada', ticker: 'AAAA11' })],
+      overview: {
+        ...OVERVIEW,
+        duplicates: [
+          {
+            manualPositionId: 'pos-dup',
+            code: 'AAAA11',
+            providerInvestmentId: 'holding-1',
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    expect(
+      await within(manualSection()).findByText(/já existe uma posição importada com este código/i),
+    ).toBeInTheDocument()
+  })
+
   it('mostra erro de validação sem enviar quantidade ou valor inválidos', async () => {
-    const mock = stubApi([])
+    const mock = stubInvestmentsApi({ positions: [] })
     const user = userEvent.setup()
 
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
-    await user.type(screen.getByLabelText('Ativo'), 'Ativo sem quantidade')
-    fireEvent.change(screen.getByLabelText('Data de referência'), {
+    const manual = manualSection()
+    await user.type(within(manual).getByLabelText('Ativo'), 'Ativo sem quantidade')
+    fireEvent.change(within(manual).getByLabelText('Data de referência'), {
       target: { value: '2026-10-22' },
     })
-    await user.click(screen.getByRole('button', { name: 'Adicionar posição' }))
+    await user.click(within(manual).getByRole('button', { name: 'Adicionar posição' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Informe a quantidade/i)
+    expect(await within(manual).findByRole('alert')).toHaveTextContent(/Informe a quantidade/i)
     expect(mock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
 })

@@ -282,8 +282,8 @@ Detalhes, fontes e alternativas: [research.md](./research.md).
 
 - **Modelo de dados**: [data-model.md](./data-model.md) define entidades,
   cifragem, FKs compostas, índices, estados, retenção e migrações.
-- **Contrato**: [contracts/openapi.yaml](./contracts/openapi.yaml) define 43
-  caminhos e 63 operações no total — 35 do MVP, 2 de investimentos da fase
+- **Contrato**: [contracts/openapi.yaml](./contracts/openapi.yaml) define 50
+  caminhos e 70 operações no total — 37 do MVP, 7 de investimentos da fase
   secundária (US8), 3 de patrimônio (US9) e 3 de metas (US10) —, schemas, erros
   RFC 9457, paginação por cursor, idempotência e segurança por sessão/CSRF.
 - **Quickstart**: [quickstart.md](./quickstart.md) define o roteiro de
@@ -699,7 +699,7 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
   outro usuário.
 - A documentação springdoc é gerada a partir do código, mas o contrato versionado
   é a fonte de verdade para o cliente e para os testes de contrato. O contrato
-  cobre 43 caminhos e 63 operações no total: 35 do MVP, 2 de investimentos (US8),
+  cobre 50 caminhos e 70 operações no total: 37 do MVP, 7 de investimentos (US8),
   3 de patrimônio (US9) e 3 de metas (US10).
 - O cliente pode gerar tipos a partir do OpenAPI; a geração é parte do build e
   falha se o contrato for inválido.

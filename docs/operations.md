@@ -197,10 +197,12 @@ tem acesso.
 
 - Módulo da fase secundária (`/investments`). Importa posições de itens do
   Meu Pluggy e mantém posições manuais complementares.
-- **Estado atual**: a importação backend está implementada na migração `V006`;
-  o dashboard, a exibição de cobertura na UI, o provento manual e o custo
-  informado entram nas fases seguintes. O sync já persiste posições,
-  movimentações e cobertura.
+- **Estado atual**: a importação backend e o dashboard de leitura estão
+  implementados na migração `V006`; a UI exibe posições, alocação, cobertura,
+  proventos do provedor e posições manuais. Provento manual e custo informado
+  entram na fase seguinte. O sync persiste posições, movimentações e cobertura.
+  A leitura pública usa `GET /api/v1/investments/overview`, `/holdings`,
+  `/holdings/{id}`, `/sources` e `/income`.
 - **Investimento não é conta.** `/accounts` só retorna `BANK`/`CREDIT`; as
   posições vêm de `GET /investments?itemId=` e não têm `accountId`. Não criar
   conta sintética.
@@ -218,9 +220,9 @@ tem acesso.
   bancárias e não alteram o fluxo de caixa.
 - `INTEREST` é a fonte de dividendos, aluguel de FII, JCP e cupons. Open Finance
   pode não enviar `INTEREST`, `amountProfit`, `amountOriginal` ou taxas de
-  rentabilidade. Nesses casos o painel deverá mostrar "não informado" e **não
-  derivar** rentabilidade de histórico incompleto. `rate`/`rateType` são
-  remuneração contratada, não desempenho.
+  rentabilidade. Nesses casos o painel mostra "não informado" e **não deriva**
+  rentabilidade de histórico incompleto. `rate`/`rateType` são remuneração
+  contratada, não desempenho.
 - O usuário poderá registrar provento manual e custo informado para uma posição
   importada. Esses dados aparecerão como manuais/estimados, não sobrescreverão o
   provedor e serão auditados. O provento manual não é somado automaticamente às

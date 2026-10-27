@@ -3,49 +3,9 @@ import { Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { InvestmentsPage } from '@/features/investments/pages/InvestmentsPage'
+import { stubInvestmentsApi } from '@/test/investmentsApiStub'
 import { expectNoA11yViolations } from '@/test/axe'
 import { renderWithProviders } from '@/test/render'
-
-const USER = {
-  id: 'user-1',
-  username: 'alice.invest',
-  createdAt: '2026-10-20T12:00:00Z',
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  })
-}
-
-function stubApi() {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn((url: string) => {
-      if (url.includes('/auth/me')) return jsonResponse(USER)
-      if (url.includes('/investments/positions')) {
-        return jsonResponse({
-          items: [
-            {
-              id: 'pos-1',
-              broker: 'XP',
-              assetName: 'Petrobras PN',
-              ticker: 'PETR4',
-              quantity: '10',
-              referencePrice: '12.5',
-              total: '125.00',
-              referenceDate: '2026-10-20',
-              origin: 'MANUAL',
-            },
-          ],
-          hasMore: false,
-        })
-      }
-      return jsonResponse({}, 404)
-    }),
-  )
-}
 
 function renderPage() {
   return renderWithProviders(
@@ -56,10 +16,10 @@ function renderPage() {
   )
 }
 
-describe('investimentos sem aconselhamento e sem importação automática', () => {
+describe('investimentos sem aconselhamento', () => {
   beforeEach(() => {
     document.cookie = 'XSRF-TOKEN=token-de-teste; path=/'
-    stubApi()
+    stubInvestmentsApi()
   })
 
   afterEach(() => {
@@ -67,16 +27,18 @@ describe('investimentos sem aconselhamento e sem importação automática', () =
     document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
   })
 
-  it('declara que não há importação automática validada', async () => {
+  it('explica importação, cobertura e posições manuais sem prometer cotação', async () => {
     renderPage()
 
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Investimentos' }),
     ).toBeInTheDocument()
+    expect(screen.getByText(/posições importadas do Meu Pluggy/i)).toBeInTheDocument()
     expect(
-      screen.getByText(/não há importação automática de investimentos validada/i),
+      await screen.findByRole('heading', { name: 'Cobertura das conexões' }),
     ).toBeInTheDocument()
-    expect(screen.getByText(/registro manual/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Posições manuais' })).toBeInTheDocument()
+    expect(screen.getByText(/não calcula cotação em tempo real/i)).toBeInTheDocument()
   })
 
   it('não oferece recomendação, ranking ou chamada de compra, venda ou alocação', async () => {
@@ -84,7 +46,7 @@ describe('investimentos sem aconselhamento e sem importação automática', () =
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
     expect(
-      screen.getByText(/não oferece recomendação de compra, venda ou alocação/i),
+      screen.getByText(/não há recomendação de compra, venda, alocação ou ranking/i),
     ).toBeInTheDocument()
 
     const forbidden = /comprar|vender|investir agora|melhor investimento/i
