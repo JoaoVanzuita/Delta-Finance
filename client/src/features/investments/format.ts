@@ -42,6 +42,31 @@ export function formatQuantity(value: string | null | undefined): string {
   return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 8 }).format(number)
 }
 
+/** Preço unitário de posição importada, respeitando a moeda informada. */
+export function formatUnitPrice(
+  value: string | null | undefined,
+  currency: string | null | undefined,
+): string {
+  if (value == null || value === '') {
+    return 'Não informado'
+  }
+  const number = Number(value)
+  if (!Number.isFinite(number)) {
+    return value
+  }
+  const code = currency || 'BRL'
+  try {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 8,
+    }).format(number)
+  } catch {
+    return `${value} ${code}`
+  }
+}
+
 /** Data de referência é um dia civil; não sofre deslocamento de fuso. */
 export function formatReferenceDate(value: string | null | undefined): string {
   if (!value) {

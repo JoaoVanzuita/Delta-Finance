@@ -1,7 +1,7 @@
 import { formatDateTime, formatMoney } from '@/features/accounts/format'
 import type { InvestmentHolding } from '@/features/integration/api'
 
-import { formatQuantity, formatReferenceDate, formatReferencePrice } from '../format'
+import { formatQuantity, formatReferenceDate, formatUnitPrice } from '../format'
 import { assetClassLabel, CLASSIFICATION_SOURCE_LABELS, HOLDING_STATUS_LABELS } from '../labels'
 
 interface InvestmentHoldingsProps {
@@ -79,7 +79,7 @@ function InvestmentHoldingCard({ holding }: { readonly holding: InvestmentHoldin
       <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 xl:grid-cols-5">
         <Value label="Valor atual" value={formatMoney(holding.balance, currency)} strong />
         <Value label="Quantidade" value={formatQuantity(holding.quantity)} />
-        <Value label="Preço unitário" value={formatReferencePrice(holding.unitValue)} />
+        <Value label="Preço unitário" value={formatUnitPrice(holding.unitValue, currency)} />
         <Value
           label="Resultado informado"
           value={
