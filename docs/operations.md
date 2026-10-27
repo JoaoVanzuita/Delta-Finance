@@ -122,6 +122,71 @@ tem acesso.
   `OVERDUE`.
 - Correção de compra parcelada propaga valor, descrição e data para todas as
   parcelas; a âncora muda de ciclo quando necessário.
+- Quando o conector não envia `creditData.balanceCloseDate`, a importação consulta
+  as Bills do cartão e infere o dia de fechamento/vencimento pela ocorrência mais
+  frequente nas últimas faturas. A inferência não sobrescreve ciclo configurado
+  pelo usuário e falhas na consulta de Bills não interrompem a sincronização.
+- O painel `/cards` consolida saldo devedor, limite, utilização e próximo
+  vencimento sem somar cartões ao saldo das contas correntes. A página
+  `/cards/{accountId}` reúne metadados (bandeira, nível, final e limite
+  disponível), fatura atual, histórico, pendências e últimas transações. A
+  primeira abertura após a criação do ciclo gera as faturas locais a partir das
+  transações já importadas.
+- Bandeira, nível e final do cartão vêm de `creditData`/`number` do provedor. O
+  limite disponível oficial é armazenado separadamente do limite total; quando o
+  provedor não envia `creditLimit`, o sistema não reutiliza o disponível como se
+  fosse o limite total.
+- `transaction.provider_bill_month` guarda o `billForecastDate` do Pluggy.
+  Compras usam o próprio mês; pagamentos usam o mês anterior, porque o provedor
+  informa o ciclo em que o pagamento foi lançado, não a fatura quitada.
+- O vencimento local fica no mesmo mês do fechamento quando o dia de vencimento
+  é maior ou igual ao de fechamento; caso contrário, no mês seguinte. Isso alinha
+  o ciclo local às Bills do provedor.
+- A fatura aberta do ciclo atual é criada quando existe qualquer transação no
+  período, inclusive `PENDING`, para permitir acompanhamento. Compras pendentes
+  aparecem separadas e não compõem o total nem o saldo devedor até serem
+  efetivadas.
+- Pagamentos de fatura importados do cartão são registrados em `invoice_payment`
+  com `source=IMPORTED` e `source_transaction_id`. O total da fatura permanece
+  bruto; `payments_total` mostra o pago e `outstanding` o saldo restante. Itens
+  espelho antigos de pagamento são convertidos na primeira geração da fatura.
+- Bills oficiais do provedor são persistidas em `provider_bill` e
+  `provider_bill_payment` durante a importação de contas. Elas são referência de
+  conciliação: guardam total, pagamento mínimo, vencimento e pagamentos oficiais,
+  mas **não** alteram totais, status ou saldo devedor locais. Falhas de leitura de
+  Bills não interrompem a sincronização.
+- A conciliação é por ciclo (fechamento; vencimento como fallback). Cada Bill
+  informa os pagamentos feitos contra ela; pagamentos muito distantes do ciclo
+  (dados antigos repetidos pelo conector) são descartados da comparação e
+  contados em `ignoredPayments`. A API expõe `providerBill` com
+  `totalDifference` e `paymentsDifference` (`local - provedor`) e `reconciled`,
+  verdadeiro somente quando total e pagamentos coincidem.
+- O pagamento mínimo exibido na fatura vem de `invoice.minimum_payment_enc`
+  quando preenchido; caso contrário, da Bill oficial conciliada.
+- Pagamento confirmado acima da obrigação da fatura vira crédito para as próximas
+  (`card_profile.credit_balance`). A obrigação usa o maior valor entre total local
+  e total oficial da Bill; faturas sem obrigação conhecida (total zero) não geram
+  crédito, pois normalmente indicam lacuna do conector.
+- Pagamentos importados recebem `dedup_key` (HMAC de cartão, valor, data e descrição
+  normalizada). Se a origem alternar `PENDING`/`POSTED`, o mesmo pagamento é
+  reaproveitado; se a transação canônica for removida, uma duplicata efetiva assume
+  o vínculo antes de qualquer reversão.
+- Correções de valor/data na transação de pagamento atualizam o `invoice_payment`
+  correspondente e recalculam a fatura. Se o ciclo mudar e a fatura atual não
+  estiver paga, o pagamento acompanha a transação.
+- A conta pagadora do pagamento importado nasce como o cartão e passa para a conta
+  bancária quando o movimento interno correspondente é confirmado.
+- Faturas com `total = 0` e `payments_total > 0` são sinalizadas como
+  `missingPurchases`/“Histórico incompleto”. O sistema não inventa compras: a
+  correção é explícita, pela conciliação com a Bill ou por ajuste manual auditado.
+- Divergência de total com a Bill oficial é resolvida por uma ação explícita:
+  `POST /api/v1/invoices/{id}/reconcile-provider` cria um item
+  `MANUAL_ADJUSTMENT` com a diferença e o motivo informado. Nenhum item ou
+  pagamento existente é reescrito. Em fatura paga, o status `PAID` é preservado,
+  o ajuste é auditado e o crédito aplicado é normalizado.
+- Faturas `PAID` mantêm a identidade `total = pagamentos + crédito aplicado`; se o
+  crédito armazenado estiver menor que o necessário, ele é corrigido no recálculo
+  sem reabrir a fatura. O histórico exibe `Crédito aplicado` quando maior que zero.
 - Se a fatura não refletir uma compra, verifique se o cartão tem
   `card_profile` (fechamento/vencimento), se a transação está efetiva e se a
   fatura não está paga.

@@ -76,7 +76,10 @@ navegadores modernos em desktop e mobile; implantação self-hosted com Caddy
 - Meu Pluggy: limite de conexões configurável e datado (atualmente 5 por conta
   pessoal), atualização de origem a cada 24 h, autorização anual, sem descoberta
   de itens e sem atualização manual de itens proxy.
-- Bills de cartão não são presumidas no fluxo Meu Pluggy; faturas são locais.
+- Bills de cartão não são presumidas no fluxo Meu Pluggy. Quando disponíveis, são
+  persistidas como referência de conciliação (total, mínimo, vencimento e
+  pagamentos oficiais) e também inferem fechamento/vencimento. As faturas
+  continuam locais e são a fonte de verdade.
 - Webhooks Pluggy foram removidos em 2026-10-25; a sincronização programada é o
   único caminho de atualização.
 - Sem tempo real, sem movimentação de dinheiro, sem recomendação de
@@ -261,8 +264,9 @@ Principais resultados:
   vazias e `LOGIN_ERROR`/`USER_AUTHORIZATION_EXPIRED`.
 - O endpoint atual de transações é `GET /v2/transactions` com cursor; o endpoint
   paginado antigo está obsoleto.
-- Bills de cartão não são garantidas no Meu Pluggy; faturas serão locais, com
-  importação opcional quando disponível.
+- Bills de cartão não são garantidas no Meu Pluggy; faturas serão locais. Quando
+  disponíveis, as Bills inferem o ciclo e servem de referência de conciliação
+  (total, mínimo, vencimento e pagamentos oficiais), sem importar itens.
 - Parcelas não têm um identificador único de grupo; o agrupamento exige
   heurística e revisão do usuário.
 - Webhooks foram removidos em 2026-10-25 (S-04); a sincronização programada
@@ -395,9 +399,11 @@ internos com semântica explícita.
 - Implementar `invoice`, `invoice_item` e `invoice_payment`.
 - Implementar configuração de fechamento/vencimento, associação por ciclo,
   parcelas, pagamentos parciais, juros, encargos e itens manuais.
-- Manter Bills do provedor fora do MVP: a fatura local por ciclo é a fonte de
-  verdade. O serviço experimental de importação e seus testes foram removidos em
-  2026-10-25; a UI e o contrato oferecem apenas as origens mantidas.
+- Manter Bills do provedor fora do cálculo das faturas: a fatura local por ciclo é
+  a fonte de verdade. Bills são persistidas como referência de conciliação
+  (`provider_bill`/`provider_bill_payment`) com total, mínimo, vencimento e
+  pagamentos oficiais, e também inferem fechamento/vencimento quando `creditData`
+  não os trouxer. Nenhum item de compra é criado a partir da Bill.
 - Implementar recálculo de total/saldo devedor, estados, fechamento e
   reconciliação de transações atrasadas.
 - Garantir que mudança de ciclo não reescreva faturas fechadas/pagas e que
@@ -809,7 +815,7 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Bills indisponíveis no Meu Pluggy | Faturas incompletas se dependessem do provedor | Fatura local por ciclo + `creditCardMetadata`; importação de Bills removida (S-05). |
+| Bills indisponíveis no Meu Pluggy | Faturas incompletas se dependessem do provedor | Fatura local por ciclo + `creditCardMetadata`; Bills apenas inferem o ciclo quando existem e o usuário pode configurar manualmente. |
 | Parcelas sem ID de grupo | Duplicação ou agrupamento errado | Heurística + revisão do usuário; nunca duplicar automaticamente. |
 | Transação removida/recriada com novo ID | Perda ou duplicação | `external_identity_history` + fingerprint; marcar, não apagar. |
 | `itemId` muda após renovação | Histórico órfão | IDs locais estáveis e workflow de reconciliação. |

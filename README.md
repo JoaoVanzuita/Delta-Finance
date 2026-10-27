@@ -48,8 +48,9 @@ compose.yaml            stack self-hosted completa
 
 - **Identidade e privacidade**: cadastro/login, sessão com CSRF, isolamento por
   usuário, exportação dos próprios dados e exclusão de conta.
-- **Contas e transações**: contas manuais, importação via Meu Pluggy, cartões,
-  faturas, categorias, correções, itens removidos na origem e reconciliação.
+- **Contas e transações**: contas manuais, importação via Meu Pluggy, painel de
+  cartões de crédito separado das contas, faturas, categorias, correções, itens
+  removidos na origem e reconciliação.
 - **Dashboard e relatórios**: resultado do período, saldo, categorias, série
   temporal, drill-down paginado e exportação dos próprios dados na área de
   privacidade.

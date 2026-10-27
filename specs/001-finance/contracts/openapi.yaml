@@ -8,8 +8,8 @@ info:
 
     monetários trafegam como strings decimais para evitar ponto flutuante. O
 
-    contrato cobre 35 caminhos do MVP, 2 de investimentos da fase secundária (US8), 3
-    de patrimônio (US9) e 3 de metas (US10): 43 caminhos e 63 operações no total.
+    contrato cobre 36 caminhos do MVP, 2 de investimentos da fase secundária (US8), 3
+    de patrimônio (US9) e 3 de metas (US10): 44 caminhos e 64 operações no total.
 
     '
   license:
@@ -476,6 +476,21 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
       operationId: patchAccountsId
+  /cards/overview:
+    get:
+      tags:
+      - Invoices
+      summary: Visão geral dos cartões de crédito
+      responses:
+        '200':
+          description: Cartões, faturas, limites e pendências de alocação.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOverview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      operationId: getCardsOverview
   /cards/{accountId}/profile:
     put:
       tags:
@@ -757,6 +772,38 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: getInvoicesId
+  /invoices/{id}/reconcile-provider:
+    post:
+      tags:
+      - Invoices
+      summary: Alinha o total da fatura ao total da Bill oficial
+      description: Cria um item manual auditado com a diferença entre o total local e o total da Bill oficial. Em fatura paga, o status é preservado e o crédito aplicado é normalizado.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/PathId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceReconciliationRequest'
+      responses:
+        '200':
+          description: Fatura reconciliada com a Bill oficial.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postInvoicesIdReconcileProvider
   /invoices/{id}/items:
     post:
       tags:
@@ -2121,7 +2168,125 @@ components:
           type: string
         creditBalance:
           type: string
-          description: Crédito acumulado do cartão para faturas futuras; não compõe income, expenses nem currentBalance.
+          description: Crédito acumulado do cartão para faturas futuras, inclusive excedente de pagamento; não compõe income, expenses nem currentBalance.
+        brand:
+          type: string
+          description: "Bandeira informada pelo provedor (ex.: VISA)."
+        level:
+          type: string
+          description: "Nível informado pelo provedor (ex.: PLATINUM)."
+        last4:
+          type: string
+          description: Últimos quatro dígitos do cartão, quando informados.
+          maxLength: 4
+        availableCreditLimit:
+          type: string
+          description: Limite disponível oficial informado pelo provedor.
+    CardOverview:
+      type: object
+      required:
+      - totalOutstanding
+      - totalLimit
+      - totalUsed
+      - nextDueDate
+      - items
+      properties:
+        totalOutstanding:
+          type: string
+          description: Soma do saldo devedor dos cartões em BRL.
+        totalLimit:
+          type: string
+          description: Soma dos limites conhecidos dos cartões em BRL.
+        totalUsed:
+          type: string
+          description: Soma do valor utilizado informado pelos cartões em BRL.
+        nextDueDate:
+          type: [string, 'null']
+          format: date
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardOverviewItem'
+    CardOverviewItem:
+      type: object
+      required:
+      - accountId
+      - alias
+      - institutionName
+      - status
+      - currency
+      - hasCycle
+      - closingDay
+      - dueDay
+      - creditLimit
+      - creditBalance
+      - usedAmount
+      - outstanding
+      - utilization
+      - nextDueDate
+      - currentInvoice
+      - nextDueInvoice
+      - unallocatedCount
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        alias:
+          type: [string, 'null']
+        institutionName:
+          type: [string, 'null']
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - UNAVAILABLE
+          - CLOSED
+        currency:
+          type: string
+        hasCycle:
+          type: boolean
+        closingDay:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 31
+        dueDay:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 31
+        creditLimit:
+          type: [string, 'null']
+        creditBalance:
+          type: [string, 'null']
+        availableCreditLimit:
+          type: [string, 'null']
+        brand:
+          type: [string, 'null']
+        level:
+          type: [string, 'null']
+        last4:
+          type: [string, 'null']
+        usedAmount:
+          type: string
+        outstanding:
+          type: string
+        utilization:
+          type: [string, 'null']
+          description: Percentual utilizado do limite, com duas casas decimais.
+        nextDueDate:
+          type: [string, 'null']
+          format: date
+        currentInvoice:
+          oneOf:
+          - $ref: '#/components/schemas/Invoice'
+          - type: 'null'
+        nextDueInvoice:
+          oneOf:
+          - $ref: '#/components/schemas/Invoice'
+          - type: 'null'
+        unallocatedCount:
+          type: integer
+          minimum: 0
     CardProfileRequest:
       type: object
       required:
@@ -2376,6 +2541,7 @@ components:
       - source
       - hasAdjustments
       - adjustmentCount
+      - missingPurchases
       properties:
         id:
           type: string
@@ -2426,6 +2592,74 @@ components:
           type: integer
           minimum: 0
           description: Quantidade de ajustes manuais.
+        providerBill:
+          allOf:
+          - $ref: '#/components/schemas/ProviderBill'
+          description: Bill oficial do provedor para conciliação; ausente quando o conector não a retorna. Não altera os totais locais.
+        missingPurchases:
+          type: boolean
+          description: Verdadeiro quando há pagamento confirmado sem compras locais no ciclo; indica lacuna no histórico do conector.
+    ProviderBill:
+      type: object
+      required:
+      - dueDate
+      - total
+      - paymentsTotal
+      - totalDifference
+      - paymentsDifference
+      - reconciled
+      - ignoredPayments
+      - syncedOn
+      - payments
+      properties:
+        closingDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        total:
+          type: string
+        minimumPayment:
+          type: string
+        paymentsTotal:
+          type: string
+          description: Soma dos pagamentos oficiais informados na Bill e dentro da janela do ciclo.
+        totalDifference:
+          type: string
+          description: total local menos total oficial.
+        paymentsDifference:
+          type: string
+          description: pagamentos locais menos pagamentos oficiais.
+        reconciled:
+          type: boolean
+          description: Verdadeiro quando total e pagamentos oficiais coincidem com os locais.
+        ignoredPayments:
+          type: integer
+          minimum: 0
+          description: Pagamentos da Bill descartados por estarem fora da janela do ciclo (dados antigos do conector).
+        syncedOn:
+          type: string
+          format: date
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderBillPayment'
+    ProviderBillPayment:
+      type: object
+      required:
+      - paidOn
+      - amount
+      properties:
+        paidOn:
+          type: string
+          format: date
+        amount:
+          type: string
+        paymentMode:
+          type: string
+        valueType:
+          type: string
     InvoiceDetail:
       allOf:
       - $ref: '#/components/schemas/Invoice'
@@ -2651,6 +2885,15 @@ components:
           enum:
           - MANUAL
           - IMPORTED
+    InvoiceReconciliationRequest:
+      type: object
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+          description: Motivo do ajuste, preservado na descrição do item e na auditoria.
     InvoicePaymentRequest:
       type: object
       required:

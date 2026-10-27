@@ -280,6 +280,10 @@ Restrições:
 | `due_day` | int | plain | 1–31. |
 | `credit_limit_enc` | bytea | enc | limite quando disponível. |
 | `credit_balance_enc` | bytea | enc | crédito acumulado para faturas futuras; não compõe `income`, `expenses` ou `currentBalance`. |
+| `brand` | text | plain | bandeira informada pelo provedor (ex.: VISA). |
+| `level` | text | plain | nível informado pelo provedor (ex.: PLATINUM). |
+| `last4_enc` | bytea | enc | últimos quatro dígitos do cartão, quando informados. |
+| `available_credit_limit_enc` | bytea | enc | limite disponível oficial informado pelo provedor. |
 | `source` | text | plain | `PROVIDER`, `USER`. |
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
 | `version` | bigint | plain | locking otimista. |
@@ -312,6 +316,7 @@ Restrições:
 | `adjustment_reason_enc` | bytea | enc | nullable; motivo explícito para `ADJUSTMENT`. |
 | `edited_fields` | text[] | plain | nomes dos campos corrigidos; não valores. |
 | `reconciliation_state` | text | plain | `NONE`, `PENDING_MATCH`, `MATCHED`, `SOURCE_REMOVED`; acompanha o `status` automático. |
+| `provider_bill_month` | date | plain | nullable; primeiro dia do mês de `creditCardMetadata.billForecastDate`. Compras usam o próprio mês; pagamentos usam o mês anterior. |
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
 | `version` | bigint | plain | locking otimista. |
 
@@ -493,12 +498,68 @@ nunca um item órfão.
 | `status` | text | plain | `PENDING`, `CONFIRMED`, `REVERSED`. |
 | `source` | text | plain | `MANUAL`, `IMPORTED`. |
 | `source_transaction_id` | uuid | plain | nullable; FK `(user_id, source_transaction_id)`. |
+| `dedup_key` | bytea | hmac | nullable; unicidade `(user_id, dedup_key)` quando presente. |
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
 | `version` | bigint | plain | locking otimista. |
 
-Pagamentos não são receita/despesa; reduzem `outstanding_enc`.
+Pagamentos não são receita/despesa; reduzem `outstanding_enc`. Pagamentos importados do
+cartão usam `source=IMPORTED`, `source_transaction_id` da transação de pagamento e
+`payment_account_id` da conta do cartão. O total da fatura permanece bruto;
+`payments_total_enc` mostra o valor pago e `outstanding_enc` o saldo restante.
 
-### 6.4 `invoice_item_correction`
+`dedup_key` é o HMAC de cartão + valor + data + descrição normalizada. Quando a origem
+alterna `PENDING`/`POSTED`, a mesma chave impede criar um segundo pagamento; se a
+transação canônica deixa de valer, uma duplicata efetiva assume o vínculo
+(`source_transaction_id`) e o pagamento é reativado. Pagamentos manuais não usam chave.
+Correções de valor/data na transação de origem atualizam `amount_enc`, `paid_on` e
+`dedup_key`; se o ciclo mudar e a fatura não estiver paga, o pagamento acompanha a
+transação.
+
+`payment_account_id` nasce com a conta do cartão e passa para a perna bancária quando
+o movimento interno correspondente é confirmado. `Invoice.missingPurchases` é derivado
+(`total = 0` e `payments_total > 0`) e sinaliza lacuna de histórico, sem inventar
+compras.
+
+Pagamento confirmado acima da obrigação da fatura gera crédito para faturas futuras
+(`card_profile.credit_balance_enc`). A obrigação considera o total local e, quando existir,
+o total oficial da Bill; o excedente só é creditado sobre obrigação maior que zero, para não
+transformar lacunas de histórico em crédito.
+
+Fatura `PAID` não é reaberta, mas `applied_credit_enc` é normalizado para
+`total_enc - payments_total_enc` (limitado a zero e ao total), preservando a identidade
+`total = pagamentos + crédito aplicado`. Divergência de total com a Bill oficial é corrigida
+por uma ação explícita que cria um item `MANUAL_ADJUSTMENT` (aumento ou redução) com motivo
+auditado; nenhum item ou pagamento existente é reescrito.
+
+### 6.4 `provider_bill` e `provider_bill_payment`
+
+| Campo | Tipo | Classificação | Regra |
+|---|---|---|---|
+| `id` | uuid | plain | PK. |
+| `user_id` | uuid | plain | proprietário. |
+| `card_account_id` | uuid | plain | FK `(user_id, card_account_id)`. |
+| `external_bill_id_hash` | bytea | hmac | unicidade `(user_id, card_account_id, hash)`. |
+| `closing_date` | date | plain | nullable quando o provedor não informa. |
+| `due_date` | date | plain | vencimento oficial. |
+| `total_enc` | bytea | enc | total oficial da Bill. |
+| `minimum_payment_enc` | bytea | enc | pagamento mínimo, quando informado. |
+| `payments_total_enc` | bytea | enc | soma dos pagamentos oficiais da Bill. |
+| `currency` | text | plain | moeda da Bill. |
+| `synced_at` | timestamptz | plain | última leitura do provedor. |
+| `created_at`, `updated_at`, `version` | — | plain | auditoria e locking. |
+
+`provider_bill_payment` guarda `external_payment_id_hash`, `payment_date`,
+`amount_enc`, `payment_mode`, `value_type` e `currency`, com FK para a Bill.
+
+As Bills são **referência de conciliação**, nunca fonte de verdade: não alteram
+`invoice.total_enc`, `outstanding_enc` nem o status local. A associação à fatura
+local é por ciclo (fechamento; vencimento como fallback). Cada Bill informa os
+pagamentos feitos contra ela; pagamentos muito distantes do ciclo (dados antigos
+repetidos pelo conector) são ignorados na comparação e contados em
+`ignoredPayments`. Divergências são expostas como
+`totalDifference`/`paymentsDifference` (`local - provedor`).
+
+### 6.5 `invoice_item_correction`
 
 | Campo | Tipo | Classificação | Regra |
 |---|---|---|---|
@@ -513,7 +574,7 @@ Pagamentos não são receita/despesa; reduzem `outstanding_enc`.
 
 Índice: `(invoice_item_id, changed_at)`.
 
-### 6.5 `internal_match`
+### 6.6 `internal_match`
 
 | Campo | Tipo | Classificação | Regra |
 |---|---|---|---|
@@ -534,7 +595,7 @@ Pagamentos não são receita/despesa; reduzem `outstanding_enc`.
 Somente `CONFIRMED` exclui os dois lados de receitas/despesas. Transferência
 manual cria duas pernas em `transaction` e um `internal_match` já `CONFIRMED`.
 
-### 6.6 `ReportEntry` (read model)
+### 6.7 `ReportEntry` (read model)
 
 Projeção usada por relatórios e drill-down:
 `id`, `source` (`TRANSACTION`, `INVOICE_ITEM`), `source_id`, `origin`
