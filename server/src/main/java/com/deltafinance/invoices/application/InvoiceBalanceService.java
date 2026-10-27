@@ -71,7 +71,11 @@ public class InvoiceBalanceService {
     }
     List<Invoice> invoices =
         invoiceRepository.findByUserIdAndCardAccountIdOrderByCycleStartDesc(userId, cardAccountId);
-    invoices.sort(java.util.Comparator.comparing(Invoice::getCycleStart));
+    // O crédito é consumido pela ordem de vencimento, com desempate estável pelo ciclo e pelo ID.
+    invoices.sort(
+        java.util.Comparator.comparing(Invoice::getDueDate)
+            .thenComparing(Invoice::getCycleStart)
+            .thenComparing(Invoice::getId));
     BigDecimal creditPool = ZERO;
     LocalDate today = clock.today();
 

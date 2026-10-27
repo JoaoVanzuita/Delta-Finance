@@ -24,6 +24,8 @@ export function ConnectionForm({ disabled }: ConnectionFormProps) {
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['integration'] })
+      void queryClient.invalidateQueries({ queryKey: ['syncStatus'] })
+      void queryClient.invalidateQueries({ queryKey: ['syncRuns'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })

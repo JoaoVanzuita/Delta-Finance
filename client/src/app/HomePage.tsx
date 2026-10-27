@@ -55,7 +55,7 @@ export function HomePage() {
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
-            Importação via Meu Pluggy, sincronização e revisão de removidos na origem
+            Importação via Meu Pluggy, sincronização e remoção automática na origem
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />

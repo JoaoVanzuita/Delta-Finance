@@ -36,8 +36,11 @@ npx playwright test e2e/a11y.spec.ts
 
 - Ordem de foco segue o DOM: link de pular, marca, navegação, conteúdo, rodapé.
 - Todos os controles são `<button>`, `<a>` ou campos com rótulo associado.
-- Diálogos de confirmação (privacidade, exclusão) são alcançáveis por `Tab` e
-  acionáveis por `Enter`/`Espaço`; o foco permanece no diálogo enquanto aberto.
+- Diálogos de confirmação (privacidade, exclusão) e de edição (correção, item e
+  pagamento de fatura) são alcançáveis por `Tab` e acionáveis por
+  `Enter`/`Espaço`. **Pendência conhecida:** o foco ainda não é preso ao
+  diálogo, o fundo não fica `inert` e `Escape` não fecha. O `CorrectionDialog`
+  move o foco para o primeiro campo; os demais não.
 - Nenhuma ação depende de hover.
 
 ## 3. Leitor de tela
@@ -62,8 +65,9 @@ Verificação manual recomendada com NVDA (Windows), Orca (Linux) ou VoiceOver
 
 ## 5. Limitações conhecidas
 
-- Gráficos Recharts são complementados por tabela/resumo; a leitura detalhada
+- Os gráficos são HTML/CSS e têm tabela/resumo equivalente; a leitura detalhada
   de séries longas pode exigir navegação por teclado na tabela.
+- Diálogos ainda não implementam trap de foco, `Escape` ou `inert` no fundo.
 - O protocolo com leitor de tela real é manual e deve ser registrado no ticket
   de release; a automação cobre apenas regras detectáveis.
 

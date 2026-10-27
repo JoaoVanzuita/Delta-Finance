@@ -97,10 +97,14 @@ export function PrivacySettingsPage() {
       )
       void queryClient.invalidateQueries({ queryKey: ['integration'] })
       void queryClient.invalidateQueries({ queryKey: ['connections'] })
-      void queryClient.invalidateQueries({ queryKey: ['sync-status'] })
+      void queryClient.invalidateQueries({ queryKey: ['syncStatus'] })
+      void queryClient.invalidateQueries({ queryKey: ['syncRuns'] })
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
     },
     onError: (error) => {
       setDisconnectError(

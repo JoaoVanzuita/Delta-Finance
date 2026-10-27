@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -52,19 +52,22 @@ export function ManualEntryForm({
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
+  const isTransfer = type === 'TRANSFER'
+  const needsOriginal = type === 'REFUND' || type === 'CHARGEBACK'
+  const isAdjustment = type === 'ADJUSTMENT'
+
   const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: financeApi.categories })
   const transactionsQuery = useQuery({
-    queryKey: ['transactions', 'manual-origin'],
-    queryFn: () => financeApi.transactions({ limit: 100, type: 'DEBIT', status: 'POSTED' }),
+    queryKey: ['transactions', 'refund-originals', accountId],
+    queryFn: () =>
+      financeApi.transactions({ limit: 100, accountId, type: 'DEBIT', status: 'POSTED' }),
+    enabled: needsOriginal && Boolean(accountId),
   })
 
   const accounts = accountsQuery.data?.items ?? []
   const categories = (categoriesQuery.data?.items ?? []).filter((category) => category.active)
-  const originCandidates = useMemo(
-    () => (transactionsQuery.data?.items ?? []).filter((item) => item.source !== undefined),
-    [transactionsQuery.data],
-  )
+  const originCandidates = transactionsQuery.data?.items ?? []
 
   const create = useMutation({
     mutationFn: (input: ManualTransactionInput) => financeApi.createTransaction(input),
@@ -88,10 +91,6 @@ export function ManualEntryForm({
       )
     },
   })
-
-  const isTransfer = type === 'TRANSFER'
-  const needsOriginal = type === 'REFUND' || type === 'CHARGEBACK'
-  const isAdjustment = type === 'ADJUSTMENT'
 
   function submit() {
     setError(null)
@@ -168,7 +167,10 @@ export function ManualEntryForm({
           <span className="font-medium text-ink">Tipo</span>
           <select
             value={type}
-            onChange={(event) => setType(event.target.value as ManualType)}
+            onChange={(event) => {
+              setType(event.target.value as ManualType)
+              setRelatedTransactionId('')
+            }}
             className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
           >
             {TYPE_OPTIONS.map((option) => (
@@ -183,7 +185,10 @@ export function ManualEntryForm({
           <span className="font-medium text-ink">Conta</span>
           <select
             value={accountId}
-            onChange={(event) => setAccountId(event.target.value)}
+            onChange={(event) => {
+              setAccountId(event.target.value)
+              setRelatedTransactionId('')
+            }}
             className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
           >
             <option value="">Selecione</option>

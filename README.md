@@ -172,8 +172,6 @@ snapshot/restore para testar migrações. A baseline atual é
 
 ## Documentação
 
-- [`docs/funcionalidades.md`](docs/funcionalidades.md): funcionalidades
-  implementadas, regras de negócio e limitações atuais.
 - [`docs/operations.md`](docs/operations.md): operação, health checks, logs,
   sincronização, investimentos, patrimônio, metas, migrações e backups.
 - [`docs/security.md`](docs/security.md): modelo de segurança, criptografia,

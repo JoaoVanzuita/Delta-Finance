@@ -156,7 +156,7 @@ describe('detalhe da fatura', () => {
     expect(screen.getByText('Juros')).toBeInTheDocument()
     expect(screen.getByText(/Crédito acumulado do cartão/)).toBeInTheDocument()
     expect(screen.getByText(/R\$\s*35,00/)).toBeInTheDocument()
-    expect(screen.getByText('2026-10-20 · CONFIRMED')).toBeInTheDocument()
+    expect(screen.getByText('2026-10-20 · Confirmado')).toBeInTheDocument()
   })
 
   it('adiciona item manual e abre histórico de correções', async () => {

@@ -6,7 +6,7 @@
 
 > **Nota de 2026-10-26:** análise histórica. Webhooks foram removidos no S-04; a
 > sincronização programada é o único caminho de atualização. O escopo vigente
-> está em [`funcionalidades.md`](funcionalidades.md) e no contrato OpenAPI.
+> está no contrato OpenAPI.
 
 ## 1. Objetivo e premissas
 

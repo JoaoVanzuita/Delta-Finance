@@ -13,9 +13,9 @@ interface DeleteManualTransactionProps {
 /**
  * Exclusão de lançamento manual com confirmação explícita.
  *
- * Transações importadas não são apagadas: a revisão de remoção na origem é o
- * fluxo correto. Transferências manuais removem as duas pernas e despesas com
- * reembolsos vinculados são recusadas pelo servidor.
+ * Transações importadas não são apagadas: a sincronização marca a ausência na
+ * origem automaticamente. Transferências manuais removem as duas pernas e
+ * despesas com reembolsos vinculados são recusadas pelo servidor.
  */
 export function DeleteManualTransaction({ transaction }: DeleteManualTransactionProps) {
   const queryClient = useQueryClient()

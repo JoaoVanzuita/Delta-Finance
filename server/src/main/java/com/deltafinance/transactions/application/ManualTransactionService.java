@@ -147,7 +147,8 @@ public class ManualTransactionService {
     if (transaction.getSource() != TransactionSource.MANUAL) {
       throw new ConflictException(
           "TRANSACTION_NOT_MANUAL",
-          "Transações importadas não são apagadas; use a revisão de remoção na origem.");
+          "Transações importadas não são apagadas; elas saem dos totais quando deixam de"
+              + " aparecer na origem.");
     }
     if (transaction.getType() != TransactionType.TRANSFER
         && transactionRepository.existsByUserIdAndRelatedTransactionId(userId, transactionId)) {

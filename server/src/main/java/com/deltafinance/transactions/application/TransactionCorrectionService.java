@@ -188,7 +188,10 @@ public class TransactionCorrectionService {
           transaction.getNotesEnc() == null
               ? null
               : decrypt(userId, transactionId, "notes", transaction.getNotesEnc());
-      if (!Objects.equals(next, previous)) {
+      // Campo vazio e ausente são equivalentes: salvar o formulário sem mudar nada não
+      // deve marcar "notes" em edited_fields nem criar uma correção artificial.
+      String previousComparable = previous == null ? "" : previous;
+      if (!Objects.equals(next, previousComparable)) {
         transaction.setNotesEnc(
             next.isEmpty() ? null : encrypt(userId, transactionId, "notes", next));
         transaction.markEdited("notes");

@@ -17,6 +17,13 @@ const typeLabels: Record<string, string> = {
   UNKNOWN: 'Tipo não informado',
 }
 
+const statusLabels: Record<string, string> = {
+  ACTIVE: 'Ativa',
+  INACTIVE: 'Inativa',
+  UNAVAILABLE: 'Indisponível',
+  CLOSED: 'Encerrada',
+}
+
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>()
   const accountQuery = useQuery({
@@ -96,7 +103,9 @@ export function AccountDetailPage() {
           <dt className="text-ink-muted">Origem</dt>
           <dd className="text-ink">{account.origin === 'IMPORTED' ? 'Importada' : 'Manual'}</dd>
           <dt className="text-ink-muted">Estado</dt>
-          <dd className="text-ink">{account.status}</dd>
+          <dd className="text-ink">
+            {account.status ? (statusLabels[account.status] ?? account.status) : 'Não informado'}
+          </dd>
           {account.connectionStatus ? (
             <>
               <dt className="text-ink-muted">Conexão</dt>

@@ -38,7 +38,9 @@ export function InvoicesPage() {
   const account = accountQuery.data
   const invoices = invoicesQuery.data?.items ?? []
   const unallocated = (transactionsQuery.data?.items ?? []).filter(
-    (transaction) => !transaction.invoiceId && transaction.status === 'POSTED',
+    (transaction) =>
+      !transaction.invoiceId &&
+      (transaction.status === 'POSTED' || transaction.status === 'RECONCILED'),
   )
 
   return (

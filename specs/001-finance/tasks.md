@@ -9,7 +9,7 @@ description: "Task list for the Delta Finance MVP implementation"
 > `RESTORE`/`CONFIRM_REMOVAL` (T192), de snapshots patrimoniais (T157) e da
 > redução de dívida nas metas (T165/T167) são históricos. Esses recursos foram
 > removidos pelos cortes S-04, S-05, S-08, S-02 e S-03. O comportamento atual
-> está em [`docs/funcionalidades.md`](../../docs/funcionalidades.md).
+> está no contrato OpenAPI.
 
 **Input**: Design documents from `/specs/001-finance/`
 

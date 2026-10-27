@@ -9,9 +9,7 @@
 > **Nota de 2026-10-26:** este documento é histórico. Webhooks (S-04), Bills
 > experimentais (S-05), snapshots patrimoniais (S-02) e redução de dívida nas
 > metas (S-03) foram removidos. As seções abaixo registram a pesquisa original;
-> o escopo vigente está em
-> [`docs/funcionalidades.md`](../../docs/funcionalidades.md) e no contrato
-> OpenAPI.
+> o escopo vigente está no contrato OpenAPI.
 
 ## 1. Versões escolhidas
 

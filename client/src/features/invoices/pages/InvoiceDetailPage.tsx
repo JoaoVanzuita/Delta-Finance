@@ -28,6 +28,12 @@ const KIND_LABELS: Record<string, string> = {
   MANUAL_ADJUSTMENT: 'Ajuste manual',
 }
 
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendente',
+  CONFIRMED: 'Confirmado',
+  REVERSED: 'Revertido',
+}
+
 export function InvoiceDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
@@ -220,7 +226,7 @@ export function InvoiceDetailPage() {
             {payments.map((payment) => (
               <li key={payment.id} className="flex items-center justify-between gap-2 p-4 text-sm">
                 <span className="text-ink">
-                  {payment.paidOn} · {payment.status}
+                  {payment.paidOn} · {PAYMENT_STATUS_LABELS[payment.status] ?? payment.status}
                 </span>
                 <span className="numeric font-medium text-ink">
                   {formatMoney(payment.amount, 'BRL')}
