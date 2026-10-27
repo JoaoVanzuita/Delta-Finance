@@ -15,6 +15,7 @@ import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
+import com.deltafinance.investments.application.InvestmentImportService;
 import com.deltafinance.reconciliation.application.InternalMatchService;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
@@ -47,6 +48,7 @@ public class PluggySyncService {
 
   private final AccountImportService accountImportService;
   private final TransactionImportService transactionImportService;
+  private final InvestmentImportService investmentImportService;
   private final PluggyAuthClient authClient;
   private final PluggyDataClient dataClient;
   private final SyncStateService stateService;
@@ -64,6 +66,7 @@ public class PluggySyncService {
   public PluggySyncService(
       AccountImportService accountImportService,
       TransactionImportService transactionImportService,
+      InvestmentImportService investmentImportService,
       PluggyAuthClient authClient,
       PluggyDataClient dataClient,
       SyncStateService stateService,
@@ -79,6 +82,7 @@ public class PluggySyncService {
       Clock clock) {
     this.accountImportService = accountImportService;
     this.transactionImportService = transactionImportService;
+    this.investmentImportService = investmentImportService;
     this.authClient = authClient;
     this.dataClient = dataClient;
     this.stateService = stateService;
@@ -169,6 +173,22 @@ public class PluggySyncService {
       cancellationRegistry.checkpoint();
       accountImportService.importAccounts(integration, connection.getId(), itemId);
       cancellationRegistry.checkpoint();
+      ImportStats investmentStats = ImportStats.empty();
+      boolean investmentFailed = false;
+      try {
+        investmentStats =
+            investmentImportService.importInvestments(integration, connection.getId(), item);
+      } catch (SyncCancelledException exception) {
+        throw exception;
+      } catch (RuntimeException exception) {
+        // Investimentos são um produto separado: a falha não invalida contas e transações.
+        investmentFailed = true;
+        LOG.warn(
+            "Falha ao importar investimentos connectionId={} tipo={}",
+            connection.getId(),
+            exception.getClass().getSimpleName());
+      }
+      cancellationRegistry.checkpoint();
       LocalDate from = windowFrom == null ? defaultWindowFrom(connection) : windowFrom;
       stats = transactionImportService.importRange(integration, connection.getId(), from);
       cancellationRegistry.checkpoint();
@@ -179,10 +199,16 @@ public class PluggySyncService {
       integration.recordSyncSuccess(finishedAt);
       integrationRepository.save(integration);
 
+      boolean hasRead = stats.read() > 0 || investmentStats.read() > 0;
+      boolean hasFailure = stats.failed() > 0 || investmentFailed;
       SyncRunStatus status =
-          stats.read() == 0
-              ? SyncRunStatus.EMPTY
-              : stats.failed() > 0 ? SyncRunStatus.PARTIAL : SyncRunStatus.SUCCESS;
+          !hasRead
+              ? (hasFailure ? SyncRunStatus.PARTIAL : SyncRunStatus.EMPTY)
+              : hasFailure ? SyncRunStatus.PARTIAL : SyncRunStatus.SUCCESS;
+      String errorCode =
+          stats.failed() > 0
+              ? "IMPORT_MISSING_FIELDS"
+              : investmentFailed ? "INVESTMENT_IMPORT_FAILED" : null;
       run.finish(
           status,
           stats.read(),
@@ -190,7 +216,7 @@ public class PluggySyncService {
           stats.updated(),
           stats.skipped(),
           stats.failed(),
-          stats.failed() > 0 ? "IMPORT_MISSING_FIELDS" : null,
+          errorCode,
           finishedAt);
       syncRunRepository.save(run);
       metrics.recordRun(run);
@@ -208,14 +234,22 @@ public class PluggySyncService {
           AuditEventType.SYNC_SUCCEEDED,
           "pluggy_connection",
           connection.getId(),
-          Map.of("status", status.name(), "readCount", stats.read()));
+          Map.of(
+              "status", status.name(),
+              "readCount", stats.read(),
+              "investmentRead", investmentStats.read(),
+              "investmentCreated", investmentStats.created(),
+              "investmentUpdated", investmentStats.updated(),
+              "investmentFailed", investmentFailed));
       LOG.info(
-          "Sincronização concluída connectionId={} status={} read={} created={} updated={} correlationId={}",
+          "Sincronização concluída connectionId={} status={} read={} created={} updated={} investmentRead={} investmentFailed={} correlationId={}",
           connection.getId(),
           status,
           stats.read(),
           stats.created(),
           stats.updated(),
+          investmentStats.read(),
+          investmentFailed,
           correlationId);
       return new SyncResult(status, stats, null, run.getId(), run.getCorrelationId());
     } catch (SyncCancelledException cancelled) {

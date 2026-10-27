@@ -820,6 +820,348 @@ public class ExportService {
               return row;
             }),
         new Dataset(
+            "provider_investments",
+            List.of(
+                "id",
+                "connectionId",
+                "externalInvestmentId",
+                "name",
+                "code",
+                "isin",
+                "owner",
+                "institution",
+                "issuer",
+                "type",
+                "subtype",
+                "status",
+                "currency",
+                "quantity",
+                "unitValue",
+                "amount",
+                "balance",
+                "amountOriginal",
+                "amountProfit",
+                "amountWithdrawal",
+                "taxes",
+                "taxes2",
+                "rate",
+                "rateType",
+                "fixedAnnualRate",
+                "lastMonthRate",
+                "annualRate",
+                "lastTwelveMonthsRate",
+                "referenceDate",
+                "purchaseDate",
+                "dueDate",
+                "gracePeriodDate",
+                "providerUpdatedAt",
+                "syncedAt",
+                "unavailableAt",
+                "manualCostBasis",
+                "manualCostBasisUpdatedAt",
+                "userAssetClass",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, connection_id, external_investment_id_enc, name_enc, code_enc,"
+                + " isin_enc, owner_enc, institution_enc, issuer_enc, type, subtype, status,"
+                + " currency, quantity_enc, unit_value_enc, amount_enc, balance_enc,"
+                + " amount_original_enc, amount_profit_enc, amount_withdrawal_enc, taxes_enc,"
+                + " taxes2_enc, rate_enc, rate_type, fixed_annual_rate_enc, last_month_rate_enc,"
+                + " annual_rate_enc, last_twelve_months_rate_enc, reference_date, purchase_date,"
+                + " due_date, grace_period_date, provider_updated_at, synced_at, unavailable_at,"
+                + " manual_cost_basis_enc, manual_cost_basis_updated_at, user_asset_class,"
+                + " created_at, updated_at from provider_investment where user_id = ?"
+                + " order by status, type, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("connectionId", uuid(rs, "connection_id"));
+              row.put(
+                  "externalInvestmentId",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "external_investment_id",
+                      id,
+                      rs.getBytes("external_investment_id_enc")));
+              row.put(
+                  "name",
+                  decrypt(userId, "provider_investment", "name", id, rs.getBytes("name_enc")));
+              row.put(
+                  "code",
+                  decrypt(userId, "provider_investment", "code", id, rs.getBytes("code_enc")));
+              row.put(
+                  "isin",
+                  decrypt(userId, "provider_investment", "isin", id, rs.getBytes("isin_enc")));
+              row.put(
+                  "owner",
+                  decrypt(userId, "provider_investment", "owner", id, rs.getBytes("owner_enc")));
+              row.put(
+                  "institution",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "institution",
+                      id,
+                      rs.getBytes("institution_enc")));
+              row.put(
+                  "issuer",
+                  decrypt(userId, "provider_investment", "issuer", id, rs.getBytes("issuer_enc")));
+              row.put("type", rs.getString("type"));
+              row.put("subtype", rs.getString("subtype"));
+              row.put("status", rs.getString("status"));
+              row.put("currency", rs.getString("currency"));
+              row.put(
+                  "quantity",
+                  decrypt(
+                      userId, "provider_investment", "quantity", id, rs.getBytes("quantity_enc")));
+              row.put(
+                  "unitValue",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "unit_value",
+                      id,
+                      rs.getBytes("unit_value_enc")));
+              row.put(
+                  "amount",
+                  decrypt(userId, "provider_investment", "amount", id, rs.getBytes("amount_enc")));
+              row.put(
+                  "balance",
+                  decrypt(
+                      userId, "provider_investment", "balance", id, rs.getBytes("balance_enc")));
+              row.put(
+                  "amountOriginal",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "amount_original",
+                      id,
+                      rs.getBytes("amount_original_enc")));
+              row.put(
+                  "amountProfit",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "amount_profit",
+                      id,
+                      rs.getBytes("amount_profit_enc")));
+              row.put(
+                  "amountWithdrawal",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "amount_withdrawal",
+                      id,
+                      rs.getBytes("amount_withdrawal_enc")));
+              row.put(
+                  "taxes",
+                  decrypt(userId, "provider_investment", "taxes", id, rs.getBytes("taxes_enc")));
+              row.put(
+                  "taxes2",
+                  decrypt(userId, "provider_investment", "taxes2", id, rs.getBytes("taxes2_enc")));
+              row.put(
+                  "rate",
+                  decrypt(userId, "provider_investment", "rate", id, rs.getBytes("rate_enc")));
+              row.put("rateType", rs.getString("rate_type"));
+              row.put(
+                  "fixedAnnualRate",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "fixed_annual_rate",
+                      id,
+                      rs.getBytes("fixed_annual_rate_enc")));
+              row.put(
+                  "lastMonthRate",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "last_month_rate",
+                      id,
+                      rs.getBytes("last_month_rate_enc")));
+              row.put(
+                  "annualRate",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "annual_rate",
+                      id,
+                      rs.getBytes("annual_rate_enc")));
+              row.put(
+                  "lastTwelveMonthsRate",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "last_twelve_months_rate",
+                      id,
+                      rs.getBytes("last_twelve_months_rate_enc")));
+              row.put("referenceDate", date(rs, "reference_date"));
+              row.put("purchaseDate", date(rs, "purchase_date"));
+              row.put("dueDate", date(rs, "due_date"));
+              row.put("gracePeriodDate", date(rs, "grace_period_date"));
+              row.put("providerUpdatedAt", instant(rs, "provider_updated_at"));
+              row.put("syncedAt", instant(rs, "synced_at"));
+              row.put("unavailableAt", instant(rs, "unavailable_at"));
+              row.put(
+                  "manualCostBasis",
+                  decrypt(
+                      userId,
+                      "provider_investment",
+                      "manual_cost_basis",
+                      id,
+                      rs.getBytes("manual_cost_basis_enc")));
+              row.put("manualCostBasisUpdatedAt", instant(rs, "manual_cost_basis_updated_at"));
+              row.put("userAssetClass", rs.getString("user_asset_class"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "provider_investment_transactions",
+            List.of(
+                "id",
+                "providerInvestmentId",
+                "externalTransactionId",
+                "type",
+                "movementType",
+                "tradeDate",
+                "transactionDate",
+                "quantity",
+                "unitValue",
+                "amount",
+                "netAmount",
+                "description",
+                "brokerageNumber",
+                "expenses",
+                "lastSeenAt",
+                "removedAt",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, provider_investment_id, external_transaction_id_enc, type,"
+                + " movement_type, trade_date, transaction_date, quantity_enc, unit_value_enc,"
+                + " amount_enc, net_amount_enc, description_enc, brokerage_number_enc,"
+                + " expenses_enc, last_seen_at, removed_at, created_at, updated_at"
+                + " from provider_investment_transaction where user_id = ?"
+                + " order by transaction_date desc, created_at desc, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("providerInvestmentId", uuid(rs, "provider_investment_id"));
+              row.put(
+                  "externalTransactionId",
+                  decrypt(
+                      userId,
+                      "provider_investment_transaction",
+                      "external_transaction_id",
+                      id,
+                      rs.getBytes("external_transaction_id_enc")));
+              row.put("type", rs.getString("type"));
+              row.put("movementType", rs.getString("movement_type"));
+              row.put("tradeDate", date(rs, "trade_date"));
+              row.put("transactionDate", date(rs, "transaction_date"));
+              row.put(
+                  "quantity",
+                  decrypt(
+                      userId,
+                      "provider_investment_transaction",
+                      "quantity",
+                      id,
+                      rs.getBytes("quantity_enc")));
+              row.put(
+                  "unitValue",
+                  decrypt(
+                      userId,
+                      "provider_investment_transaction",
+                      "unit_value",
+                      id,
+                      rs.getBytes("unit_value_enc")));
+              row.put(
+                  "amount",
+                  decrypt(
+                      userId,
+                      "provider_investment_transaction",
+                      "amount",
+                      id,
+                      rs.getBytes("amount_enc")));
+              row.put(
+                  "netAmount",
+                  decrypt(
+                      userId,
+                      "provider_investment_transaction",
+                      "net_amount",
+                      id,
+                      rs.getBytes("net_amount_enc")));
+              row.put(
+                  "description",
+                  decrypt(
+                      userId,
+                      "provider_investment_transaction",
+                      "description",
+                      id,
+                      rs.getBytes("description_enc")));
+              row.put(
+                  "brokerageNumber",
+                  decrypt(
+                      userId,
+                      "provider_investment_transaction",
+                      "brokerage_number",
+                      id,
+                      rs.getBytes("brokerage_number_enc")));
+              row.put(
+                  "expenses",
+                  decrypt(
+                      userId,
+                      "provider_investment_transaction",
+                      "expenses",
+                      id,
+                      rs.getBytes("expenses_enc")));
+              row.put("lastSeenAt", instant(rs, "last_seen_at"));
+              row.put("removedAt", instant(rs, "removed_at"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "provider_investment_syncs",
+            List.of(
+                "id",
+                "connectionId",
+                "scope",
+                "resourceCount",
+                "availableResourceCount",
+                "pendingResourceCount",
+                "unavailableResourceCount",
+                "resourcesCollectedAt",
+                "lastSyncedAt",
+                "errorCode",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, connection_id, scope, resource_count,"
+                + " available_resource_count, pending_resource_count, unavailable_resource_count,"
+                + " resources_collected_at, last_synced_at, error_code, created_at, updated_at"
+                + " from provider_investment_sync where user_id = ? order by last_synced_at desc, id",
+            rs -> {
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", uuid(rs, "id"));
+              row.put("connectionId", uuid(rs, "connection_id"));
+              row.put("scope", rs.getString("scope"));
+              row.put("resourceCount", rs.getInt("resource_count"));
+              row.put("availableResourceCount", rs.getInt("available_resource_count"));
+              row.put("pendingResourceCount", rs.getInt("pending_resource_count"));
+              row.put("unavailableResourceCount", rs.getInt("unavailable_resource_count"));
+              row.put("resourcesCollectedAt", instant(rs, "resources_collected_at"));
+              row.put("lastSyncedAt", instant(rs, "last_synced_at"));
+              row.put("errorCode", rs.getString("error_code"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
             "invoice_item_corrections",
             List.of(
                 "id", "invoiceItemId", "fieldName", "oldValue", "newValue", "reason", "changedAt"),

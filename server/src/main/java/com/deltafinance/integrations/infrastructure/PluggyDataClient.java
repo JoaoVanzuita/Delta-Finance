@@ -60,7 +60,163 @@ public class PluggyDataClient {
         PluggyModels.instant(node, "lastUpdatedAt"),
         PluggyModels.instant(node, "nextAutoSyncAt"),
         institutionName,
-        node.path("error").path("code").asString(null));
+        node.path("error").path("code").asString(null),
+        textList(node.path("products")),
+        PluggyModels.instant(node, "resourcesCollectedAt"),
+        booleanOrNull(node.path("hasResourcesPendingAuthorization")));
+  }
+
+  /** Recursos declarados pela instituição para um item Open Finance. */
+  public PluggyModels.PluggyItemResourcePage listItemResources(String apiKey, String itemId) {
+    List<PluggyModels.PluggyItemResource> resources = new ArrayList<>();
+    int page = 1;
+    int totalPages = 1;
+    boolean truncated = false;
+    while (page <= totalPages) {
+      if (page > MAX_PAGES) {
+        truncated = true;
+        break;
+      }
+      MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+      params.add("pageSize", String.valueOf(PAGE_SIZE));
+      params.add("page", String.valueOf(page));
+      JsonNode root = getJson("/items/{id}/resources", itemId, params, apiKey);
+      JsonNode results = root.isArray() ? root : root.path("results");
+      if (!results.isArray()) {
+        throw new PluggyException("Resposta de recursos inválida.");
+      }
+      for (JsonNode node : results) {
+        resources.add(
+            new PluggyModels.PluggyItemResource(
+                node.path("resourceId").asString(null),
+                upper(node.path("type").asString(null)),
+                upper(node.path("status").asString(null))));
+      }
+      totalPages = root.path("totalPages").asInt(1);
+      if (totalPages < 1) {
+        truncated = true;
+        break;
+      }
+      page++;
+    }
+    return new PluggyModels.PluggyItemResourcePage(resources, !truncated);
+  }
+
+  /** Posições de investimento de um item; paginado por page/pageSize. */
+  public PluggyModels.PluggyInvestmentPage listInvestments(String apiKey, String itemId) {
+    List<PluggyModels.PluggyInvestment> investments = new ArrayList<>();
+    int page = 1;
+    int totalPages = 1;
+    boolean truncated = false;
+    while (page <= totalPages) {
+      if (page > MAX_PAGES) {
+        truncated = true;
+        break;
+      }
+      MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+      params.add("itemId", itemId);
+      params.add("pageSize", String.valueOf(PAGE_SIZE));
+      params.add("page", String.valueOf(page));
+      JsonNode root = getJson("/investments", null, params, apiKey);
+      JsonNode results = root.isArray() ? root : root.path("results");
+      if (!results.isArray()) {
+        throw new PluggyException("Resposta de investimentos inválida.");
+      }
+      for (JsonNode node : results) {
+        String externalId = node.path("id").asString(null);
+        if (externalId == null || externalId.isBlank()) {
+          continue;
+        }
+        investments.add(
+            new PluggyModels.PluggyInvestment(
+                externalId,
+                node.path("name").asString(null),
+                node.path("code").asString(null),
+                node.path("isin").asString(null),
+                node.path("owner").asString(null),
+                upper(node.path("type").asString("OTHER")),
+                upper(node.path("subtype").asString(null)),
+                upper(node.path("status").asString(null)),
+                firstText(node, "currencyCode", "currency", "BRL"),
+                PluggyModels.decimal(node, "quantity"),
+                PluggyModels.decimal(node, "value"),
+                PluggyModels.decimal(node, "amount"),
+                PluggyModels.decimal(node, "balance"),
+                PluggyModels.decimal(node, "amountOriginal"),
+                PluggyModels.decimal(node, "amountProfit"),
+                PluggyModels.decimal(node, "amountWithdrawal"),
+                PluggyModels.decimal(node, "taxes"),
+                PluggyModels.decimal(node, "taxes2"),
+                PluggyModels.decimal(node, "rate"),
+                upper(node.path("rateType").asString(null)),
+                PluggyModels.decimal(node, "fixedAnnualRate"),
+                PluggyModels.decimal(node, "lastMonthRate"),
+                PluggyModels.decimal(node, "annualRate"),
+                PluggyModels.decimal(node, "lastTwelveMonthsRate"),
+                PluggyModels.civilDate(node, "date"),
+                PluggyModels.civilDate(node, "purchaseDate"),
+                PluggyModels.civilDate(node, "dueDate"),
+                PluggyModels.civilDate(node, "gracePeriodDate"),
+                PluggyModels.instant(node, "updatedAt"),
+                node.path("institution").isObject()
+                    ? node.path("institution").path("name").asString(null)
+                    : node.path("institution").asString(null),
+                node.path("issuer").asString(null)));
+      }
+      totalPages = root.path("totalPages").asInt(1);
+      if (totalPages < 1) {
+        truncated = true;
+        break;
+      }
+      page++;
+    }
+    return new PluggyModels.PluggyInvestmentPage(investments, !truncated);
+  }
+
+  /** Movimentações de um investimento; paginado por page/pageSize. */
+  public PluggyModels.PluggyInvestmentTransactionPage listInvestmentTransactions(
+      String apiKey, String investmentId) {
+    List<PluggyModels.PluggyInvestmentTransaction> transactions = new ArrayList<>();
+    int page = 1;
+    int totalPages = 1;
+    boolean truncated = false;
+    while (page <= totalPages) {
+      if (page > MAX_PAGES) {
+        truncated = true;
+        break;
+      }
+      MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+      params.add("pageSize", String.valueOf(PAGE_SIZE));
+      params.add("page", String.valueOf(page));
+      JsonNode root = getJson("/investments/{id}/transactions", investmentId, params, apiKey);
+      JsonNode results = root.isArray() ? root : root.path("results");
+      if (!results.isArray()) {
+        throw new PluggyException("Resposta de transações de investimento inválida.");
+      }
+      for (JsonNode node : results) {
+        transactions.add(
+            new PluggyModels.PluggyInvestmentTransaction(
+                node.path("id").asString(null),
+                upper(node.path("type").asString(null)),
+                upper(node.path("movementType").asString(null)),
+                PluggyModels.civilDate(node, "tradeDate"),
+                PluggyModels.civilDate(node, "date"),
+                PluggyModels.decimal(node, "quantity"),
+                PluggyModels.decimal(node, "value"),
+                PluggyModels.decimal(node, "amount"),
+                PluggyModels.decimal(node, "netAmount"),
+                node.path("description").asString(null),
+                node.path("brokerageNumber").asString(null),
+                node.path("expenses")));
+      }
+      totalPages = root.path("totalPages").asInt(1);
+      if (totalPages < 1) {
+        truncated = true;
+        break;
+      }
+      page++;
+    }
+    return new PluggyModels.PluggyInvestmentTransactionPage(transactions, !truncated);
   }
 
   public PluggyModels.PluggyAccountPage listAccounts(String apiKey, String itemId) {
@@ -310,7 +466,34 @@ public class PluggyDataClient {
         : value.trim().toUpperCase(java.util.Locale.ROOT);
   }
 
+  private static String upper(String value) {
+    return value == null || value.isBlank()
+        ? null
+        : value.trim().toUpperCase(java.util.Locale.ROOT);
+  }
+
+  private static List<String> textList(JsonNode node) {
+    if (node == null || !node.isArray()) {
+      return List.of();
+    }
+    List<String> values = new ArrayList<>();
+    for (JsonNode item : node) {
+      String value = item.asString(null);
+      if (value != null && !value.isBlank()) {
+        values.add(value.trim().toUpperCase(java.util.Locale.ROOT));
+      }
+    }
+    return List.copyOf(values);
+  }
+
+  private static Boolean booleanOrNull(JsonNode node) {
+    return node == null || node.isMissingNode() || node.isNull() ? null : node.asBoolean();
+  }
+
   private static String endpointKey(String path) {
+    if (path.startsWith("/items/") && path.endsWith("/resources")) {
+      return "item-resources";
+    }
     if (path.startsWith("/items/")) {
       return "items";
     }
@@ -319,6 +502,12 @@ public class PluggyDataClient {
     }
     if (path.startsWith("/bills")) {
       return "bills";
+    }
+    if (path.startsWith("/investments/") && path.endsWith("/transactions")) {
+      return "investment-transactions";
+    }
+    if (path.startsWith("/investments")) {
+      return "investments";
     }
     if (path.startsWith("/v2/transactions")) {
       return "transactions";

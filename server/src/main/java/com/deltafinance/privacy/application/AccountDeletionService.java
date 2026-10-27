@@ -94,6 +94,12 @@ public class AccountDeletionService {
     deleted += jdbcTemplate.update("delete from goal_allocation where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from financial_goal where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from investment_position where user_id = ?", userId);
+    deleted +=
+        jdbcTemplate.update(
+            "delete from provider_investment_transaction where user_id = ?", userId);
+    deleted += jdbcTemplate.update("delete from provider_investment where user_id = ?", userId);
+    deleted +=
+        jdbcTemplate.update("delete from provider_investment_sync where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from manual_asset_liability where user_id = ?", userId);
     // A remoção das contas dispara o cascade de transações, faturas, itens, pagamentos,
     // correções, cartões, histórico de identidade externa e movimentos internos.

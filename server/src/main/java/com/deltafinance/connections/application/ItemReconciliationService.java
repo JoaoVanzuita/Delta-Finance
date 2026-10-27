@@ -14,6 +14,7 @@ import com.deltafinance.integrations.infrastructure.PluggyDataClient;
 import com.deltafinance.integrations.infrastructure.PluggyException;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
+import com.deltafinance.investments.application.InvestmentImportService;
 import com.deltafinance.reconciliation.application.InternalMatchService;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
@@ -23,6 +24,7 @@ import com.deltafinance.shared.crypto.IndexHmacService;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.ErrorCode;
 import com.deltafinance.shared.errors.NotFoundException;
+import com.deltafinance.shared.sync.SyncCancelledException;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.application.ImportStats;
 import com.deltafinance.transactions.application.TransactionImportService;
@@ -50,6 +52,7 @@ public class ItemReconciliationService {
   private final PluggyDataClient dataClient;
   private final AccountImportService accountImportService;
   private final TransactionImportService transactionImportService;
+  private final InvestmentImportService investmentImportService;
   private final CryptoService cryptoService;
   private final IndexHmacService hmacService;
   private final AuditService auditService;
@@ -65,6 +68,7 @@ public class ItemReconciliationService {
       PluggyDataClient dataClient,
       AccountImportService accountImportService,
       TransactionImportService transactionImportService,
+      InvestmentImportService investmentImportService,
       CryptoService cryptoService,
       IndexHmacService hmacService,
       AuditService auditService,
@@ -78,6 +82,7 @@ public class ItemReconciliationService {
     this.dataClient = dataClient;
     this.accountImportService = accountImportService;
     this.transactionImportService = transactionImportService;
+    this.investmentImportService = investmentImportService;
     this.cryptoService = cryptoService;
     this.hmacService = hmacService;
     this.auditService = auditService;
@@ -150,6 +155,16 @@ public class ItemReconciliationService {
 
     try {
       accountImportService.importAccounts(integration, connection.getId(), normalizedItemId);
+      ImportStats investmentStats = ImportStats.empty();
+      boolean investmentFailed = false;
+      try {
+        investmentStats =
+            investmentImportService.importInvestments(integration, connection.getId(), item);
+      } catch (SyncCancelledException exception) {
+        throw exception;
+      } catch (RuntimeException exception) {
+        investmentFailed = true;
+      }
       ImportStats stats =
           transactionImportService.importInitial(integration, connection.getId(), true);
       connection.recordSync(clock.now(), ConnectionStatus.SYNCED);
@@ -162,17 +177,21 @@ public class ItemReconciliationService {
       } catch (RuntimeException ignored) {
         // A reconexão continua válida mesmo se a geração de sugestões falhar.
       }
+      boolean hasRead = stats.read() > 0 || investmentStats.read() > 0;
+      boolean hasFailure = stats.failed() > 0 || investmentFailed;
       finishRun(
           run,
-          stats.read() == 0
-              ? SyncRunStatus.EMPTY
-              : stats.failed() > 0 ? SyncRunStatus.PARTIAL : SyncRunStatus.SUCCESS,
+          !hasRead
+              ? (hasFailure ? SyncRunStatus.PARTIAL : SyncRunStatus.EMPTY)
+              : hasFailure ? SyncRunStatus.PARTIAL : SyncRunStatus.SUCCESS,
           stats.read(),
           stats.created(),
           stats.updated(),
           stats.skipped(),
           stats.failed(),
-          stats.failed() > 0 ? "IMPORT_MISSING_FIELDS" : null);
+          stats.failed() > 0
+              ? "IMPORT_MISSING_FIELDS"
+              : investmentFailed ? "INVESTMENT_IMPORT_FAILED" : null);
     } catch (PluggyException exception) {
       SyncStateService.SyncFailure failure = stateService.fromException(exception);
       stateService.apply(integration, connection, failure, clock.now());

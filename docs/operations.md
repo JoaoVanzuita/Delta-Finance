@@ -197,6 +197,10 @@ tem acesso.
 
 - Módulo da fase secundária (`/investments`). Importa posições de itens do
   Meu Pluggy e mantém posições manuais complementares.
+- **Estado atual**: a importação backend está implementada na migração `V006`;
+  o dashboard, a exibição de cobertura na UI, o provento manual e o custo
+  informado entram nas fases seguintes. O sync já persiste posições,
+  movimentações e cobertura.
 - **Investimento não é conta.** `/accounts` só retorna `BANK`/`CREDIT`; as
   posições vêm de `GET /investments?itemId=` e não têm `accountId`. Não criar
   conta sintética.
@@ -214,12 +218,12 @@ tem acesso.
   bancárias e não alteram o fluxo de caixa.
 - `INTEREST` é a fonte de dividendos, aluguel de FII, JCP e cupons. Open Finance
   pode não enviar `INTEREST`, `amountProfit`, `amountOriginal` ou taxas de
-  rentabilidade. Nesses casos o painel mostra "não informado" e **não deriva**
-  rentabilidade de histórico incompleto. `rate`/`rateType` são remuneração
-  contratada, não desempenho.
-- O usuário pode registrar provento manual e custo informado para uma posição
-  importada. Esses dados aparecem como manuais/estimados, não sobrescrevem o
-  provedor e são auditados. O provento manual não é somado automaticamente às
+  rentabilidade. Nesses casos o painel deverá mostrar "não informado" e **não
+  derivar** rentabilidade de histórico incompleto. `rate`/`rateType` são
+  remuneração contratada, não desempenho.
+- O usuário poderá registrar provento manual e custo informado para uma posição
+  importada. Esses dados aparecerão como manuais/estimados, não sobrescreverão o
+  provedor e serão auditados. O provento manual não é somado automaticamente às
   receitas do dashboard principal.
 - Posições importadas ativas entram uma única vez no patrimônio; encerradas,
   indisponíveis e fora de BRL ficam de fora com motivo. Duplicidade entre posição
@@ -230,6 +234,8 @@ tem acesso.
 - Não há recomendação de compra, venda ou alocação, nem snapshots históricos de
   valor de portfólio. A importação foi validada para XP via Meu Pluggy em
   2026-10-27; outras instituições dependem de validação por consentimento.
+  Nessa validação, a conexão XP retornou 6 posições (3 ativas, 3 encerradas) e
+  11 movimentações `BUY`, sem `INTEREST` ou rentabilidade informada.
 - Posições manuais continuam com total `quantidade × preço unitário`; quando
   apenas o total é informado, o preço é `total ÷ quantidade`, com 8 casas
   decimais. Elas entram na visão patrimonial e podem ser fonte de alocação de
@@ -288,7 +294,7 @@ tem acesso.
   investimentos, patrimônio e metas, mais as tabelas de sessão do Spring e o
   histórico do Flyway. Webhooks, snapshots patrimoniais e dívida inicial não
   fazem parte da baseline; Bills estão em migração própria (`V003`) e os
-  investimentos importados serão adicionados em `V006`.
+  investimentos importados foram adicionados em `V006`.
 - Acesso administrativo local:
 
 ```bash

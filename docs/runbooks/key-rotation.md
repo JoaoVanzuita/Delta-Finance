@@ -50,7 +50,9 @@ código 0 se não houver falhas. O job:
 
 - percorre todos os campos cifrados ativos (`pluggy_integration`,
   `pluggy_connection`, `financial_account`, `card_profile`, `transaction`,
-  `invoice`, `invoice_item`, `invoice_payment`, correções, `investment_position`,
+  `invoice`, `invoice_item`, `invoice_payment`, `provider_bill`,
+  `provider_bill_payment`, `provider_investment`,
+  `provider_investment_transaction`, correções, `investment_position`,
   `manual_asset_liability`, `financial_goal`, `goal_allocation`,
   `goal_progress_snapshot` e `idempotency_key.response_body`);
 - regrava cada valor com a versão ativa, preservando o AAD

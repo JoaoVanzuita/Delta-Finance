@@ -19,7 +19,14 @@ public final class PluggyModels {
       Instant lastUpdatedAt,
       Instant nextAutoSyncAt,
       String institutionName,
-      String errorCode) {}
+      String errorCode,
+      List<String> products,
+      Instant resourcesCollectedAt,
+      Boolean hasResourcesPendingAuthorization) {}
+
+  public record PluggyItemResource(String resourceId, String type, String status) {}
+
+  public record PluggyItemResourcePage(List<PluggyItemResource> items, boolean complete) {}
 
   public record PluggyAccount(
       String externalId,
@@ -70,6 +77,58 @@ public final class PluggyModels {
       String paymentMode,
       String valueType,
       String currency) {}
+
+  public record PluggyInvestment(
+      String externalId,
+      String name,
+      String code,
+      String isin,
+      String owner,
+      String type,
+      String subtype,
+      String status,
+      String currency,
+      BigDecimal quantity,
+      BigDecimal unitValue,
+      BigDecimal amount,
+      BigDecimal balance,
+      BigDecimal amountOriginal,
+      BigDecimal amountProfit,
+      BigDecimal amountWithdrawal,
+      BigDecimal taxes,
+      BigDecimal taxes2,
+      BigDecimal rate,
+      String rateType,
+      BigDecimal fixedAnnualRate,
+      BigDecimal lastMonthRate,
+      BigDecimal annualRate,
+      BigDecimal lastTwelveMonthsRate,
+      LocalDate referenceDate,
+      LocalDate purchaseDate,
+      LocalDate dueDate,
+      LocalDate gracePeriodDate,
+      Instant providerUpdatedAt,
+      String institution,
+      String issuer) {}
+
+  public record PluggyInvestmentPage(List<PluggyInvestment> items, boolean complete) {}
+
+  public record PluggyInvestmentTransaction(
+      String externalId,
+      String type,
+      String movementType,
+      LocalDate tradeDate,
+      LocalDate transactionDate,
+      BigDecimal quantity,
+      BigDecimal unitValue,
+      BigDecimal amount,
+      BigDecimal netAmount,
+      String description,
+      String brokerageNumber,
+      JsonNode expenses) {}
+
+  public record PluggyInvestmentTransactionPage(
+      List<PluggyInvestmentTransaction> items, boolean complete) {}
 
   static String text(JsonNode node, String field) {
     JsonNode value = node.path(field);

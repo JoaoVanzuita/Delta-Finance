@@ -86,10 +86,12 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
 
 - `GET /api/v1/me/export` gera, em streaming, um ZIP com JSON Lines e CSV por
   conjunto de dados ativo do titular: perfil, contas, cartões, posições de
-  investimento, ativos/passivos manuais, metas, alocações e histórico de metas,
-  categorias, transações, faturas, itens, pagamentos, correções, reconciliações,
-  integrações (somente metadados), conexões (sem itemId/HMAC), execuções de
-  sincronização, jobs e auditoria sanitizada.
+  investimento manuais e importadas, movimentações de investimento, cobertura de
+  investimentos por conexão, ativos/passivos manuais, metas, alocações e
+  histórico de metas, categorias, transações, faturas, itens, pagamentos, Bills
+  oficiais e pagamentos oficiais, correções, reconciliações, integrações (somente
+  metadados), conexões (sem itemId/HMAC), execuções de sincronização, jobs e
+  auditoria sanitizada.
 - O arquivo `manifest.json` documenta formato (`delta-finance-export`, versão 1),
   data, fuso `America/Sao_Paulo`, moeda `BRL`, total de registros e contagem por
   arquivo. Os nomes `*.jsonl` e `*.csv` são estáveis para uso portátil.

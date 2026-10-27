@@ -39,6 +39,11 @@ class KeyRotationIT extends PostgresTestBase {
   private UUID allocationId;
   private UUID snapshotId;
   private UUID idempotencyId;
+  private UUID integrationId;
+  private UUID connectionId;
+  private UUID providerInvestmentId;
+  private UUID providerTransactionId;
+  private UUID providerSyncId;
 
   @BeforeEach
   void setUp() {
@@ -79,6 +84,11 @@ class KeyRotationIT extends PostgresTestBase {
     allocationId = UUID.randomUUID();
     snapshotId = UUID.randomUUID();
     idempotencyId = UUID.randomUUID();
+    integrationId = UUID.randomUUID();
+    connectionId = UUID.randomUUID();
+    providerInvestmentId = UUID.randomUUID();
+    providerTransactionId = UUID.randomUUID();
+    providerSyncId = UUID.randomUUID();
     insertPostMvpRows(now);
   }
 
@@ -168,6 +178,120 @@ class KeyRotationIT extends PostgresTestBase {
         encrypt(idempotencyId, "idempotency_key", "response_body", "{}"),
         now,
         Timestamp.from(now.toInstant().plusSeconds(86_400)));
+    jdbcTemplate.update(
+        """
+        insert into pluggy_integration
+          (id, user_id, provider, status, created_at, updated_at, version)
+        values (?, ?, 'MEU_PLUGGY', 'ACTIVE', ?, ?, 0)
+        """,
+        integrationId,
+        user.id(),
+        now,
+        now);
+    jdbcTemplate.update(
+        """
+        insert into pluggy_connection
+          (id, user_id, integration_id, status, created_at, updated_at, version)
+        values (?, ?, ?, 'ACTIVE', ?, ?, 0)
+        """,
+        connectionId,
+        user.id(),
+        integrationId,
+        now,
+        now);
+    jdbcTemplate.update(
+        """
+        insert into provider_investment
+          (id, user_id, connection_id, external_investment_id_enc,
+           external_investment_id_hash, name_enc, code_enc, isin_enc, owner_enc,
+           institution_enc, issuer_enc, type, subtype, status, currency, quantity_enc,
+           unit_value_enc, amount_enc, balance_enc, amount_original_enc, amount_profit_enc,
+           amount_withdrawal_enc, taxes_enc, taxes2_enc, rate_enc, rate_type,
+           fixed_annual_rate_enc, last_month_rate_enc, annual_rate_enc,
+           last_twelve_months_rate_enc, reference_date, provider_updated_at, synced_at,
+           manual_cost_basis_enc, user_asset_class, created_at, updated_at, version)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EQUITY', 'STOCK', 'ACTIVE', 'BRL',
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CDI', ?, ?, ?, ?, '2026-10-01', ?, ?, ?, 'FII',
+                ?, ?, 0)
+        """,
+        providerInvestmentId,
+        user.id(),
+        connectionId,
+        encrypt(providerInvestmentId, "provider_investment", "external_investment_id", "inv-1"),
+        new byte[] {7, 7, 7},
+        encrypt(providerInvestmentId, "provider_investment", "name", "FII rotacionado"),
+        encrypt(providerInvestmentId, "provider_investment", "code", "AAAA11"),
+        encrypt(providerInvestmentId, "provider_investment", "isin", "BRAAAA"),
+        encrypt(providerInvestmentId, "provider_investment", "owner", "Titular"),
+        encrypt(providerInvestmentId, "provider_investment", "institution", "Instituição"),
+        encrypt(providerInvestmentId, "provider_investment", "issuer", "Emissor"),
+        encrypt(providerInvestmentId, "provider_investment", "quantity", "10"),
+        encrypt(providerInvestmentId, "provider_investment", "unit_value", "100.00"),
+        encrypt(providerInvestmentId, "provider_investment", "amount", "1000.00"),
+        encrypt(providerInvestmentId, "provider_investment", "balance", "1000.00"),
+        encrypt(providerInvestmentId, "provider_investment", "amount_original", "900.00"),
+        encrypt(providerInvestmentId, "provider_investment", "amount_profit", "100.00"),
+        encrypt(providerInvestmentId, "provider_investment", "amount_withdrawal", "1000.00"),
+        encrypt(providerInvestmentId, "provider_investment", "taxes", "0.00"),
+        encrypt(providerInvestmentId, "provider_investment", "taxes2", "0.00"),
+        encrypt(providerInvestmentId, "provider_investment", "rate", "100"),
+        encrypt(providerInvestmentId, "provider_investment", "fixed_annual_rate", "10.00"),
+        encrypt(providerInvestmentId, "provider_investment", "last_month_rate", "1.00"),
+        encrypt(providerInvestmentId, "provider_investment", "annual_rate", "12.00"),
+        encrypt(providerInvestmentId, "provider_investment", "last_twelve_months_rate", "12.00"),
+        now,
+        now,
+        encrypt(providerInvestmentId, "provider_investment", "manual_cost_basis", "900.00"),
+        now,
+        now);
+    jdbcTemplate.update(
+        """
+        insert into provider_investment_transaction
+          (id, user_id, provider_investment_id, external_transaction_id_enc,
+           external_transaction_id_hash, dedup_key, type, movement_type, trade_date,
+           transaction_date, quantity_enc, unit_value_enc, amount_enc, net_amount_enc,
+           description_enc, brokerage_number_enc, expenses_enc, last_seen_at,
+           created_at, updated_at, version)
+        values (?, ?, ?, ?, ?, ?, 'INTEREST', 'CREDIT', '2026-10-01', '2026-10-01',
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """,
+        providerTransactionId,
+        user.id(),
+        providerInvestmentId,
+        encrypt(
+            providerTransactionId,
+            "provider_investment_transaction",
+            "external_transaction_id",
+            "tx-1"),
+        new byte[] {8, 8, 8},
+        new byte[] {9, 9, 9},
+        encrypt(providerTransactionId, "provider_investment_transaction", "quantity", "0"),
+        encrypt(providerTransactionId, "provider_investment_transaction", "unit_value", "1.00"),
+        encrypt(providerTransactionId, "provider_investment_transaction", "amount", "12.50"),
+        encrypt(providerTransactionId, "provider_investment_transaction", "net_amount", "12.50"),
+        encrypt(
+            providerTransactionId, "provider_investment_transaction", "description", "Rendimento"),
+        encrypt(
+            providerTransactionId, "provider_investment_transaction", "brokerage_number", "123"),
+        encrypt(providerTransactionId, "provider_investment_transaction", "expenses", "{}"),
+        now,
+        now,
+        now);
+    jdbcTemplate.update(
+        """
+        insert into provider_investment_sync
+          (id, user_id, connection_id, scope, resource_count, available_resource_count,
+           pending_resource_count, unavailable_resource_count, resources_collected_at,
+           last_synced_at, created_at, updated_at, version)
+        values (?, ?, ?, 'AVAILABLE', 1, 1, 0, 0, ?, ?, ?, ?, 0)
+        """,
+        providerSyncId,
+        user.id(),
+        connectionId,
+        now,
+        now,
+        now,
+        now);
   }
 
   private byte[] encrypt(UUID recordId, String table, String column, String value) {
@@ -222,6 +346,42 @@ class KeyRotationIT extends PostgresTestBase {
     assertRotated(allocationId, "goal_allocation", "allocated_amount");
     assertRotated(snapshotId, "goal_progress_snapshot", "current_value", "remaining");
     assertRotated(idempotencyId, "idempotency_key", "response_body");
+    assertRotated(
+        providerInvestmentId,
+        "provider_investment",
+        "external_investment_id",
+        "name",
+        "code",
+        "isin",
+        "owner",
+        "institution",
+        "issuer",
+        "quantity",
+        "unit_value",
+        "amount",
+        "balance",
+        "amount_original",
+        "amount_profit",
+        "amount_withdrawal",
+        "taxes",
+        "taxes2",
+        "rate",
+        "fixed_annual_rate",
+        "last_month_rate",
+        "annual_rate",
+        "last_twelve_months_rate",
+        "manual_cost_basis");
+    assertRotated(
+        providerTransactionId,
+        "provider_investment_transaction",
+        "external_transaction_id",
+        "quantity",
+        "unit_value",
+        "amount",
+        "net_amount",
+        "description",
+        "brokerage_number",
+        "expenses");
 
     KeyRotationJob.RotationResult second = job.rotate();
     assertThat(second.rotated()).isZero();

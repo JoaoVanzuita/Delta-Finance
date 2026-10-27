@@ -711,6 +711,9 @@ compartilhar nenhuma posição.
 
 ### 7.5 `investment_income` (provento manual)
 
+Implementada em migração própria (`V007__investment_income.sql`) na fase de
+proventos.
+
 `id`, `user_id`, `provider_investment_id` (nullable), `investment_position_id`
 (nullable), `income_type` (`DIVIDEND`, `INTEREST`, `JCP`, `RENT`, `COUPON`,
 `OTHER`), `income_date`, `amount_enc`, `description_enc`, `source` (`MANUAL`),

@@ -66,6 +66,15 @@ public final class PluggyStub {
       new ConcurrentHashMap<>();
   private final Map<String, Map<String, Object>> creditCardMetadataByTransaction =
       new ConcurrentHashMap<>();
+  private final Map<String, List<Map<String, Object>>> investmentsByItem =
+      new ConcurrentHashMap<>();
+  private final Map<String, List<Map<String, Object>>> investmentTransactionsByInvestment =
+      new ConcurrentHashMap<>();
+  private final Map<String, List<Map<String, Object>>> resourcesByItem = new ConcurrentHashMap<>();
+  private final Map<String, List<String>> productsByItem = new ConcurrentHashMap<>();
+  private final Map<String, Instant> resourcesCollectedAtByItem = new ConcurrentHashMap<>();
+  private final Set<String> resourcesCollectedAtUnset = ConcurrentHashMap.newKeySet();
+  private final Map<String, Boolean> pendingAuthorizationByItem = new ConcurrentHashMap<>();
   private final List<RecordedRequest> requests = new CopyOnWriteArrayList<>();
   private final List<String> dataApiKeys = new CopyOnWriteArrayList<>();
   private final Set<String> validApiKeys = ConcurrentHashMap.newKeySet();
@@ -114,6 +123,13 @@ public final class PluggyStub {
     billPaymentsByBill.clear();
     installmentMetadataByTransaction.clear();
     creditCardMetadataByTransaction.clear();
+    investmentsByItem.clear();
+    investmentTransactionsByInvestment.clear();
+    resourcesByItem.clear();
+    productsByItem.clear();
+    resourcesCollectedAtByItem.clear();
+    resourcesCollectedAtUnset.clear();
+    pendingAuthorizationByItem.clear();
     requests.clear();
     dataApiKeys.clear();
     validApiKeys.clear();
@@ -215,6 +231,58 @@ public final class PluggyStub {
         .add(payment);
   }
 
+  /** Adiciona uma posição de investimento ao item. */
+  public void addInvestment(String itemId, Map<String, Object> investment) {
+    investmentsByItem
+        .computeIfAbsent(itemId, ignored -> new CopyOnWriteArrayList<>())
+        .add(investment);
+  }
+
+  public void setInvestments(String itemId, List<Map<String, Object>> investments) {
+    investmentsByItem.put(itemId, new CopyOnWriteArrayList<>(investments));
+  }
+
+  /** Adiciona uma movimentação a um investimento. */
+  public void addInvestmentTransaction(
+      String investmentExternalId, Map<String, Object> transaction) {
+    investmentTransactionsByInvestment
+        .computeIfAbsent(investmentExternalId, ignored -> new CopyOnWriteArrayList<>())
+        .add(transaction);
+  }
+
+  public void setInvestmentTransactions(
+      String investmentExternalId, List<Map<String, Object>> transactions) {
+    investmentTransactionsByInvestment.put(
+        investmentExternalId, new CopyOnWriteArrayList<>(transactions));
+  }
+
+  /** Recursos declarados pelo item; vazio significa que a instituição não compartilha. */
+  public void setInvestmentResources(String itemId, List<Map<String, Object>> resources) {
+    resourcesByItem.put(itemId, new CopyOnWriteArrayList<>(resources));
+  }
+
+  public void setItemProducts(String itemId, List<String> products) {
+    productsByItem.put(itemId, List.copyOf(products));
+  }
+
+  public void setResourcesCollectedAt(String itemId, Instant resourcesCollectedAt) {
+    if (resourcesCollectedAt == null) {
+      resourcesCollectedAtByItem.remove(itemId);
+      resourcesCollectedAtUnset.add(itemId);
+    } else {
+      resourcesCollectedAtUnset.remove(itemId);
+      resourcesCollectedAtByItem.put(itemId, resourcesCollectedAt);
+    }
+  }
+
+  public void setHasResourcesPendingAuthorization(String itemId, Boolean pending) {
+    if (pending == null) {
+      pendingAuthorizationByItem.remove(itemId);
+    } else {
+      pendingAuthorizationByItem.put(itemId, pending);
+    }
+  }
+
   public void setBills(String accountId, List<BillFixture> bills) {
     billsByAccount.put(accountId, new CopyOnWriteArrayList<>(bills));
   }
@@ -308,7 +376,7 @@ public final class PluggyStub {
     @Override
     public MockResponse dispatch(RecordedRequest request) {
       requests.add(request);
-      String path = request.getPath() == null ? "" : request.getPath();
+      String path = request.getRequestUrl() == null ? "" : request.getRequestUrl().encodedPath();
       String apiKey = request.getHeader("X-API-KEY");
       if (apiKey != null) {
         dataApiKeys.add(apiKey);
@@ -335,6 +403,9 @@ public final class PluggyStub {
       if (requiresApiKey(path) && (apiKey == null || !validApiKeys.contains(apiKey))) {
         return response(401, Map.of("message", "invalid api key"));
       }
+      if (path.startsWith("/items/") && path.endsWith("/resources")) {
+        return resources(path.substring("/items/".length(), path.length() - "/resources".length()));
+      }
       if (path.startsWith("/items/")) {
         return item(path.substring("/items/".length()));
       }
@@ -346,6 +417,14 @@ public final class PluggyStub {
       }
       if (path.startsWith("/bills")) {
         return bills(request.getRequestUrl().queryParameter("accountId"));
+      }
+      if (path.startsWith("/investments/") && path.endsWith("/transactions")) {
+        String remainder = path.substring("/investments/".length());
+        String investmentId = remainder.substring(0, remainder.indexOf('/'));
+        return investmentTransactions(investmentId);
+      }
+      if (path.startsWith("/investments")) {
+        return investments(request.getRequestUrl().queryParameter("itemId"));
       }
       return response(404, Map.of("message", "not found"));
     }
@@ -365,6 +444,7 @@ public final class PluggyStub {
       return path.startsWith("/items/")
           || path.startsWith("/accounts")
           || path.startsWith("/bills")
+          || path.startsWith("/investments")
           || path.startsWith("/v2/transactions");
     }
 
@@ -398,6 +478,26 @@ public final class PluggyStub {
       body.put("lastUpdatedAt", Instant.now().toString());
       body.put("nextAutoSyncAt", Instant.now().plusSeconds(3600).toString());
       body.put("connector", Map.of("name", item.institution()));
+      body.put(
+          "products",
+          productsByItem.getOrDefault(
+              item.id(),
+              List.of(
+                  "ACCOUNTS",
+                  "CREDIT_CARDS",
+                  "TRANSACTIONS",
+                  "INVESTMENTS",
+                  "INVESTMENTS_TRANSACTIONS")));
+      Instant resourcesCollectedAt =
+          resourcesCollectedAtUnset.contains(item.id())
+              ? null
+              : resourcesCollectedAtByItem.getOrDefault(item.id(), Instant.now());
+      body.put(
+          "resourcesCollectedAt",
+          resourcesCollectedAt == null ? null : resourcesCollectedAt.toString());
+      body.put(
+          "hasResourcesPendingAuthorization",
+          pendingAuthorizationByItem.getOrDefault(item.id(), false));
       if (item.errorCode() != null) {
         body.put("error", Map.of("code", item.errorCode()));
       }
@@ -456,6 +556,28 @@ public final class PluggyStub {
       }
       return response(
           200, Map.of("results", results, "page", 1, "totalPages", 1, "total", results.size()));
+    }
+
+    private MockResponse resources(String itemId) {
+      List<Map<String, Object>> resources = resourcesByItem.getOrDefault(itemId, List.of());
+      return response(
+          200, Map.of("results", resources, "page", 1, "totalPages", 1, "total", resources.size()));
+    }
+
+    private MockResponse investments(String itemId) {
+      List<Map<String, Object>> investments = investmentsByItem.getOrDefault(itemId, List.of());
+      return response(
+          200,
+          Map.of("results", investments, "page", 1, "totalPages", 1, "total", investments.size()));
+    }
+
+    private MockResponse investmentTransactions(String investmentId) {
+      List<Map<String, Object>> transactions =
+          investmentTransactionsByInvestment.getOrDefault(investmentId, List.of());
+      return response(
+          200,
+          Map.of(
+              "results", transactions, "page", 1, "totalPages", 1, "total", transactions.size()));
     }
 
     private MockResponse transactions(String accountId) {
