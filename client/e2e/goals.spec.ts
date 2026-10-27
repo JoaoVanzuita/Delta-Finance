@@ -32,7 +32,6 @@ interface Goal {
   targetDate?: string
   status: string
   progressRule: string
-  initialValue?: string
   currentValue: string
   percentage: string
   remainingAmount: string
@@ -235,13 +234,4 @@ test('cria meta, mostra progresso e estados sem mover dinheiro', async ({ page }
   await expect(
     page.getByRole('button', { name: /transferir|pagar|comprar|vender|investir|ordem/i }),
   ).toHaveCount(0)
-})
-
-test('mostra dívida inicial na regra de redução de dívida', async ({ page }) => {
-  await installStub(page)
-  await page.goto('/goals')
-
-  await page.getByLabel('Regra de progresso').selectOption('DEBT_REDUCTION')
-  await expect(page.getByLabel('Dívida inicial')).toBeVisible()
-  await expect(page.getByText(/não movimentam dinheiro/i)).toBeVisible()
 })

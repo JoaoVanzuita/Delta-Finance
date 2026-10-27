@@ -97,18 +97,6 @@ const MANUAL_ITEMS = [
   },
 ]
 
-const SNAPSHOT = {
-  id: 'snap-1',
-  referenceDate: '2026-10-23',
-  grossAssets: '1600.00',
-  liabilities: '300.00',
-  netWorth: '1300.00',
-  completeness: 'COMPLETE',
-  notes: 'Fechamento',
-  createdAt: '2026-10-23T21:00:00Z',
-  items: [],
-}
-
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -118,14 +106,13 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 interface StubState {
   manualItems: Array<Record<string, unknown>>
-  snapshots: Array<Record<string, unknown>>
 }
 
-function stubApi(initialSnapshots: Array<Record<string, unknown>> = []): {
+function stubApi(): {
   mock: ReturnType<typeof vi.fn>
   state: StubState
 } {
-  const state: StubState = { manualItems: [...MANUAL_ITEMS], snapshots: initialSnapshots }
+  const state: StubState = { manualItems: [...MANUAL_ITEMS] }
   const mock = vi.fn((url: string, init: RequestInit = {}) => {
     const method = init.method ?? 'GET'
     if (url.includes('/auth/me')) return jsonResponse(USER)
@@ -151,18 +138,6 @@ function stubApi(initialSnapshots: Array<Record<string, unknown>> = []): {
       const id = url.split('/').pop() ?? ''
       state.manualItems = state.manualItems.filter((item) => item.id !== id)
       return new Response(null, { status: 204 })
-    }
-    if (url.endsWith('/wealth/snapshots') && method === 'GET') {
-      return jsonResponse({ items: state.snapshots })
-    }
-    if (url.endsWith('/wealth/snapshots') && method === 'POST') {
-      const created = {
-        ...SNAPSHOT,
-        id: `snap-${state.snapshots.length + 1}`,
-        referenceDate: '2026-10-24',
-      }
-      state.snapshots = [created, ...state.snapshots]
-      return jsonResponse(created, 201)
     }
     return jsonResponse({}, 404)
   })
@@ -190,7 +165,7 @@ describe('visão patrimonial', () => {
   })
 
   it('mostra patrimônio bruto, passivos, líquido, composição e lacunas', async () => {
-    stubApi([])
+    stubApi()
     renderPage()
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })).toBeInTheDocument()
@@ -211,33 +186,8 @@ describe('visão patrimonial', () => {
     expect(within(composition).getByText('Conta sem saldo')).toBeInTheDocument()
   })
 
-  it('não inventa saldos passados quando o histórico é insuficiente', async () => {
-    stubApi([SNAPSHOT])
-    renderPage()
-
-    await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })
-    const history = await screen.findByRole('region', { name: 'Histórico de snapshots' })
-    expect(
-      within(history).getByText(/Histórico insuficiente para comparar períodos/i),
-    ).toBeInTheDocument()
-    expect(within(history).getByText(/Nenhum saldo passado é inferido/i)).toBeInTheDocument()
-    expect(within(history).getByText(/23\/10\/2026/)).toBeInTheDocument()
-  })
-
-  it('mostra estado vazio de snapshots sem valores inventados', async () => {
-    stubApi([])
-    renderPage()
-
-    await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })
-    const history = await screen.findByRole('region', { name: 'Histórico de snapshots' })
-    expect(within(history).getByText('Nenhum snapshot registrado')).toBeInTheDocument()
-    expect(
-      within(history).getByText(/Histórico insuficiente para comparar períodos/i),
-    ).toBeInTheDocument()
-  })
-
   it('cria item manual como ativo com valor e data de referência', async () => {
-    const { mock } = stubApi([])
+    const { mock } = stubApi()
     const user = userEvent.setup()
     renderPage()
 
@@ -267,30 +217,8 @@ describe('visão patrimonial', () => {
     expect(await screen.findByText('Apartamento')).toBeInTheDocument()
   })
 
-  it('registra snapshot do dia e mantém o histórico visível', async () => {
-    const { mock } = stubApi([])
-    const user = userEvent.setup()
-    renderPage()
-
-    await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })
-    await user.click(screen.getByRole('button', { name: 'Registrar snapshot de hoje' }))
-
-    await waitFor(() => {
-      expect(
-        mock.mock.calls.some(
-          ([url, init]) => String(url).endsWith('/wealth/snapshots') && init?.method === 'POST',
-        ),
-      ).toBe(true)
-    })
-    const history = await screen.findByRole('region', { name: 'Histórico de snapshots' })
-    expect(within(history).getByText(/24\/10\/2026/)).toBeInTheDocument()
-    expect(
-      within(history).getByText(/Histórico insuficiente para comparar períodos/i),
-    ).toBeInTheDocument()
-  })
-
   it('mantém acessibilidade WCAG 2.1 A/AA', async () => {
-    stubApi([SNAPSHOT])
+    stubApi()
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })

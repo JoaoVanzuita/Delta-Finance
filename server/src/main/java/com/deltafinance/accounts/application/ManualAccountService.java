@@ -27,7 +27,8 @@ import org.springframework.stereotype.Service;
  * Criação e edição de contas manuais.
  *
  * <p>O tipo é imutável após a criação. Conta desativada não recebe novos lançamentos, mas preserva
- * histórico e relatórios. Saldo/data são apenas referência do usuário.
+ * histórico e relatórios. Saldo/data são a base do saldo efetivo calculado por {@link
+ * AccountBalanceService}.
  */
 @Service
 public class ManualAccountService {
@@ -119,9 +120,12 @@ public class ManualAccountService {
     }
     try {
       AccountType type = AccountType.valueOf(value.trim().toUpperCase(Locale.ROOT));
-      if (type == AccountType.CREDIT) {
+      if (type == AccountType.CREDIT || type == AccountType.UNKNOWN) {
         throw new ValidationException(
-            "type", "Cartões de crédito não podem ser criados como conta manual.");
+            "type",
+            type == AccountType.CREDIT
+                ? "Cartões de crédito não podem ser criados como conta manual."
+                : "O tipo da conta manual deve ser informado.");
       }
       return type;
     } catch (IllegalArgumentException exception) {

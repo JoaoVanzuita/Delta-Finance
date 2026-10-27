@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,15 +41,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class ManualTransactionService {
 
   private static final String TABLE = "transaction";
-  private static final int REFUND_WINDOW_DAYS = 90;
 
   private final TransactionRepository transactionRepository;
   private final FinancialAccountRepository accountRepository;
   private final CategoryService categoryService;
   private final InternalMatchPort internalMatchPort;
   private final TransactionQueryService queryService;
+  private final RefundMatcher refundMatcher;
   private final CryptoService cryptoService;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
   private final Clock clock;
 
   public ManualTransactionService(
@@ -57,16 +59,20 @@ public class ManualTransactionService {
       CategoryService categoryService,
       InternalMatchPort internalMatchPort,
       TransactionQueryService queryService,
+      RefundMatcher refundMatcher,
       CryptoService cryptoService,
       AuditService auditService,
+      ApplicationEventPublisher eventPublisher,
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
     this.categoryService = categoryService;
     this.internalMatchPort = internalMatchPort;
     this.queryService = queryService;
+    this.refundMatcher = refundMatcher;
     this.cryptoService = cryptoService;
     this.auditService = auditService;
+    this.eventPublisher = eventPublisher;
     this.clock = clock;
   }
 
@@ -86,7 +92,8 @@ public class ManualTransactionService {
     UUID relatedTransactionId = null;
     if (type == TransactionType.REFUND || type == TransactionType.CHARGEBACK) {
       Transaction original =
-          resolveOriginal(userId, account, type, amount, postedOn, request.relatedTransactionId());
+          resolveOriginal(
+              userId, account, type, amount, postedOn, description, request.relatedTransactionId());
       relatedTransactionId = original.getId();
       if (categoryId == null) {
         categoryId = original.getCategoryId();
@@ -121,6 +128,7 @@ public class ManualTransactionService {
       transaction.linkRelatedTransaction(relatedTransactionId);
       transactionRepository.save(transaction);
     }
+    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, transaction.getId()));
     auditService.record(
         userId,
         AuditEventType.TRANSACTION_CREATED,
@@ -153,6 +161,12 @@ public class ManualTransactionService {
       UUID counterpartId = transaction.getRelatedTransactionId();
       Transaction counterpart =
           transactionRepository.findByIdAndUserId(counterpartId, userId).orElse(null);
+      eventPublisher.publishEvent(
+          new TransactionDeletedEvent(userId, transaction.getId(), transaction.getAccountId()));
+      if (counterpart != null) {
+        eventPublisher.publishEvent(
+            new TransactionDeletedEvent(userId, counterpart.getId(), counterpart.getAccountId()));
+      }
       transaction.linkRelatedTransaction(null);
       Transaction first = transactionRepository.saveAndFlush(transaction);
       if (counterpart != null) {
@@ -163,6 +177,8 @@ public class ManualTransactionService {
         transactionRepository.delete(first);
       }
     } else {
+      eventPublisher.publishEvent(
+          new TransactionDeletedEvent(userId, transaction.getId(), transaction.getAccountId()));
       transactionRepository.delete(transaction);
     }
     auditService.record(
@@ -226,6 +242,8 @@ public class ManualTransactionService {
     transactionRepository.save(credit);
 
     internalMatchPort.confirmManualTransfer(userId, debit.getId(), credit.getId());
+    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, debit.getId()));
+    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, credit.getId()));
 
     auditService.record(
         userId,
@@ -295,6 +313,7 @@ public class ManualTransactionService {
       TransactionType type,
       BigDecimal amount,
       LocalDate postedOn,
+      String description,
       UUID relatedTransactionId) {
     if (relatedTransactionId != null) {
       Transaction original =
@@ -308,34 +327,15 @@ public class ManualTransactionService {
       }
       return original;
     }
-    LocalDate limit = postedOn.minusDays(REFUND_WINDOW_DAYS);
-    BigDecimal magnitude = amount.abs();
-    for (Transaction candidate :
-        transactionRepository.findByUserIdAndAccountIdOrderByPostedOnDescIdDesc(
-            userId, account.getId())) {
-      if (candidate.getType() != TransactionType.DEBIT
-          || candidate.getPostedOn().isBefore(limit)
-          || candidate.getPostedOn().isAfter(postedOn)) {
-        continue;
-      }
-      BigDecimal candidateAmount = effectiveAmount(candidate);
-      if (candidateAmount.signum() < 0 && candidateAmount.abs().compareTo(magnitude) >= 0) {
-        return candidate;
-      }
-    }
-    throw new ValidationException(
-        "relatedTransactionId",
-        "Selecione a transação original para "
-            + type.name().toLowerCase(Locale.ROOT)
-            + "; nenhuma despesa compatível foi encontrada.");
-  }
-
-  private BigDecimal effectiveAmount(Transaction transaction) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            transaction.getAmountEffectiveEnc(),
-            new CryptoContext(
-                transaction.getUserId(), TABLE, "amount_effective", transaction.getId())));
+    return refundMatcher
+        .findOriginal(userId, account.getId(), type, amount, postedOn, description)
+        .orElseThrow(
+            () ->
+                new ValidationException(
+                    "relatedTransactionId",
+                    "Selecione a transação original para "
+                        + type.name().toLowerCase(Locale.ROOT)
+                        + "; nenhuma despesa compatível foi encontrada."));
   }
 
   private FinancialAccount requireActiveAccount(UUID userId, UUID accountId) {

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Metas financeiras.
  *
  * <p>Nenhum endpoint move dinheiro, cria ordem ou executa ação bancária; as metas apenas calculam
- * progresso sobre alocações explícitas, patrimônio líquido ou dívida inicial.
+ * progresso sobre alocações explícitas ou patrimônio líquido.
  */
 @RestController
 @RequestMapping("/api/v1/goals")

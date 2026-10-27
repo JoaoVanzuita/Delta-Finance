@@ -30,6 +30,16 @@ export function DashboardFilters({ value, accounts, categories, onApply }: Dashb
     setDraft((current) => ({ ...current, [key]: next }))
   }
 
+  function toggleAccount(accountId: string) {
+    const current = draft.accountIds ?? []
+    update(
+      'accountIds',
+      current.includes(accountId)
+        ? current.filter((id) => id !== accountId)
+        : [...current, accountId],
+    )
+  }
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     onApply(draft)
@@ -90,21 +100,25 @@ export function DashboardFilters({ value, accounts, categories, onApply }: Dashb
           />
         </label>
 
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Conta ou cartão</span>
-          <select
-            value={draft.accountId ?? ''}
-            onChange={(event) => update('accountId', event.target.value || undefined)}
-            className={fieldClass}
-          >
-            <option value="">Todas</option>
+        <fieldset className="block text-sm sm:col-span-2">
+          <legend className="font-medium text-ink">Contas e cartões</legend>
+          <p className="mt-1 text-xs text-ink-muted">
+            Nenhum selecionado significa todas as contas e cartões.
+          </p>
+          <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-card border border-line bg-surface p-2">
             {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.alias ?? account.institutionName ?? account.id}
-              </option>
+              <label key={account.id} className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={(draft.accountIds ?? []).includes(account.id)}
+                  onChange={() => toggleAccount(account.id)}
+                  className="h-4 w-4 rounded border-line"
+                />
+                <span>{account.alias ?? account.institutionName ?? account.id}</span>
+              </label>
             ))}
-          </select>
-        </label>
+          </div>
+        </fieldset>
 
         <label className="block text-sm">
           <span className="font-medium text-ink">Categoria</span>

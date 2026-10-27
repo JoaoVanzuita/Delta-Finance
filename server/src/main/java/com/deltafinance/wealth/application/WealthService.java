@@ -20,10 +20,6 @@ import com.deltafinance.wealth.domain.ManualAssetLiability;
 import com.deltafinance.wealth.domain.ManualAssetLiabilityRepository;
 import com.deltafinance.wealth.domain.ManualItemKind;
 import com.deltafinance.wealth.domain.WealthCompleteness;
-import com.deltafinance.wealth.domain.WealthSnapshot;
-import com.deltafinance.wealth.domain.WealthSnapshotItem;
-import com.deltafinance.wealth.domain.WealthSnapshotItemRepository;
-import com.deltafinance.wealth.domain.WealthSnapshotRepository;
 import com.deltafinance.wealth.domain.WealthSourceType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -36,10 +32,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Patrimônio consolidado, ativos/passivos manuais e snapshots datados.
+ * Patrimônio consolidado e ativos/passivos manuais.
  *
  * <p>Regras centrais:
  *
@@ -49,21 +44,16 @@ import org.springframework.transaction.annotation.Transactional;
  *       individual, evitando dupla contagem;
  *   <li>posições de investimento e itens manuais entram uma única vez;
  *   <li>valores ausentes e moeda não suportada viram lacunas explícitas; referências com mais de 30
- *       dias tornam a visão estimada;
- *   <li>snapshots usam sempre os dados do dia e nunca inventam saldos passados.
+ *       dias tornam a visão estimada.
  * </ul>
  */
 @Service
 public class WealthService {
 
   private static final String MANUAL_TABLE = "manual_asset_liability";
-  private static final String SNAPSHOT_TABLE = "wealth_snapshot";
-  private static final String SNAPSHOT_ITEM_TABLE = "wealth_snapshot_item";
   private static final int STALE_DAYS = 30;
 
   private final ManualAssetLiabilityRepository manualRepository;
-  private final WealthSnapshotRepository snapshotRepository;
-  private final WealthSnapshotItemRepository snapshotItemRepository;
   private final AccountQueryService accountQueryService;
   private final InvoiceQueryService invoiceQueryService;
   private final InvoiceReportingService invoiceReportingService;
@@ -74,8 +64,6 @@ public class WealthService {
 
   public WealthService(
       ManualAssetLiabilityRepository manualRepository,
-      WealthSnapshotRepository snapshotRepository,
-      WealthSnapshotItemRepository snapshotItemRepository,
       AccountQueryService accountQueryService,
       InvoiceQueryService invoiceQueryService,
       InvoiceReportingService invoiceReportingService,
@@ -84,8 +72,6 @@ public class WealthService {
       AuditService auditService,
       Clock clock) {
     this.manualRepository = manualRepository;
-    this.snapshotRepository = snapshotRepository;
-    this.snapshotItemRepository = snapshotItemRepository;
     this.accountQueryService = accountQueryService;
     this.invoiceQueryService = invoiceQueryService;
     this.invoiceReportingService = invoiceReportingService;
@@ -188,56 +174,6 @@ public class WealthService {
     ManualAssetLiability item = requireManual(userId, itemId);
     manualRepository.delete(item);
     auditService.record(userId, AuditEventType.WEALTH_MANUAL_ITEM_DELETED, MANUAL_TABLE, itemId);
-  }
-
-  /** Cria ou atualiza o snapshot do dia, com a composição atual. */
-  @Transactional
-  public WealthSnapshotView createSnapshot(UUID userId, String notesValue) {
-    String notes = optionalText(notesValue, "notes", 2000);
-    LocalDate today = clock.today();
-    WealthOverviewView overview = overview(userId);
-    WealthSnapshot snapshot =
-        snapshotRepository
-            .findByUserIdAndReferenceDate(userId, today)
-            .orElseGet(() -> new WealthSnapshot(userId, today));
-
-    snapshot.apply(
-        encrypt(userId, snapshot.getId(), SNAPSHOT_TABLE, "gross_assets", overview.grossAssets()),
-        encrypt(userId, snapshot.getId(), SNAPSHOT_TABLE, "liabilities", overview.liabilities()),
-        encrypt(userId, snapshot.getId(), SNAPSHOT_TABLE, "net_worth", overview.netWorth()),
-        WealthCompleteness.valueOf(overview.completeness()),
-        optionalEncrypt(userId, snapshot.getId(), SNAPSHOT_TABLE, "notes", notes));
-    snapshotRepository.save(snapshot);
-
-    snapshotItemRepository.deleteByUserIdAndSnapshotId(userId, snapshot.getId());
-    for (WealthItemView item : overview.items()) {
-      WealthSnapshotItem entity =
-          new WealthSnapshotItem(
-              userId,
-              snapshot.getId(),
-              WealthSourceType.valueOf(item.sourceType()),
-              item.sourceId());
-      entity.apply(
-          encrypt(userId, entity.getId(), SNAPSHOT_ITEM_TABLE, "description", item.description()),
-          encrypt(userId, entity.getId(), SNAPSHOT_ITEM_TABLE, "value", item.value()),
-          item.included(),
-          item.exclusionReason());
-      snapshotItemRepository.save(entity);
-    }
-
-    auditService.record(
-        userId,
-        AuditEventType.WEALTH_SNAPSHOT_CREATED,
-        SNAPSHOT_TABLE,
-        snapshot.getId(),
-        Map.of("completeness", overview.completeness()));
-    return toView(snapshot);
-  }
-
-  public List<WealthSnapshotView> listSnapshots(UUID userId) {
-    return snapshotRepository.findByUserIdOrderByReferenceDateDescIdDesc(userId).stream()
-        .map(this::toView)
-        .toList();
   }
 
   private void addAccount(Accumulator accumulator, AccountView account, LocalDate today) {
@@ -457,66 +393,6 @@ public class WealthService {
             entity.getReferenceValueEnc()),
         entity.getReferenceDate(),
         decrypt(entity.getUserId(), MANUAL_TABLE, "notes", entity.getId(), entity.getNotesEnc()));
-  }
-
-  private WealthSnapshotView toView(WealthSnapshot snapshot) {
-    List<WealthItemView> items =
-        snapshotItemRepository
-            .findByUserIdAndSnapshotIdOrderBySourceTypeAscIdAsc(
-                snapshot.getUserId(), snapshot.getId())
-            .stream()
-            .map(
-                item ->
-                    new WealthItemView(
-                        item.getSourceType().name(),
-                        item.getSourceId(),
-                        decrypt(
-                            item.getUserId(),
-                            SNAPSHOT_ITEM_TABLE,
-                            "description",
-                            item.getId(),
-                            item.getDescriptionEnc()),
-                        decrypt(
-                            item.getUserId(),
-                            SNAPSHOT_ITEM_TABLE,
-                            "value",
-                            item.getId(),
-                            item.getValueEnc()),
-                        item.isIncluded(),
-                        item.getExclusionReason(),
-                        snapshot.getReferenceDate(),
-                        false))
-            .toList();
-    return new WealthSnapshotView(
-        snapshot.getId(),
-        snapshot.getReferenceDate(),
-        decrypt(
-            snapshot.getUserId(),
-            SNAPSHOT_TABLE,
-            "gross_assets",
-            snapshot.getId(),
-            snapshot.getGrossAssetsEnc()),
-        decrypt(
-            snapshot.getUserId(),
-            SNAPSHOT_TABLE,
-            "liabilities",
-            snapshot.getId(),
-            snapshot.getLiabilitiesEnc()),
-        decrypt(
-            snapshot.getUserId(),
-            SNAPSHOT_TABLE,
-            "net_worth",
-            snapshot.getId(),
-            snapshot.getNetWorthEnc()),
-        snapshot.getCompleteness().name(),
-        decrypt(
-            snapshot.getUserId(),
-            SNAPSHOT_TABLE,
-            "notes",
-            snapshot.getId(),
-            snapshot.getNotesEnc()),
-        snapshot.getCreatedAt(),
-        items);
   }
 
   private void applyManual(

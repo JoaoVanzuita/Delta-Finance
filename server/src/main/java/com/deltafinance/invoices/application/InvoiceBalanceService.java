@@ -178,11 +178,12 @@ public class InvoiceBalanceService {
     if (outstanding.signum() == 0) {
       return InvoiceStatus.PAID;
     }
+    if (invoice.getDueDate().isBefore(today)) {
+      // Atraso prevalece sobre pagamento parcial: a dívida restante já venceu.
+      return InvoiceStatus.OVERDUE;
+    }
     if (payments.signum() > 0) {
       return InvoiceStatus.PARTIALLY_PAID;
-    }
-    if (invoice.getDueDate().isBefore(today)) {
-      return InvoiceStatus.OVERDUE;
     }
     if (today.isAfter(invoice.getClosingDate())) {
       return InvoiceStatus.CLOSED;

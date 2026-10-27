@@ -155,6 +155,95 @@ class ManualEntriesIT extends PostgresTestBase {
   }
 
   @Test
+  void saldoManualAjustaSomenteLancamentosAPartirDaReferenciaEExpoeOsDoisSaldos() throws Exception {
+    String cash = createAccount("CASH", "Carteira", "100.00");
+    String bank = createAccount("BANK", "Conta Casa", "500.00");
+
+    createTransactionOn("DEBIT", cash, "999.00", "Antes da referência", "2026-10-22", null);
+    createTransactionOn("CREDIT", cash, "50.00", "No dia da referência", "2026-10-23", null);
+    createTransactionOn("DEBIT", cash, "20.00", "Depois da referência", "2026-10-24", null);
+    createTransactionOn("TRANSFER", cash, "30.00", "Para banco", "2026-10-24", bank);
+
+    JsonNode cashView = account(cash);
+    assertThat(cashView.path("referenceBalance").asString()).isEqualTo("100.00");
+    assertThat(cashView.path("currentBalance").asString()).isEqualTo("100.00");
+
+    JsonNode bankView = account(bank);
+    assertThat(bankView.path("referenceBalance").asString()).isEqualTo("500.00");
+    assertThat(bankView.path("currentBalance").asString()).isEqualTo("530.00");
+
+    JsonNode summary =
+        json(
+            alice
+                .get("/api/v1/dashboard/summary?from=2026-10-01&to=2026-10-31")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(summary.path("currentBalance").asString()).isEqualTo("1630.00");
+  }
+
+  @Test
+  void filtrosDeCategoriaEFaixaDeValorRespeitamPaginacao() throws Exception {
+    String cash = createAccount("CASH", "Filtros", "1000.00");
+    String category =
+        json(alice
+                .post("/api/v1/categories", Map.of("name", "Categoria filtro", "kind", "EXPENSE"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+            .path("id")
+            .asString();
+    createTransaction("DEBIT", cash, "10.00", "Dez", null, null, null);
+    createTransaction("DEBIT", cash, "50.00", "Cinquenta", null, null, category);
+    createTransaction("DEBIT", cash, "55.00", "Cinquenta e cinco", null, null, null);
+    createTransaction("CREDIT", cash, "57.00", "Cinquenta e sete", null, null, null);
+    createTransaction("CREDIT", cash, "100.00", "Cem", null, null, null);
+    createTransaction("CREDIT", cash, "200.00", "Duzentos", null, null, null);
+
+    JsonNode firstPage =
+        json(
+            alice
+                .get("/api/v1/transactions?limit=1&minAmount=55&maxAmount=57")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(firstPage.path("items")).hasSize(1);
+    assertThat(firstPage.path("hasMore").asBoolean()).isTrue();
+
+    JsonNode secondPage =
+        json(
+            alice
+                .get(
+                    "/api/v1/transactions?limit=1&minAmount=55&maxAmount=57&cursor="
+                        + firstPage.path("nextCursor").asString())
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(secondPage.path("items")).hasSize(1);
+    assertThat(secondPage.path("hasMore").asBoolean()).isFalse();
+
+    JsonNode byCategory =
+        json(
+            alice
+                .get("/api/v1/transactions?limit=100&categoryId=" + category)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(byCategory.path("items")).hasSize(1);
+    assertThat(byCategory.path("items").get(0).path("description").asString())
+        .isEqualTo("Cinquenta");
+
+    alice
+        .get("/api/v1/transactions?minAmount=100&maxAmount=50")
+        .andExpect(status().isUnprocessableEntity());
+  }
+
+  @Test
   void contaManualDesativadaNaoRecebeLancamentosETipoPermaneceImutavel() throws Exception {
     String cash = createAccount("CASH", "Carteira", "100.00");
     alice
@@ -271,6 +360,33 @@ class ManualEntriesIT extends PostgresTestBase {
     assertThat(aliceCash).isNotEqualTo(bobCash);
   }
 
+  @Test
+  void correcaoDeTransferenciaNaoPermiteAlterarValorOuDataDeUmaPerna() throws Exception {
+    String cash = createAccount("CASH", "Carteira transferência", "100.00");
+    String bank = createAccount("BANK", "Conta transferência", "0.00");
+    JsonNode transfer =
+        createTransactionOn("TRANSFER", cash, "30.00", "Para banco", "2026-10-24", bank);
+    String legId = transfer.path("id").asString();
+
+    alice
+        .patch("/api/v1/transactions/" + legId, Map.of("amount", "40.00"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CONFLICT"));
+    alice
+        .patch("/api/v1/transactions/" + legId, Map.of("postedOn", "2026-10-25"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CONFLICT"));
+
+    alice
+        .patch("/api/v1/transactions/" + legId, Map.of("description", "Para banco corrigido"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.description").value("Para banco corrigido"));
+
+    JsonNode bankLeg = transactionsForAccount(bank).path("items").get(0);
+    assertThat(bankLeg.path("amount").asString()).isEqualTo("30.00");
+    assertThat(bankLeg.path("postedOn").asString()).isEqualTo("2026-10-24");
+  }
+
   private String createAccount(String type, String alias, String balance) throws Exception {
     return createAccount(type, alias, balance, alice);
   }
@@ -292,6 +408,32 @@ class ManualEntriesIT extends PostgresTestBase {
             .getResponse()
             .getContentAsString();
     return json(body).path("id").asString();
+  }
+
+  private JsonNode createTransactionOn(
+      String type,
+      String accountId,
+      String amount,
+      String description,
+      String postedOn,
+      String transferAccountId)
+      throws Exception {
+    Map<String, Object> request = request(type, accountId, amount, description, null);
+    request.put("postedOn", postedOn);
+    if (transferAccountId != null) {
+      request.put("transferAccountId", transferAccountId);
+    }
+    return create(request);
+  }
+
+  private JsonNode account(String accountId) throws Exception {
+    return json(
+        alice
+            .get("/api/v1/accounts/" + accountId)
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
   private JsonNode createTransaction(

@@ -39,7 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
  * CRUD de metas e composição da visão com progresso e histórico.
  *
  * <p>Não há qualquer efeito financeiro: metas apenas leem agregações e alocações explícitas. As
- * únicas escritas são a própria meta, suas alocações e o snapshot diário de progresso.
+ * únicas escritas são a própria meta, suas alocações e o snapshot de progresso (um por meta/dia,
+ * gravado sob demanda).
  */
 @Service
 public class GoalService {
@@ -110,11 +111,15 @@ public class GoalService {
     FinancialGoal goal = requireGoal(userId, goalId);
     ParsedGoal parsed = parse(request);
     BigDecimal oldTarget = progressService.targetAmount(goal);
+    List<GoalAllocation> previousAllocations =
+        allocationRepository.findByUserIdAndGoalIdOrderByOrdinalAscIdAsc(userId, goalId);
     boolean materialChange =
         oldTarget.compareTo(parsed.target()) != 0
             || !Objects.equals(goal.getTargetDate(), parsed.targetDate())
             || goal.getType() != parsed.type()
-            || goal.getProgressRule() != parsed.progressRule();
+            || goal.getProgressRule() != parsed.progressRule()
+            || !allocationSignatures(userId, previousAllocations)
+                .equals(plannedSignatures(parsed.allocations()));
 
     apply(goal, parsed);
     if (materialChange) {
@@ -220,20 +225,15 @@ public class GoalService {
 
     GoalStatus status =
         frozen ? goal.getStatus() : progressService.effectiveStatus(goal, percentage);
-    BigDecimal denominator =
-        goal.getProgressRule() == GoalProgressRule.DEBT_REDUCTION
-            ? progressService.initialValue(goal)
-            : target;
-    BigDecimal unallocated = nonNegative(denominator.subtract(current));
-    BigDecimal excess =
-        goal.getProgressRule() == GoalProgressRule.DEBT_REDUCTION
-            ? nonNegative(current.subtract(denominator))
-            : nonNegative(current.subtract(target));
+    BigDecimal unallocated = nonNegative(target.subtract(current));
+    BigDecimal excess = nonNegative(current.subtract(target));
 
     Map<UUID, BigDecimal> contributionByAllocation = new LinkedHashMap<>();
+    Map<UUID, Boolean> capacityByAllocation = new LinkedHashMap<>();
     for (GoalProgressService.AllocationContribution contribution :
-        progressService.contributions(target, allocations)) {
+        progressService.contributionsForProgress(userId, goal, target, allocations)) {
       contributionByAllocation.put(contribution.allocation().getId(), contribution.contribution());
+      capacityByAllocation.put(contribution.allocation().getId(), contribution.capacityExceeded());
     }
 
     List<GoalAllocationView> allocationViews = new ArrayList<>();
@@ -243,6 +243,7 @@ public class GoalService {
               allocation.getId(),
               allocation.getSourceType().name(),
               allocation.getSourceId(),
+              progressService.sourceName(userId, allocation),
               allocation.getAllocationMode().name(),
               allocation.getAllocatedAmountEnc() == null
                   ? null
@@ -260,19 +261,20 @@ public class GoalService {
                       .multiply(HUNDRED)
                       .stripTrailingZeros()
                       .toPlainString(),
-              format(contributionByAllocation.getOrDefault(allocation.getId(), BigDecimal.ZERO))));
+              format(contributionByAllocation.getOrDefault(allocation.getId(), BigDecimal.ZERO)),
+              capacityByAllocation.getOrDefault(allocation.getId(), false)));
     }
 
     return new GoalView(
         goal.getId(),
         decryptText(userId, goal.getId(), GOAL_TABLE, "name", goal.getNameEnc()),
         decryptText(userId, goal.getId(), GOAL_TABLE, "description", goal.getDescriptionEnc()),
+        decryptText(userId, goal.getId(), GOAL_TABLE, "notes", goal.getNotesEnc()),
         goal.getType().name(),
         format(target),
         goal.getTargetDate(),
         status.name(),
         goal.getProgressRule().name(),
-        goal.getInitialValueEnc() == null ? null : format(progressService.initialValue(goal)),
         goal.getChangedAt(),
         goal.getCreatedAt(),
         format(current),
@@ -337,6 +339,7 @@ public class GoalService {
   private ParsedGoal parse(GoalRequest request) {
     String name = requireText(request.name(), "name", 120, "Informe o nome da meta.");
     String description = optionalText(request.description(), "description", 500);
+    String notes = optionalText(request.notes(), "notes", 2000);
     GoalType type = parseEnum(GoalType.class, request.type(), "type", "Tipo de meta inválido.");
     BigDecimal target = parsePositiveMoney(request.targetAmount(), "targetAmount");
     GoalProgressRule rule =
@@ -345,21 +348,13 @@ public class GoalService {
             request.progressRule(),
             "progressRule",
             "Regra de progresso inválida.");
-    if (type == GoalType.DEBT_REDUCTION && rule != GoalProgressRule.DEBT_REDUCTION) {
-      throw new ValidationException(
-          "progressRule", "Metas de redução de dívida exigem a regra DEBT_REDUCTION.");
-    }
-    BigDecimal initial =
-        rule == GoalProgressRule.DEBT_REDUCTION
-            ? parsePositiveMoney(request.initialValue(), "initialValue")
-            : null;
     List<PlannedAllocation> allocations = parseAllocations(request.allocations());
     if (rule == GoalProgressRule.NET_WORTH && !allocations.isEmpty()) {
       throw new ValidationException(
           "allocations", "Metas de patrimônio líquido não usam alocações explícitas.");
     }
     return new ParsedGoal(
-        name, description, type, target, request.targetDate(), rule, initial, allocations);
+        name, description, notes, type, target, request.targetDate(), rule, allocations);
   }
 
   private List<PlannedAllocation> parseAllocations(List<GoalAllocationRequest> requests) {
@@ -436,13 +431,60 @@ public class GoalService {
         parsed.description() == null
             ? null
             : encrypt(userId, id, GOAL_TABLE, "description", parsed.description()),
+        parsed.notes() == null ? null : encrypt(userId, id, GOAL_TABLE, "notes", parsed.notes()),
         parsed.type(),
         encrypt(userId, id, GOAL_TABLE, "target_amount", format(parsed.target())),
         parsed.targetDate(),
-        parsed.progressRule(),
-        parsed.initial() == null
-            ? null
-            : encrypt(userId, id, GOAL_TABLE, "initial_value", format(parsed.initial())));
+        parsed.progressRule());
+  }
+
+  private List<String> allocationSignatures(UUID userId, List<GoalAllocation> allocations) {
+    return allocations.stream()
+        .map(
+            allocation -> {
+              String amount =
+                  allocation.getAllocatedAmountEnc() == null
+                      ? ""
+                      : format(
+                          decryptAmount(
+                              userId,
+                              allocation.getId(),
+                              ALLOCATION_TABLE,
+                              "allocated_amount",
+                              allocation.getAllocatedAmountEnc()));
+              String ratio =
+                  allocation.getAllocationRatio() == null
+                      ? ""
+                      : allocation.getAllocationRatio().stripTrailingZeros().toPlainString();
+              return allocation.getSourceType()
+                  + "|"
+                  + allocation.getSourceId()
+                  + "|"
+                  + allocation.getAllocationMode()
+                  + "|"
+                  + amount
+                  + "|"
+                  + ratio;
+            })
+        .toList();
+  }
+
+  private static List<String> plannedSignatures(List<PlannedAllocation> allocations) {
+    return allocations.stream()
+        .map(
+            allocation ->
+                allocation.sourceType()
+                    + "|"
+                    + allocation.sourceId()
+                    + "|"
+                    + allocation.mode()
+                    + "|"
+                    + (allocation.amount() == null ? "" : format(allocation.amount()))
+                    + "|"
+                    + (allocation.ratio() == null
+                        ? ""
+                        : allocation.ratio().stripTrailingZeros().toPlainString()))
+        .toList();
   }
 
   private List<GoalAllocation> saveAllocations(
@@ -593,10 +635,10 @@ public class GoalService {
   private record ParsedGoal(
       String name,
       String description,
+      String notes,
       GoalType type,
       BigDecimal target,
       LocalDate targetDate,
       GoalProgressRule progressRule,
-      BigDecimal initial,
       List<PlannedAllocation> allocations) {}
 }

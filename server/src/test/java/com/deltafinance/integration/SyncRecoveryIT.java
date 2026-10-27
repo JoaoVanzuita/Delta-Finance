@@ -27,7 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Falhas, lista vazia, SOURCE_REMOVED/RESTORE e PENDING→POSTED sem duplicação (T072). */
+/** Falhas, lista vazia, SOURCE_REMOVED automático/restauração e PENDING→POSTED sem duplicação. */
 @AutoConfigureMockMvc
 class SyncRecoveryIT extends PostgresTestBase {
 
@@ -96,7 +96,7 @@ class SyncRecoveryIT extends PostgresTestBase {
   }
 
   @Test
-  void ausenciaConclusivaMarcaSourceRemovedEConfirmaPreservandoLinha() throws Exception {
+  void ausenciaConclusivaRemoveAutomaticamenteEPreservaHistorico() throws Exception {
     syncAndProcess();
     String removedId = transactionIdByDescription("Mercado");
 
@@ -107,46 +107,20 @@ class SyncRecoveryIT extends PostgresTestBase {
     assertThat(transactions.path("items").size()).isEqualTo(2);
     JsonNode removed = findById(transactions, removedId);
     assertThat(removed.path("status").asString()).isEqualTo("SOURCE_REMOVED");
+    assertThat(removed.path("reconciliationState").asString()).isEqualTo("SOURCE_REMOVED");
 
-    alice
-        .post(
-            "/api/v1/transactions/" + removedId + "/source-removal",
-            Map.of("action", "CONFIRM_REMOVAL", "reason", "Não reconheço a compra"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value("SOURCE_REMOVED"));
-
-    // Confirmação não apaga a linha nem duplica o histórico.
-    assertThat(transactions().path("items").size()).isEqualTo(2);
-  }
-
-  @Test
-  void restoreValidaOrigemERetornaAosTotaisSemDuplicar() throws Exception {
-    syncAndProcess();
-    String removedId = transactionIdByDescription("Mercado");
-
-    PLUGGY.removeTransaction("acc-alice", "tx-2");
-    syncAndProcess();
-    assertThat(findById(transactions(), removedId).path("status").asString())
-        .isEqualTo("SOURCE_REMOVED");
-
-    // Ainda ausente na origem: restauração é recusada.
-    alice
-        .post("/api/v1/transactions/" + removedId + "/source-removal", Map.of("action", "RESTORE"))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.code").value("SOURCE_REMOVAL_CONFLICT"));
-
+    // Reaparecer na origem restaura a mesma linha e o status atual, sem confirmação manual.
     PLUGGY.addTransaction(
         "acc-alice",
         new TransactionFixture(
-            "tx-2", "acc-alice", "Mercado", "-30.00", "2026-10-21", "POSTED", null));
-    alice
-        .post("/api/v1/transactions/" + removedId + "/source-removal", Map.of("action", "RESTORE"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value("POSTED"));
+            "tx-2", "acc-alice", "Mercado", "-30.00", "2026-10-21", "PENDING", null));
+    syncAndProcess();
 
-    JsonNode transactions = transactions();
-    assertThat(transactions.path("items").size()).isEqualTo(2);
-    assertThat(findById(transactions, removedId).path("status").asString()).isEqualTo("POSTED");
+    JsonNode restoredTransactions = transactions();
+    assertThat(restoredTransactions.path("items").size()).isEqualTo(2);
+    JsonNode restored = findById(restoredTransactions, removedId);
+    assertThat(restored.path("status").asString()).isEqualTo("PENDING");
+    assertThat(restored.path("reconciliationState").asString()).isEqualTo("NONE");
   }
 
   @Test
@@ -234,6 +208,25 @@ class SyncRecoveryIT extends PostgresTestBase {
     JsonNode transactions = transactions();
     assertThat(transactions.path("items").size()).isEqualTo(3);
     assertThat(findById(transactions, transactionId).path("status").asString()).isEqualTo("POSTED");
+  }
+
+  @Test
+  void leituraTruncadaNaoMarcaAusencias() throws Exception {
+    syncAndProcess();
+    String mercadoId = transactionIdByDescription("Mercado");
+
+    // A origem devolve apenas um item e um cursor que não pode ser interpretado.
+    PLUGGY.setTransactions(
+        "acc-alice",
+        List.of(
+            new TransactionFixture(
+                "tx-1", "acc-alice", "Padaria", "-20.00", "2026-10-20", "POSTED", null)));
+    PLUGGY.setTransactionsNext("acc-alice", "http://[cursor-invalido");
+    syncAndProcess();
+
+    JsonNode mercado = findById(transactions(), mercadoId);
+    assertThat(mercado.path("status").asString()).isEqualTo("POSTED");
+    assertThat(mercado.path("reconciliationState").asString()).isEqualTo("NONE");
   }
 
   @Test

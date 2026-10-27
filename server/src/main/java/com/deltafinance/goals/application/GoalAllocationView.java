@@ -7,7 +7,9 @@ public record GoalAllocationView(
     UUID id,
     String sourceType,
     UUID sourceId,
+    String sourceName,
     String allocationMode,
     String allocatedAmount,
     String percentage,
-    String contributionAmount) {}
+    String contributionAmount,
+    boolean capacityExceeded) {}

@@ -11,6 +11,7 @@ import com.deltafinance.support.PluggyStub;
 import com.deltafinance.support.PluggyStub.AccountFixture;
 import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,17 +68,11 @@ class ItemIdChangeIT extends PostgresTestBase {
         "acc-1",
         new TransactionFixture("tx-2", "acc-1", "Mercado", "-30.00", "2026-10-21", "POSTED", null));
 
-    // Após nova autorização o itemId muda, mas contas e transações mantêm os IDs externos.
+    // Após nova autorização o itemId e os IDs externos mudam; o fingerprint reconcilia.
     PLUGGY.addItem("item-new-0002", "Banco Alfa", "UPDATED");
     PLUGGY.addAccount(
         "item-new-0002",
         new AccountFixture("acc-1", "BANK", "CHECKING_ACCOUNT", "Conta Alfa", "1200.00", null));
-    PLUGGY.addTransaction(
-        "acc-1",
-        new TransactionFixture("tx-1", "acc-1", "Padaria", "-20.00", "2026-10-20", "POSTED", null));
-    PLUGGY.addTransaction(
-        "acc-1",
-        new TransactionFixture("tx-2", "acc-1", "Mercado", "-30.00", "2026-10-21", "POSTED", null));
     alice = new AuthTestClient(mockMvc, jsonMapper).csrf();
     alice.register(ALICE, PASSWORD).login(ALICE, PASSWORD);
     alice
@@ -99,10 +94,16 @@ class ItemIdChangeIT extends PostgresTestBase {
   void trocaDeItemIdMantemConexaoContasETransacoesSemDuplicar() throws Exception {
     String accountBefore = accounts().path("items").get(0).path("id").asString();
     String padariaBefore = transactionId("Padaria");
-    PLUGGY.addTransaction(
+    // O item novo retorna os mesmos lançamentos com IDs externos diferentes, mais tx-3.
+    PLUGGY.setTransactions(
         "acc-1",
-        new TransactionFixture(
-            "tx-3", "acc-1", "Farmácia", "-15.00", "2026-10-22", "POSTED", null));
+        List.of(
+            new TransactionFixture(
+                "tx-new-1", "acc-1", "Padaria", "-20.00", "2026-10-20", "POSTED", null),
+            new TransactionFixture(
+                "tx-new-2", "acc-1", "Mercado", "-30.00", "2026-10-21", "POSTED", null),
+            new TransactionFixture(
+                "tx-3", "acc-1", "Farmácia", "-15.00", "2026-10-22", "POSTED", null)));
 
     alice
         .patch("/api/v1/connections/" + connectionId, Map.of("itemId", "item-new-0002"))
@@ -125,6 +126,14 @@ class ItemIdChangeIT extends PostgresTestBase {
     assertThat(transactions.path("items")).hasSize(3);
     assertThat(transactionId("Padaria")).isEqualTo(padariaBefore);
     assertThat(transactions.toString()).contains("Farmácia");
+
+    JsonNode runs = syncRuns();
+    assertThat(runs.path("items")).hasSizeGreaterThanOrEqualTo(2);
+    assertThat(runs.path("items").get(0).path("status").asString()).isEqualTo("SUCCESS");
+    alice
+        .get("/api/v1/integrations/pluggy")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("SYNCED"));
 
     // PATCH repetido e sincronização subsequente continuam idempotentes.
     alice
@@ -151,6 +160,16 @@ class ItemIdChangeIT extends PostgresTestBase {
     assertThat(connections.path("items")).hasSize(1);
     assertThat(connections.path("items").get(0).path("itemIdMasked").asString()).isEqualTo(before);
     assertThat(transactions().path("items")).hasSize(2);
+  }
+
+  private JsonNode syncRuns() throws Exception {
+    return json(
+        alice
+            .get("/api/v1/sync/runs?limit=20")
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
   private JsonNode connections() throws Exception {

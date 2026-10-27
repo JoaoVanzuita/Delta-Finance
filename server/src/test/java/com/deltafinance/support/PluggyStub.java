@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
@@ -47,13 +49,19 @@ public final class PluggyStub {
   private final Map<String, List<AccountFixture>> accountsByItem = new ConcurrentHashMap<>();
   private final Map<String, List<TransactionFixture>> transactionsByAccount =
       new ConcurrentHashMap<>();
+  private final Map<String, Map<String, Object>> installmentMetadataByTransaction =
+      new ConcurrentHashMap<>();
   private final List<RecordedRequest> requests = new CopyOnWriteArrayList<>();
   private final List<String> dataApiKeys = new CopyOnWriteArrayList<>();
   private final Set<String> validApiKeys = ConcurrentHashMap.newKeySet();
   private final Map<String, Integer> failuresRemaining = new ConcurrentHashMap<>();
   private final Map<String, Integer> failureStatus = new ConcurrentHashMap<>();
+  private final Map<String, String> nextByAccount = new ConcurrentHashMap<>();
   private final AtomicInteger authCalls = new AtomicInteger();
   private volatile boolean rotateKeys;
+  private volatile String blockedPathPrefix;
+  private volatile CountDownLatch blockedArrived = new CountDownLatch(0);
+  private volatile CountDownLatch blockedRelease = new CountDownLatch(0);
   private final JsonMapper jsonMapper = JsonMapper.shared();
 
   private record ItemFixture(
@@ -86,17 +94,43 @@ public final class PluggyStub {
     items.clear();
     accountsByItem.clear();
     transactionsByAccount.clear();
+    installmentMetadataByTransaction.clear();
     requests.clear();
     dataApiKeys.clear();
     validApiKeys.clear();
     failuresRemaining.clear();
     failureStatus.clear();
+    nextByAccount.clear();
     authCalls.set(0);
     rotateKeys = false;
+    blockedPathPrefix = null;
+    blockedRelease.countDown();
+    blockedArrived = new CountDownLatch(0);
+    blockedRelease = new CountDownLatch(0);
   }
 
   public void registerClient(String clientId, String clientSecret) {
     clients.put(clientId, clientSecret);
+  }
+
+  /** Bloqueia requisições cujo path começa pelo prefixo, para testar cancelamento/timeout. */
+  public void blockPath(String pathPrefix) {
+    blockedPathPrefix = pathPrefix;
+    blockedArrived = new CountDownLatch(1);
+    blockedRelease = new CountDownLatch(1);
+  }
+
+  public boolean awaitBlocked(int seconds) throws InterruptedException {
+    return blockedArrived.await(seconds, TimeUnit.SECONDS);
+  }
+
+  public void releaseBlocked() {
+    blockedRelease.countDown();
+  }
+
+  /** Força o próximo cursor de transações da conta; útil para simular leitura truncada. */
+  public void setTransactionsNext(String accountId, String next) {
+    nextByAccount.put(accountId, next);
   }
 
   public void addItem(String itemId, String institution, String status) {
@@ -149,6 +183,13 @@ public final class PluggyStub {
     transactionsByAccount
         .computeIfAbsent(accountId, ignored -> new CopyOnWriteArrayList<>())
         .add(transaction);
+  }
+
+  /** Sobrescreve o creditCardMetadata devolvido para uma transação específica. */
+  public void setInstallments(String externalTransactionId, int installmentNumber, int total) {
+    installmentMetadataByTransaction.put(
+        externalTransactionId,
+        Map.of("installmentNumber", installmentNumber, "totalInstallments", total));
   }
 
   public void setTransactions(String accountId, List<TransactionFixture> transactions) {
@@ -222,6 +263,16 @@ public final class PluggyStub {
       String apiKey = request.getHeader("X-API-KEY");
       if (apiKey != null) {
         dataApiKeys.add(apiKey);
+      }
+
+      String blockedPrefix = blockedPathPrefix;
+      if (blockedPrefix != null && path.startsWith(blockedPrefix)) {
+        blockedArrived.countDown();
+        try {
+          blockedRelease.await(15, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+          Thread.currentThread().interrupt();
+        }
       }
 
       MockResponse failure = failure(path);
@@ -334,10 +385,14 @@ public final class PluggyStub {
         body.put("status", transaction.status());
         body.put("category", transaction.category());
         body.put("currencyCode", "BRL");
-        body.put("creditCardMetadata", Map.of("totalInstallments", 1, "installmentNumber", 1));
+        body.put(
+            "creditCardMetadata",
+            installmentMetadataByTransaction.getOrDefault(
+                transaction.externalId(), Map.of("totalInstallments", 1, "installmentNumber", 1)));
         results.add(body);
       }
-      return response(200, Map.of("results", results, "next", ""));
+      return response(
+          200, Map.of("results", results, "next", nextByAccount.getOrDefault(accountId, "")));
     }
 
     private MockResponse response(int status, Object body) {

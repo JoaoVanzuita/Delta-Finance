@@ -41,14 +41,12 @@ export const TYPE_LABELS: Record<string, string> = {
   EMERGENCY_FUND: 'Reserva de emergência',
   TRAVEL: 'Viagem',
   PLANNED_PURCHASE: 'Compra planejada',
-  DEBT_REDUCTION: 'Redução de dívida',
   NET_WORTH: 'Patrimônio líquido',
 }
 
 export const RULE_LABELS: Record<string, string> = {
   ALLOCATIONS: 'Alocações explícitas',
   NET_WORTH: 'Patrimônio líquido',
-  DEBT_REDUCTION: 'Redução de dívida',
 }
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -56,7 +54,6 @@ export const SOURCE_LABELS: Record<string, string> = {
   ACCOUNT: 'Conta',
   INVESTMENT: 'Investimento',
   MANUAL_ASSET: 'Ativo manual',
-  MANUAL_LIABILITY: 'Passivo manual',
 }
 
 export const MODE_LABELS: Record<string, string> = {

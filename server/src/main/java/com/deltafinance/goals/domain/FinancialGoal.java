@@ -14,9 +14,8 @@ import java.util.UUID;
 /**
  * Meta financeira.
  *
- * <p>Nome, descrição, valor-alvo e dívida inicial são cifrados. Tipo, estado, regra, prazo e {@code
- * changed_at} ficam em claro. A meta nunca movimenta dinheiro, cria ordens ou executa ação
- * bancária.
+ * <p>Nome, descrição e valor-alvo são cifrados. Tipo, estado, regra, prazo e {@code changed_at}
+ * ficam em claro. A meta nunca movimenta dinheiro, cria ordens ou executa ação bancária.
  */
 @Entity
 @Table(name = "financial_goal")
@@ -30,6 +29,9 @@ public class FinancialGoal extends BaseEntity {
 
   @Column(name = "description_enc", columnDefinition = "bytea")
   private byte[] descriptionEnc;
+
+  @Column(name = "notes_enc", columnDefinition = "bytea")
+  private byte[] notesEnc;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "type", nullable = false, length = 32)
@@ -48,9 +50,6 @@ public class FinancialGoal extends BaseEntity {
   @Enumerated(EnumType.STRING)
   @Column(name = "progress_rule", nullable = false, length = 24)
   private GoalProgressRule progressRule;
-
-  @Column(name = "initial_value_enc", columnDefinition = "bytea")
-  private byte[] initialValueEnc;
 
   @Column(name = "changed_at")
   private Instant changedAt;
@@ -72,18 +71,18 @@ public class FinancialGoal extends BaseEntity {
   public void apply(
       byte[] nameEnc,
       byte[] descriptionEnc,
+      byte[] notesEnc,
       GoalType type,
       byte[] targetAmountEnc,
       LocalDate targetDate,
-      GoalProgressRule progressRule,
-      byte[] initialValueEnc) {
+      GoalProgressRule progressRule) {
     this.nameEnc = Objects.requireNonNull(nameEnc, "nameEnc");
     this.descriptionEnc = descriptionEnc;
+    this.notesEnc = notesEnc;
     this.type = Objects.requireNonNull(type, "type");
     this.targetAmountEnc = Objects.requireNonNull(targetAmountEnc, "targetAmountEnc");
     this.targetDate = targetDate;
     this.progressRule = Objects.requireNonNull(progressRule, "progressRule");
-    this.initialValueEnc = initialValueEnc;
   }
 
   public void markChanged(Instant changedAt) {
@@ -116,6 +115,10 @@ public class FinancialGoal extends BaseEntity {
     return descriptionEnc;
   }
 
+  public byte[] getNotesEnc() {
+    return notesEnc;
+  }
+
   public GoalType getType() {
     return type;
   }
@@ -134,10 +137,6 @@ public class FinancialGoal extends BaseEntity {
 
   public GoalProgressRule getProgressRule() {
     return progressRule;
-  }
-
-  public byte[] getInitialValueEnc() {
-    return initialValueEnc;
   }
 
   public Instant getChangedAt() {

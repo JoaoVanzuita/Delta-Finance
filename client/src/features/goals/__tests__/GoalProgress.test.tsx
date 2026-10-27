@@ -17,12 +17,12 @@ interface GoalFixture {
   id: string
   name: string
   description?: string
-  type: 'EMERGENCY_FUND' | 'TRAVEL' | 'PLANNED_PURCHASE' | 'DEBT_REDUCTION' | 'NET_WORTH'
+  notes?: string
+  type: 'EMERGENCY_FUND' | 'TRAVEL' | 'PLANNED_PURCHASE' | 'NET_WORTH'
   targetAmount: string
   targetDate?: string
   status: 'ACTIVE' | 'ACHIEVED' | 'PAUSED' | 'ARCHIVED' | 'OVERDUE' | 'CHANGED'
-  progressRule: 'ALLOCATIONS' | 'NET_WORTH' | 'DEBT_REDUCTION'
-  initialValue?: string
+  progressRule: 'ALLOCATIONS' | 'NET_WORTH'
   currentValue: string
   percentage: string
   remainingAmount: string
@@ -88,6 +88,38 @@ function stubApi(initialGoals: GoalFixture[]) {
     if (url.includes('/auth/me')) return jsonResponse(USER)
     if (url.endsWith('/goals') && method === 'GET') {
       return jsonResponse({ items: goals })
+    }
+    if (url.endsWith('/accounts')) {
+      return jsonResponse({
+        items: [
+          {
+            id: 'acc-1',
+            type: 'BANK',
+            origin: 'MANUAL',
+            alias: 'Conta Alfa',
+            currency: 'BRL',
+            status: 'ACTIVE',
+          },
+          {
+            id: 'acc-usd',
+            type: 'BANK',
+            origin: 'MANUAL',
+            alias: 'Conta Dólar',
+            currency: 'USD',
+            status: 'ACTIVE',
+          },
+        ],
+      })
+    }
+    if (url.includes('/investments/positions')) {
+      return jsonResponse({
+        items: [{ id: 'pos-1', assetName: 'Fundo imobiliário', ticker: 'HGLG11' }],
+      })
+    }
+    if (url.endsWith('/wealth/manual-items')) {
+      return jsonResponse({
+        items: [{ id: 'asset-1', kind: 'ASSET', description: 'Reserva manual' }],
+      })
     }
     if (url.endsWith('/goals') && method === 'POST') {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -175,6 +207,50 @@ describe('metas financeiras', () => {
     expect(within(card).getByText(/24\/10\/2026/)).toBeInTheDocument()
   })
 
+  it('seleciona contas em BRL e ativos manuais como fonte da alocação', async () => {
+    stubApi([])
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Metas' })
+    await user.click(screen.getByRole('button', { name: 'Adicionar alocação' }))
+    await user.selectOptions(screen.getByLabelText('Origem da alocação'), 'ACCOUNT')
+
+    const accountSource = await screen.findByLabelText('Fonte')
+    expect(within(accountSource).getByRole('option', { name: 'Conta Alfa' })).toBeInTheDocument()
+    expect(within(accountSource).queryByText('Conta Dólar')).not.toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Origem da alocação'), 'MANUAL_ASSET')
+    const assetSource = await screen.findByLabelText('Fonte')
+    expect(within(assetSource).getByRole('option', { name: 'Reserva manual' })).toBeInTheDocument()
+  })
+
+  it('mostra observações, nome da fonte e aviso de capacidade excedida', async () => {
+    stubApi([
+      goal({
+        notes: 'Guardar para a viagem de 2027.',
+        allocations: [
+          {
+            id: 'alloc-1',
+            sourceType: 'ACCOUNT',
+            sourceId: 'acc-1',
+            sourceName: 'Conta Alfa',
+            allocationMode: 'FIXED_AMOUNT',
+            allocatedAmount: '800.00',
+            contributionAmount: '800.00',
+            capacityExceeded: true,
+          },
+        ],
+      }),
+    ])
+    renderPage()
+
+    const card = await screen.findByRole('article', { name: 'Reserva de emergência' })
+    expect(within(card).getByText('Guardar para a viagem de 2027.')).toBeInTheDocument()
+    expect(within(card).getByText(/Conta Alfa/)).toBeInTheDocument()
+    expect(within(card).getByText(/Capacidade da fonte excedida/)).toBeInTheDocument()
+  })
+
   it('distingue todos os estados e mostra excesso sobre a meta', async () => {
     stubApi([
       goal({ id: 'g1', name: 'Ativa', status: 'ACTIVE' }),
@@ -217,6 +293,7 @@ describe('metas financeiras', () => {
     await user.type(screen.getByLabelText('Nome da meta'), 'Viagem')
     await user.selectOptions(screen.getByLabelText('Tipo'), 'TRAVEL')
     await user.type(screen.getByLabelText('Valor-alvo'), '1000.00')
+    await user.type(screen.getByLabelText('Observações'), 'Reserva para 2027')
     await user.selectOptions(screen.getByLabelText('Regra de progresso'), 'ALLOCATIONS')
     await user.click(screen.getByRole('button', { name: 'Adicionar alocação' }))
     await user.selectOptions(screen.getByLabelText('Modo da alocação'), 'PERCENTAGE')
@@ -230,6 +307,7 @@ describe('metas financeiras', () => {
       expect(post).toBeDefined()
       expect(JSON.parse(String(post?.[1]?.body))).toEqual({
         name: 'Viagem',
+        notes: 'Reserva para 2027',
         type: 'TRAVEL',
         targetAmount: '1000.00',
         progressRule: 'ALLOCATIONS',

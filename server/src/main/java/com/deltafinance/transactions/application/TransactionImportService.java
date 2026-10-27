@@ -1,5 +1,7 @@
 package com.deltafinance.transactions.application;
 
+import com.deltafinance.accounts.domain.AccountStatus;
+import com.deltafinance.accounts.domain.AccountType;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
 import com.deltafinance.categories.domain.Category;
@@ -15,6 +17,7 @@ import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.crypto.IndexHmacService;
+import com.deltafinance.shared.sync.SyncCancellationRegistry;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.domain.ExternalIdentityHistory;
 import com.deltafinance.transactions.domain.ExternalIdentityHistoryRepository;
@@ -34,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -45,7 +49,10 @@ import tools.jackson.databind.JsonNode;
  * external_identity_history}. {@code PENDING→POSTED} atualiza o mesmo registro.
  *
  * <p>A reconciliação de ausências só ocorre em uma leitura conclusiva e não vazia: transações que
- * deixaram de aparecer na janela são marcadas como {@code SOURCE_REMOVED}, nunca apagadas.
+ * deixaram de aparecer na janela ficam com {@code status=SOURCE_REMOVED} e {@code
+ * reconciliation_state=SOURCE_REMOVED}, saindo imediatamente dos totais correntes. Nenhuma linha é
+ * apagada; se o mesmo identificador voltar em uma leitura posterior, a marca é limpa e o status
+ * efetivo é restaurado automaticamente.
  */
 @Service
 public class TransactionImportService {
@@ -53,17 +60,19 @@ public class TransactionImportService {
   private static final String TABLE = "transaction";
   private static final String SOURCE = "PLUGGY";
   private static final int MONTHS_INITIAL = 12;
-  private static final int REFUND_WINDOW_DAYS = 90;
 
   private final TransactionRepository transactionRepository;
   private final FinancialAccountRepository accountRepository;
   private final CategoryRepository categoryRepository;
   private final ExternalIdentityHistoryRepository identityRepository;
+  private final RefundMatcher refundMatcher;
   private final PluggyAuthClient authClient;
   private final PluggyDataClient dataClient;
   private final CryptoService cryptoService;
   private final IndexHmacService hmacService;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
+  private final SyncCancellationRegistry cancellationRegistry;
   private final Clock clock;
 
   public TransactionImportService(
@@ -71,27 +80,45 @@ public class TransactionImportService {
       FinancialAccountRepository accountRepository,
       CategoryRepository categoryRepository,
       ExternalIdentityHistoryRepository identityRepository,
+      RefundMatcher refundMatcher,
       PluggyAuthClient authClient,
       PluggyDataClient dataClient,
       CryptoService cryptoService,
       IndexHmacService hmacService,
       AuditService auditService,
+      ApplicationEventPublisher eventPublisher,
+      SyncCancellationRegistry cancellationRegistry,
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
     this.categoryRepository = categoryRepository;
     this.identityRepository = identityRepository;
+    this.refundMatcher = refundMatcher;
     this.authClient = authClient;
     this.dataClient = dataClient;
     this.cryptoService = cryptoService;
     this.hmacService = hmacService;
     this.auditService = auditService;
+    this.eventPublisher = eventPublisher;
+    this.cancellationRegistry = cancellationRegistry;
     this.clock = clock;
   }
 
   /** Importação inicial de 12 meses por conta da conexão. */
-  public int importInitial(PluggyIntegration integration, UUID connectionId) {
-    return importRange(integration, connectionId, clock.today().minusMonths(MONTHS_INITIAL)).read();
+  public ImportStats importInitial(PluggyIntegration integration, UUID connectionId) {
+    return importInitial(integration, connectionId, false);
+  }
+
+  /**
+   * Importação inicial com controle explícito de reconciliação de identidade.
+   *
+   * <p>{@code reconcileIdentity=true} só é usado na troca de itemId, quando o ID externo pode ter
+   * mudado e o fingerprint é o único vínculo com o registro local.
+   */
+  public ImportStats importInitial(
+      PluggyIntegration integration, UUID connectionId, boolean reconcileIdentity) {
+    return importRange(
+        integration, connectionId, clock.today().minusMonths(MONTHS_INITIAL), reconcileIdentity);
   }
 
   /**
@@ -101,17 +128,33 @@ public class TransactionImportService {
    * atualização e descarte, permitindo registrar {@code sync_run} fielmente.
    */
   public ImportStats importRange(PluggyIntegration integration, UUID connectionId, LocalDate from) {
+    return importRange(integration, connectionId, from, false);
+  }
+
+  public ImportStats importRange(
+      PluggyIntegration integration, UUID connectionId, LocalDate from, boolean reconcileIdentity) {
     List<FinancialAccount> accounts =
         accountRepository.findByConnectionIdOrderByCreatedAtAsc(connectionId);
     ImportStats total = ImportStats.empty();
     for (FinancialAccount account : accounts) {
-      total = total.plus(importAccount(integration, connectionId, account, from));
+      if (account.getStatus() == AccountStatus.UNAVAILABLE) {
+        // Conta não retornada pela origem não deve voltar a ser consultada até reaparecer.
+        continue;
+      }
+      cancellationRegistry.checkpoint();
+      total =
+          total.plus(importAccount(integration, connectionId, account, from, reconcileIdentity));
     }
     return total;
   }
 
   private ImportStats importAccount(
-      PluggyIntegration integration, UUID connectionId, FinancialAccount account, LocalDate from) {
+      PluggyIntegration integration,
+      UUID connectionId,
+      FinancialAccount account,
+      LocalDate from,
+      boolean reconcileIdentity) {
+    cancellationRegistry.checkpoint();
     String externalAccountId = decryptAccountId(account);
     String apiKey = authClient.getApiKey(integration);
     PluggyModels.PluggyTransactionPage page;
@@ -126,8 +169,10 @@ public class TransactionImportService {
     int created = 0;
     int updated = 0;
     int skipped = 0;
+    int failed = 0;
     Set<byte[]> seenHashes = new HashSet<>();
     for (PluggyModels.PluggyTransaction imported : page.items()) {
+      cancellationRegistry.checkpoint();
       read++;
       if (imported.externalId() == null || imported.externalId().isBlank()) {
         skipped++;
@@ -135,11 +180,18 @@ public class TransactionImportService {
       }
       seenHashes.add(hmacService.externalIdHash(SOURCE, imported.externalId()));
       Outcome outcome =
-          upsert(integration.getUserId(), connectionId, account, externalAccountId, imported);
+          upsert(
+              integration.getUserId(),
+              connectionId,
+              account,
+              externalAccountId,
+              imported,
+              reconcileIdentity);
       switch (outcome) {
         case CREATED -> created++;
         case UPDATED -> updated++;
         case SKIPPED -> skipped++;
+        case FAILED -> failed++;
         default -> {
           // Enum fechado: nenhum outcome adicional é esperado.
         }
@@ -147,10 +199,12 @@ public class TransactionImportService {
     }
 
     // Lista vazia é inconclusiva: não marque ausências a partir dela (FR-040/FR-046).
-    if (read > 0) {
+    // Leitura truncada/cursor inválido também é inconclusiva.
+    if (read > 0 && page.complete()) {
+      cancellationRegistry.checkpoint();
       updated += markMissingAsSourceRemoved(integration.getUserId(), account, from, seenHashes);
     }
-    return new ImportStats(read, created, updated, skipped, 0);
+    return new ImportStats(read, created, updated, skipped, failed);
   }
 
   private int markMissingAsSourceRemoved(
@@ -162,7 +216,8 @@ public class TransactionImportService {
       if (candidate.getSource() != TransactionSource.IMPORTED
           || candidate.getPostedOn().isBefore(from)
           || candidate.getExternalTransactionIdHash() == null
-          || candidate.getStatus() == TransactionStatus.SOURCE_REMOVED) {
+          || candidate.getStatus() == TransactionStatus.SOURCE_REMOVED
+          || candidate.getReconciliationState() == ReconciliationState.SOURCE_REMOVED) {
         continue;
       }
       boolean seen =
@@ -172,6 +227,14 @@ public class TransactionImportService {
       if (!seen) {
         candidate.markSourceRemoved();
         transactionRepository.save(candidate);
+        auditService.record(
+            userId,
+            AuditEventType.TRANSACTION_SOURCE_REMOVED,
+            "transaction",
+            candidate.getId(),
+            java.util.Map.of("automatic", true));
+        eventPublisher.publishEvent(
+            new TransactionFinancialChangedEvent(userId, candidate.getId()));
         removed++;
       }
     }
@@ -183,12 +246,17 @@ public class TransactionImportService {
       UUID connectionId,
       FinancialAccount account,
       String externalAccountId,
-      PluggyModels.PluggyTransaction imported) {
-    BigDecimal amount = imported.amount() == null ? BigDecimal.ZERO : imported.amount();
+      PluggyModels.PluggyTransaction imported,
+      boolean reconcileIdentity) {
+    if (imported.amount() == null || imported.date() == null) {
+      // Sem valor/data não invente 0,00 nem "hoje": registre a falha e siga.
+      return Outcome.FAILED;
+    }
+    BigDecimal amount = imported.amount();
     String description = imported.description() == null ? "" : imported.description();
-    LocalDate postedOn = imported.date() == null ? clock.today() : imported.date();
+    LocalDate postedOn = imported.date();
     TransactionStatus status = mapStatus(imported.status());
-    TransactionType type = mapType(amount, description);
+    TransactionType type = mapType(account, amount, description);
     byte[] dedupKey =
         hmacService.dedupKey(SOURCE, connectionId, externalAccountId, imported.externalId());
     byte[] fingerprint =
@@ -200,20 +268,37 @@ public class TransactionImportService {
             installmentMetadata(imported.creditCardMetadata()));
 
     Transaction transaction =
-        transactionRepository
-            .findByUserIdAndDedupKey(userId, dedupKey)
-            .or(
-                () ->
-                    transactionRepository.findFirstByUserIdAndAccountIdAndFingerprint(
-                        userId, account.getId(), fingerprint))
-            .orElse(null);
+        transactionRepository.findByUserIdAndDedupKey(userId, dedupKey).orElse(null);
+    if (transaction == null && reconcileIdentity) {
+      // O fingerprint só entra na reconciliação explícita de itemId. No fluxo normal, duas
+      // compras legítimas idênticas com IDs externos diferentes continuam sendo duas transações.
+      transaction =
+          transactionRepository
+              .findFirstByUserIdAndAccountIdAndFingerprint(userId, account.getId(), fingerprint)
+              .orElse(null);
+    }
 
     UUID categoryId =
         transaction != null && transaction.hasEdited("category")
             ? transaction.getCategoryId()
             : resolveCategory(userId, account, type, amount, imported.category(), transaction);
     UUID relatedId =
-        transaction == null ? findOriginalTransaction(userId, account, type, amount) : null;
+        transaction == null
+            ? refundMatcher
+                .findOriginal(userId, account.getId(), type, amount, postedOn, description)
+                .map(Transaction::getId)
+                .orElse(null)
+            : null;
+    if (relatedId != null && (transaction == null || !transaction.hasEdited("category"))) {
+      UUID originalCategory =
+          transactionRepository
+              .findByIdAndUserId(relatedId, userId)
+              .map(Transaction::getCategoryId)
+              .orElse(null);
+      if (originalCategory != null) {
+        categoryId = originalCategory;
+      }
+    }
 
     byte[] amountSourceEnc =
         encrypt(userId, "amount_source", transaction == null ? null : transaction.getId(), amount);
@@ -259,6 +344,9 @@ public class TransactionImportService {
         transaction.linkRelatedTransaction(relatedId);
       }
       transaction.setReconciliationState(ReconciliationState.NONE);
+      transaction.applyInstallments(
+          installmentValue(imported.creditCardMetadata(), "installmentNumber"),
+          installmentValue(imported.creditCardMetadata(), "totalInstallments"));
       transaction = transactionRepository.save(transaction);
       // Cifragens usam o ID recém-gerado; refaz para vincular o AAD correto.
       transaction.applyImported(
@@ -281,6 +369,8 @@ public class TransactionImportService {
           transaction.getId(),
           imported.externalId(),
           encrypt(userId, "external_transaction_id", transaction.getId(), imported.externalId()));
+      eventPublisher.publishEvent(
+          new TransactionFinancialChangedEvent(userId, transaction.getId()));
       return Outcome.CREATED;
     }
 
@@ -288,6 +378,8 @@ public class TransactionImportService {
     boolean descriptionEdited = transaction.hasEdited("description");
     boolean postedOnEdited = transaction.hasEdited("postedOn");
     boolean categoryEdited = transaction.hasEdited("category");
+    boolean wasSourceRemoved =
+        transaction.getReconciliationState() == ReconciliationState.SOURCE_REMOVED;
     byte[] preservedAmount = transaction.getAmountEffectiveEnc();
     byte[] preservedDescription = transaction.getDescriptionEffectiveEnc();
     LocalDate preservedPostedOn = transaction.getPostedOn();
@@ -337,9 +429,15 @@ public class TransactionImportService {
           transaction.getId(),
           java.util.Map.of("fields", String.join(",", preservedFields)));
     }
-    if (transaction.getReconciliationState() == ReconciliationState.SOURCE_REMOVED) {
-      // A origem voltou a trazer o registro: restauração automática sem duplicar a linha.
-      transaction.setReconciliationState(ReconciliationState.NONE);
+    if (wasSourceRemoved) {
+      // A transação reapareceu na origem: limpa a marca e volta aos totais com o status atual.
+      transaction.restoreFromSource(status);
+      auditService.record(
+          userId,
+          AuditEventType.TRANSACTION_SOURCE_RESTORED,
+          "transaction",
+          transaction.getId(),
+          java.util.Map.of("automatic", true));
     }
     if (categoryId != null) {
       transaction.setCategoryId(categoryId);
@@ -347,16 +445,21 @@ public class TransactionImportService {
     if (relatedId != null && transaction.getRelatedTransactionId() == null) {
       transaction.linkRelatedTransaction(relatedId);
     }
+    transaction.applyInstallments(
+        installmentValue(imported.creditCardMetadata(), "installmentNumber"),
+        installmentValue(imported.creditCardMetadata(), "totalInstallments"));
     transactionRepository.save(transaction);
     upsertIdentityHistory(
         userId, account.getId(), transaction.getId(), imported.externalId(), externalIdEnc);
+    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, transaction.getId()));
     return Outcome.UPDATED;
   }
 
   private enum Outcome {
     CREATED,
     UPDATED,
-    SKIPPED
+    SKIPPED,
+    FAILED
   }
 
   private void upsertIdentityHistory(
@@ -419,30 +522,6 @@ public class TransactionImportService {
     return categoryRepository.save(category).getId();
   }
 
-  private UUID findOriginalTransaction(
-      UUID userId, FinancialAccount account, TransactionType type, BigDecimal amount) {
-    if (type != TransactionType.REFUND && type != TransactionType.CHARGEBACK) {
-      return null;
-    }
-    LocalDate limit = clock.today().minusDays(REFUND_WINDOW_DAYS);
-    for (Transaction candidate :
-        transactionRepository.findByUserIdAndAccountIdOrderByPostedOnDescIdDesc(
-            userId, account.getId())) {
-      if (candidate.getPostedOn().isBefore(limit) || candidate.getType() != TransactionType.DEBIT) {
-        continue;
-      }
-      BigDecimal candidateAmount =
-          new BigDecimal(
-              cryptoService.decryptString(
-                  candidate.getAmountEffectiveEnc(),
-                  new CryptoContext(userId, TABLE, "amount_effective", candidate.getId())));
-      if (candidateAmount.signum() < 0 && candidateAmount.abs().compareTo(amount.abs()) == 0) {
-        return candidate.getId();
-      }
-    }
-    return null;
-  }
-
   private byte[] encrypt(UUID userId, String column, UUID recordId, BigDecimal amount) {
     return cryptoService.encrypt(
         amount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
@@ -468,7 +547,8 @@ public class TransactionImportService {
         : TransactionStatus.POSTED;
   }
 
-  private static TransactionType mapType(BigDecimal amount, String description) {
+  private static TransactionType mapType(
+      FinancialAccount account, BigDecimal amount, String description) {
     if (amount.signum() > 0) {
       String normalized = normalize(description);
       if (normalized.contains("chargeback")) {
@@ -479,9 +559,24 @@ public class TransactionImportService {
           || normalized.contains("refund")) {
         return TransactionType.REFUND;
       }
-      return TransactionType.CREDIT;
+      // Entrada em cartão é crédito/estorno que reduz a despesa, nunca receita.
+      return account.getType() == AccountType.CREDIT
+          ? TransactionType.REFUND
+          : TransactionType.CREDIT;
     }
     return TransactionType.DEBIT;
+  }
+
+  private static Integer installmentValue(JsonNode metadata, String field) {
+    if (metadata == null || metadata.isMissingNode() || metadata.isNull()) {
+      return null;
+    }
+    JsonNode value = metadata.path(field);
+    if (value.isMissingNode() || value.isNull()) {
+      return null;
+    }
+    int parsed = value.asInt(0);
+    return parsed > 0 ? parsed : null;
   }
 
   private static String installmentMetadata(JsonNode metadata) {

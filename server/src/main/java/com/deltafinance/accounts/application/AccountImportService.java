@@ -15,11 +15,13 @@ import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.crypto.IndexHmacService;
+import com.deltafinance.shared.sync.SyncCancellationRegistry;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,7 @@ public class AccountImportService {
   private final PluggyDataClient dataClient;
   private final CryptoService cryptoService;
   private final IndexHmacService hmacService;
+  private final SyncCancellationRegistry cancellationRegistry;
   private final Clock clock;
 
   public AccountImportService(
@@ -52,6 +55,7 @@ public class AccountImportService {
       PluggyDataClient dataClient,
       CryptoService cryptoService,
       IndexHmacService hmacService,
+      SyncCancellationRegistry cancellationRegistry,
       Clock clock) {
     this.accountRepository = accountRepository;
     this.cardProfileRepository = cardProfileRepository;
@@ -59,27 +63,54 @@ public class AccountImportService {
     this.dataClient = dataClient;
     this.cryptoService = cryptoService;
     this.hmacService = hmacService;
+    this.cancellationRegistry = cancellationRegistry;
     this.clock = clock;
   }
 
   public int importAccounts(PluggyIntegration integration, UUID connectionId, String itemId) {
+    cancellationRegistry.checkpoint();
     String apiKey = authClient.getApiKey(integration);
     PluggyModels.PluggyItem item;
-    List<PluggyModels.PluggyAccount> accounts;
+    PluggyModels.PluggyAccountPage page;
     try {
       item = dataClient.getItem(apiKey, itemId);
-      accounts = dataClient.listAccounts(apiKey, itemId);
+      page = dataClient.listAccounts(apiKey, itemId);
     } catch (PluggyUnauthorizedException exception) {
       apiKey = authClient.refreshApiKey(integration);
       item = dataClient.getItem(apiKey, itemId);
-      accounts = dataClient.listAccounts(apiKey, itemId);
+      page = dataClient.listAccounts(apiKey, itemId);
     }
 
     Instant now = clock.now();
-    for (PluggyModels.PluggyAccount imported : accounts) {
+    List<byte[]> seenHashes = new ArrayList<>();
+    for (PluggyModels.PluggyAccount imported : page.items()) {
+      cancellationRegistry.checkpoint();
+      seenHashes.add(hmacService.externalIdHash("pluggy", imported.externalId()));
       upsert(integration.getUserId(), connectionId, imported, item.institutionName(), now);
     }
-    return accounts.size();
+    // Leitura completa: contas ausentes saem dos saldos, mas preservam histórico e transações.
+    if (page.complete()) {
+      markMissingUnavailable(connectionId, seenHashes);
+    }
+    return page.items().size();
+  }
+
+  private void markMissingUnavailable(UUID connectionId, List<byte[]> seenHashes) {
+    for (FinancialAccount account :
+        accountRepository.findByConnectionIdOrderByCreatedAtAsc(connectionId)) {
+      if (account.getStatus() == AccountStatus.UNAVAILABLE
+          || account.getStatus() == AccountStatus.INACTIVE
+          || account.getExternalAccountIdHash() == null) {
+        continue;
+      }
+      boolean seen =
+          seenHashes.stream()
+              .anyMatch(hash -> hmacService.matches(hash, account.getExternalAccountIdHash()));
+      if (!seen) {
+        account.markUnavailable();
+        accountRepository.save(account);
+      }
+    }
   }
 
   private void upsert(
@@ -135,22 +166,26 @@ public class AccountImportService {
   }
 
   private void upsertCardProfile(UUID userId, UUID accountId, JsonNode creditData) {
-    CardProfile profile =
-        cardProfileRepository
-            .findByAccountIdAndUserId(accountId, userId)
-            .orElseGet(
-                () ->
-                    new CardProfile(
-                        userId,
-                        accountId,
-                        dayOrDefault(creditData, "balanceCloseDate", 1),
-                        dayOrDefault(creditData, "balanceDueDate", 1),
-                        CardProfileSource.PROVIDER));
+    Integer providerClosing = dayOrNull(creditData, "balanceCloseDate");
+    Integer providerDue = dayOrNull(creditData, "balanceDueDate");
+    CardProfile existing =
+        cardProfileRepository.findByAccountIdAndUserId(accountId, userId).orElse(null);
 
-    int closingDay = dayOrDefault(creditData, "balanceCloseDate", profile.getClosingDay());
-    int dueDay = dayOrDefault(creditData, "balanceDueDate", profile.getDueDay());
-    if (profile.getSource() != CardProfileSource.USER) {
-      profile.applyProviderCycle(closingDay, dueDay);
+    // Sem ciclo utilizável do provedor, não invente 1/1: o cartão fica sem perfil até o usuário
+    // configurar. Se já existe perfil (do usuário ou de um provedor anterior), preserve-o.
+    if (existing == null && (providerClosing == null || providerDue == null)) {
+      return;
+    }
+
+    CardProfile profile =
+        existing == null
+            ? new CardProfile(
+                userId, accountId, providerClosing, providerDue, CardProfileSource.PROVIDER)
+            : existing;
+    if (profile.getSource() != CardProfileSource.USER
+        && providerClosing != null
+        && providerDue != null) {
+      profile.applyProviderCycle(providerClosing, providerDue);
     }
 
     BigDecimal limit = decimal(creditData, "creditLimit");
@@ -172,16 +207,25 @@ public class AccountImportService {
   }
 
   private static AccountType mapType(String type) {
-    return "CREDIT".equalsIgnoreCase(type) ? AccountType.CREDIT : AccountType.BANK;
+    if (type == null || type.isBlank()) {
+      return AccountType.UNKNOWN;
+    }
+    return switch (type.trim().toUpperCase(java.util.Locale.ROOT)) {
+      case "BANK" -> AccountType.BANK;
+      case "CREDIT" -> AccountType.CREDIT;
+      case "CASH" -> AccountType.CASH;
+      case "WALLET" -> AccountType.WALLET;
+      default -> AccountType.UNKNOWN;
+    };
   }
 
-  private static int dayOrDefault(JsonNode creditData, String field, int fallback) {
+  private static Integer dayOrNull(JsonNode creditData, String field) {
     if (creditData == null || creditData.isMissingNode() || creditData.isNull()) {
-      return fallback;
+      return null;
     }
     String text = creditData.path(field).asString(null);
     if (text == null || text.isBlank()) {
-      return fallback;
+      return null;
     }
     try {
       return LocalDate.parse(text).getDayOfMonth();
@@ -189,7 +233,7 @@ public class AccountImportService {
       try {
         return Instant.parse(text).atZone(ZoneId.of("America/Sao_Paulo")).getDayOfMonth();
       } catch (RuntimeException ignored) {
-        return fallback;
+        return null;
       }
     }
   }

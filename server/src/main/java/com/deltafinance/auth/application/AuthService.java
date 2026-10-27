@@ -19,10 +19,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.security.SecureRandom;
 import java.util.HexFormat;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
@@ -31,8 +31,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.context.SecurityContextRepository;
-import org.springframework.session.FindByIndexNameSessionRepository;
-import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
 
 /**
@@ -53,7 +51,7 @@ public class AuthService {
   private final LoginAttemptService loginAttemptService;
   private final AuthAuditService authAuditService;
   private final SecurityContextRepository securityContextRepository;
-  private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
+  private final JdbcTemplate jdbcTemplate;
   private final Clock clock;
   private final String dummyPasswordHash;
 
@@ -64,7 +62,7 @@ public class AuthService {
       LoginAttemptService loginAttemptService,
       AuthAuditService authAuditService,
       SecurityContextRepository securityContextRepository,
-      FindByIndexNameSessionRepository<? extends Session> sessionRepository,
+      JdbcTemplate jdbcTemplate,
       Clock clock) {
     this.userRepository = userRepository;
     this.passwordEncoder = passwordEncoder;
@@ -72,7 +70,7 @@ public class AuthService {
     this.loginAttemptService = loginAttemptService;
     this.authAuditService = authAuditService;
     this.securityContextRepository = securityContextRepository;
-    this.sessionRepository = sessionRepository;
+    this.jdbcTemplate = jdbcTemplate;
     this.clock = clock;
     this.dummyPasswordHash =
         passwordEncoder.encode("delta-finance-dummy-" + HexFormat.of().formatHex(randomBytes(24)));
@@ -225,10 +223,8 @@ public class AuthService {
   /** Revoga todas as sessões do usuário, inclusive a atual. */
   public void revokeAllSessions(UUID userId) {
     AppUser user = userRepository.findById(userId).orElseThrow(UnauthenticatedException::new);
-    for (String sessionId :
-        sessionRepository.findByPrincipalName(user.getUsernameNormalized()).keySet()) {
-      sessionRepository.deleteById(sessionId);
-    }
+    jdbcTemplate.update(
+        "delete from spring_session where principal_name = ?", user.getUsernameNormalized());
   }
 
   private void establishSession(
@@ -254,11 +250,15 @@ public class AuthService {
   }
 
   private void revokeOtherSessions(String usernameNormalized, String currentSessionId) {
-    Map<String, ? extends Session> sessions =
-        sessionRepository.findByPrincipalName(usernameNormalized);
-    sessions.keySet().stream()
-        .filter(sessionId -> !sessionId.equals(currentSessionId))
-        .forEach(sessionRepository::deleteById);
+    if (currentSessionId == null) {
+      jdbcTemplate.update(
+          "delete from spring_session where principal_name = ?", usernameNormalized);
+      return;
+    }
+    jdbcTemplate.update(
+        "delete from spring_session where principal_name = ? and session_id <> ?",
+        usernameNormalized,
+        currentSessionId);
   }
 
   private void validatePassword(String usernameNormalized, String password) {

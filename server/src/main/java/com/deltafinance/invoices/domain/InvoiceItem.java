@@ -55,14 +55,11 @@ public class InvoiceItem extends BaseEntity {
   @Column(name = "installment_plan_key", columnDefinition = "bytea")
   private byte[] installmentPlanKey;
 
-  @Column(name = "provider_item_id_enc", columnDefinition = "bytea")
-  private byte[] providerItemIdEnc;
-
-  @Column(name = "provider_item_id_hash", columnDefinition = "bytea")
-  private byte[] providerItemIdHash;
-
   @Column(name = "removed_at")
   private Instant removedAt;
+
+  @Column(name = "mirror_suspended", nullable = false)
+  private boolean mirrorSuspended;
 
   protected InvoiceItem() {
     // Hibernate
@@ -172,20 +169,17 @@ public class InvoiceItem extends BaseEntity {
     return installmentPlanKey;
   }
 
-  public byte[] getProviderItemIdEnc() {
-    return providerItemIdEnc;
-  }
-
-  public byte[] getProviderItemIdHash() {
-    return providerItemIdHash;
-  }
-
   public Instant getRemovedAt() {
     return removedAt;
   }
 
+  /** Item participa dos totais; suspensão automática também usa {@code removed_at}. */
   public boolean isActive() {
     return removedAt == null;
+  }
+
+  public boolean isMirrorSuspended() {
+    return mirrorSuspended;
   }
 
   public void applyEdits(
@@ -209,13 +203,38 @@ public class InvoiceItem extends BaseEntity {
     this.transactionId = transactionId;
   }
 
-  public void attachProviderItem(byte[] enc, byte[] hash) {
-    this.providerItemIdEnc = enc;
-    this.providerItemIdHash = hash;
-    this.source = InvoiceItemSource.PROVIDER_BILL;
+  /** Atualiza o espelho de uma transação sem alterar vínculo, histórico ou parcelamento. */
+  public void applyMirror(
+      InvoiceItemKind kind,
+      ReportingEffect reportingEffect,
+      byte[] descriptionEnc,
+      byte[] amountEnc,
+      LocalDate occurredOn) {
+    this.kind = Objects.requireNonNull(kind, "kind");
+    this.reportingEffect = Objects.requireNonNull(reportingEffect, "reportingEffect");
+    this.descriptionEnc = Objects.requireNonNull(descriptionEnc, "descriptionEnc");
+    this.amountEnc = Objects.requireNonNull(amountEnc, "amountEnc");
+    this.occurredOn = Objects.requireNonNull(occurredOn, "occurredOn");
+  }
+
+  public void moveTo(UUID invoiceId) {
+    this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId");
   }
 
   public void remove(Instant at) {
     this.removedAt = Objects.requireNonNull(at, "at");
+    this.mirrorSuspended = false;
+  }
+
+  /** Remove logicamente por perda de efetividade da âncora, preservando a marca de suspensão. */
+  public void suspendByMirror(Instant at) {
+    this.removedAt = Objects.requireNonNull(at, "at");
+    this.mirrorSuspended = true;
+  }
+
+  /** Reativa um item que havia sido suspenso pelo espelho, mantendo seus dados originais. */
+  public void restoreFromMirrorSuspension() {
+    this.removedAt = null;
+    this.mirrorSuspended = false;
   }
 }

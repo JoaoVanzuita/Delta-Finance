@@ -4,6 +4,7 @@ import com.deltafinance.auth.application.AuthService;
 import com.deltafinance.auth.application.LoginCommand;
 import com.deltafinance.auth.application.PasswordChangeCommand;
 import com.deltafinance.auth.application.RegisterCommand;
+import com.deltafinance.auth.application.RegistrationRateLimiter;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,10 +27,15 @@ public class AuthController {
 
   private final AuthService authService;
   private final AuthenticatedUser authenticatedUser;
+  private final RegistrationRateLimiter registrationRateLimiter;
 
-  public AuthController(AuthService authService, AuthenticatedUser authenticatedUser) {
+  public AuthController(
+      AuthService authService,
+      AuthenticatedUser authenticatedUser,
+      RegistrationRateLimiter registrationRateLimiter) {
     this.authService = authService;
     this.authenticatedUser = authenticatedUser;
+    this.registrationRateLimiter = registrationRateLimiter;
   }
 
   /** Garante o cookie CSRF. O valor é escrito pelo filtro do Spring Security; o corpo é vazio. */
@@ -40,7 +46,9 @@ public class AuthController {
 
   @PostMapping("/register")
   @ResponseStatus(HttpStatus.CREATED)
-  public UserResponse register(@Valid @RequestBody RegisterRequest request) {
+  public UserResponse register(
+      @Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+    registrationRateLimiter.checkAndRecord(httpRequest.getRemoteAddr());
     return UserResponse.from(
         authService.register(new RegisterCommand(request.username(), request.password())));
   }

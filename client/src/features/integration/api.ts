@@ -41,9 +41,6 @@ export type WealthItem = components['schemas']['WealthItem']
 export type WealthManualItem = components['schemas']['WealthManualItem']
 export type WealthManualItemList = components['schemas']['WealthManualItemList']
 export type WealthManualItemInput = components['schemas']['WealthManualItemRequest']
-export type WealthSnapshot = components['schemas']['WealthSnapshot']
-export type WealthSnapshotList = components['schemas']['WealthSnapshotList']
-export type WealthSnapshotInput = components['schemas']['WealthSnapshotRequest']
 export type Goal = components['schemas']['Goal']
 export type GoalList = components['schemas']['GoalList']
 export type GoalInput = components['schemas']['GoalRequest']
@@ -60,11 +57,14 @@ export interface TransactionFilters {
   readonly cursor?: string
   readonly limit?: number
   readonly accountId?: string
+  readonly categoryId?: string
   readonly status?: string
   readonly type?: string
   readonly origin?: string
   readonly from?: string
   readonly to?: string
+  readonly minAmount?: string
+  readonly maxAmount?: string
 }
 
 function transactionQuery(filters: TransactionFilters): string {
@@ -72,11 +72,14 @@ function transactionQuery(filters: TransactionFilters): string {
   if (filters.cursor) params.set('cursor', filters.cursor)
   if (filters.limit) params.set('limit', String(filters.limit))
   if (filters.accountId) params.set('accountId', filters.accountId)
+  if (filters.categoryId) params.set('categoryId', filters.categoryId)
   if (filters.status) params.set('status', filters.status)
   if (filters.type) params.set('type', filters.type)
   if (filters.origin) params.set('origin', filters.origin)
   if (filters.from) params.set('from', filters.from)
   if (filters.to) params.set('to', filters.to)
+  if (filters.minAmount) params.set('minAmount', filters.minAmount)
+  if (filters.maxAmount) params.set('maxAmount', filters.maxAmount)
   const query = params.toString()
   return query ? `?${query}` : ''
 }
@@ -103,9 +106,6 @@ export const financeApi = {
     if (cursor) params.set('cursor', cursor)
     return api.get<SyncRunPage>(`/sync/runs?${params.toString()}`)
   },
-
-  reviewSourceRemoval: (transactionId: string, action: 'RESTORE' | 'CONFIRM_REMOVAL') =>
-    api.post<Transaction>(`/transactions/${transactionId}/source-removal`, { action }),
 
   accounts: () => api.get<AccountList>('/accounts'),
   account: (id: string) => api.get<Account>(`/accounts/${id}`),
@@ -154,9 +154,6 @@ export const financeApi = {
   updateWealthManualItem: (id: string, input: WealthManualItemInput) =>
     api.patch<WealthManualItem>(`/wealth/manual-items/${id}`, input),
   deleteWealthManualItem: (id: string) => api.delete<void>(`/wealth/manual-items/${id}`),
-  wealthSnapshots: () => api.get<WealthSnapshotList>('/wealth/snapshots'),
-  createWealthSnapshot: (input: WealthSnapshotInput = {}) =>
-    api.post<WealthSnapshot>('/wealth/snapshots', input),
 
   goals: () => api.get<GoalList>('/goals'),
   goal: (id: string) => api.get<Goal>(`/goals/${id}`),

@@ -34,8 +34,8 @@ import tools.jackson.databind.json.JsonMapper;
  * Matriz final de acesso cruzado (T183).
  *
  * <p>Dois usuários e duas integrações independentes; cobre leitura, escrita, exclusão, exportação,
- * relatórios e a revisão {@code RESTORE}/{@code CONFIRM_REMOVAL} sem atravessar o limite do
- * titular.
+ * relatórios e a remoção/restauração automática de {@code SOURCE_REMOVED} sem atravessar o limite
+ * do titular.
  */
 @AutoConfigureMockMvc
 class FinalIsolationIT extends PostgresTestBase {
@@ -131,7 +131,7 @@ class FinalIsolationIT extends PostgresTestBase {
   }
 
   @Test
-  void leituraEscritaExclusaoExportacaoRelatoriosERevisaoSaoIsolados() throws Exception {
+  void leituraEscritaExclusaoExportacaoRelatoriosERemocaoAutomaticaSaoIsolados() throws Exception {
     // Leitura cruzada por ID: 404 sem vazar dados.
     bob.get("/api/v1/accounts/" + aliceAccountId).andExpect(status().isNotFound());
 
@@ -169,17 +169,16 @@ class FinalIsolationIT extends PostgresTestBase {
     assertThat(aliceSummary.path("expenses").asString()).isEqualTo("140.00");
     assertThat(bobSummary.path("expenses").asString()).isEqualTo("80.00");
 
-    // SOURCE_REMOVED: Bob não pode revisar; Alice restaura e depois confirma a remoção.
+    // SOURCE_REMOVED automático: a linha de Alice sai dos totais sem afetar Bob.
     PLUGGY.removeTransaction("acc-alice-final-iso", "tx-alice-final-iso");
     sync(alice);
-    assertThat(transaction(alice, aliceTransactionId).path("status").asString())
-        .isEqualTo("SOURCE_REMOVED");
+    JsonNode missing = transaction(alice, aliceTransactionId);
+    assertThat(missing.path("status").asString()).isEqualTo("SOURCE_REMOVED");
+    assertThat(missing.path("reconciliationState").asString()).isEqualTo("SOURCE_REMOVED");
+    assertThat(summary(alice).path("expenses").asString()).isEqualTo("20.00");
+    assertThat(summary(bob).path("expenses").asString()).isEqualTo("80.00");
 
-    bob.post(
-            "/api/v1/transactions/" + aliceTransactionId + "/source-removal",
-            Map.of("action", "RESTORE", "reason", "tentativa cruzada"))
-        .andExpect(status().isNotFound());
-
+    // Quando a origem volta a trazer o item, a mesma linha é restaurada automaticamente.
     PLUGGY.addTransaction(
         "acc-alice-final-iso",
         new TransactionFixture(
@@ -190,23 +189,17 @@ class FinalIsolationIT extends PostgresTestBase {
             "2026-10-23",
             "POSTED",
             "Mercado"));
-    alice
-        .post(
-            "/api/v1/transactions/" + aliceTransactionId + "/source-removal",
-            Map.of("action", "RESTORE", "reason", "reapareceu na origem"))
-        .andExpect(status().isOk());
-    assertThat(transaction(alice, aliceTransactionId).path("status").asString())
-        .isEqualTo("POSTED");
+    sync(alice);
+    JsonNode restored = transaction(alice, aliceTransactionId);
+    assertThat(restored.path("status").asString()).isEqualTo("POSTED");
+    assertThat(restored.path("reconciliationState").asString()).isEqualTo("NONE");
+    assertThat(summary(alice).path("expenses").asString()).isEqualTo("140.00");
+    assertThat(summary(bob).path("expenses").asString()).isEqualTo("80.00");
 
     PLUGGY.removeTransaction("acc-alice-final-iso", "tx-alice-final-iso");
     sync(alice);
-    alice
-        .post(
-            "/api/v1/transactions/" + aliceTransactionId + "/source-removal",
-            Map.of("action", "CONFIRM_REMOVAL", "reason", "confirmado pelo titular"))
-        .andExpect(status().isOk());
-    JsonNode confirmed = transaction(alice, aliceTransactionId);
-    assertThat(confirmed.path("status").asString()).isEqualTo("SOURCE_REMOVED");
+    JsonNode removedAgain = transaction(alice, aliceTransactionId);
+    assertThat(removedAgain.path("status").asString()).isEqualTo("SOURCE_REMOVED");
     assertThat(
             alice
                 .get("/api/v1/transactions?limit=100")

@@ -1,5 +1,6 @@
 package com.deltafinance.connections.application;
 
+import com.deltafinance.connections.domain.ConnectionStatus;
 import com.deltafinance.connections.domain.PluggyConnectionRepository;
 import com.deltafinance.integrations.application.ConnectionCounter;
 import java.util.UUID;
@@ -17,6 +18,7 @@ public class ConnectionCounterAdapter implements ConnectionCounter {
 
   @Override
   public long countByIntegration(UUID integrationId) {
-    return connectionRepository.countByIntegrationId(integrationId);
+    return connectionRepository.countByIntegrationIdAndStatusNot(
+        integrationId, ConnectionStatus.ITEM_UNAVAILABLE);
   }
 }

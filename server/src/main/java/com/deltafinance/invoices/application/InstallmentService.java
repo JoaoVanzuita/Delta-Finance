@@ -19,15 +19,16 @@ public class InstallmentService {
     if (installmentNumber == null && totalInstallments == null) {
       return;
     }
-    if (installmentNumber == null || totalInstallments == null) {
-      throw new ValidationException("installments", "Informe número e total de parcelas juntos.");
+    if (totalInstallments == null || totalInstallments < 1) {
+      throw new ValidationException("installments", "Informe um total de parcelas positivo.");
     }
-    if (installmentNumber < 1 || totalInstallments < 1) {
-      throw new ValidationException("installments", "As parcelas devem ser positivas.");
+    if (totalInstallments > 120) {
+      throw new ValidationException("installments", "O total de parcelas deve ser no máximo 120.");
     }
-    if (installmentNumber > totalInstallments) {
+    if (installmentNumber != null
+        && (installmentNumber < 1 || installmentNumber > totalInstallments)) {
       throw new ValidationException(
-          "installmentNumber", "O número da parcela não pode exceder o total.");
+          "installmentNumber", "O número da parcela deve estar entre 1 e o total.");
     }
   }
 

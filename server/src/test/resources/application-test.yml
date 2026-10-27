@@ -14,7 +14,13 @@ delta:
   sync:
     scheduler-enabled: false
     jitter: 0s
-  pluggy:
-    webhooks-enabled: false
+  operator:
+    reset:
+      token: test-operator-reset-token
   security:
     operator-reset-token: test-operator-reset-token
+    registration:
+      # A maioria dos ITs registra vários usuários no mesmo contexto; o limite
+      # dedicado é exercitado por RegistrationRateLimitIT com contexto próprio.
+      max-attempts: 1000
+      window: 1h

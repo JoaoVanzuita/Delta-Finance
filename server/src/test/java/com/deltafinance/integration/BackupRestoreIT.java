@@ -75,12 +75,14 @@ class BackupRestoreIT extends PostgresTestBase {
     Integer categories =
         queryRestore("select count(*) from category where id = '" + categoryId + "'");
     Integer users = queryRestore("select count(*) from app_user where id = '" + user.id() + "'");
-    Integer migrations =
-        queryRestore("select count(*) from flyway_schema_history where success = true");
+    Integer baselineMigrations =
+        queryRestore(
+            "select count(*) from flyway_schema_history"
+                + " where success = true and version = '001' and description = 'baseline'");
 
     assertThat(users).isEqualTo(1);
     assertThat(categories).isEqualTo(1);
-    assertThat(migrations).isGreaterThanOrEqualTo(6);
+    assertThat(baselineMigrations).isEqualTo(1);
 
     byte[] restored =
         jdbcTemplate.queryForObject(

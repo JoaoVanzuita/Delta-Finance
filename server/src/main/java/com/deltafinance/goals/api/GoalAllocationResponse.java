@@ -8,19 +8,23 @@ public record GoalAllocationResponse(
     UUID id,
     String sourceType,
     UUID sourceId,
+    String sourceName,
     String allocationMode,
     String allocatedAmount,
     String percentage,
-    String contributionAmount) {
+    String contributionAmount,
+    boolean capacityExceeded) {
 
   public static GoalAllocationResponse from(GoalAllocationView view) {
     return new GoalAllocationResponse(
         view.id(),
         view.sourceType(),
         view.sourceId(),
+        view.sourceName(),
         view.allocationMode(),
         view.allocatedAmount(),
         view.percentage(),
-        view.contributionAmount());
+        view.contributionAmount(),
+        view.capacityExceeded());
   }
 }

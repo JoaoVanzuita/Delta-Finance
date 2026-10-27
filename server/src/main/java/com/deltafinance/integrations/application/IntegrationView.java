@@ -1,6 +1,7 @@
 package com.deltafinance.integrations.application;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /** Visão pública da integração; nunca contém Client Secret ou API Key. */
@@ -12,4 +13,6 @@ public record IntegrationView(
     Instant lastSyncAttemptAt,
     Instant lastSuccessfulSyncAt,
     String lastErrorCode,
-    long connectionCount) {}
+    long connectionCount,
+    int connectionLimit,
+    LocalDate connectionLimitCheckedAt) {}

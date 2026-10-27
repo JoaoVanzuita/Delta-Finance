@@ -15,11 +15,9 @@ describe('App', () => {
     expect(heading).toBeInTheDocument()
   })
 
-  it('avisa que a aplicação ainda está em construção', async () => {
+  it('apresenta os módulos disponíveis na página inicial', async () => {
     render(<App />)
 
-    expect(
-      await screen.findByRole('heading', { name: 'Aplicação em construção' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Módulos disponíveis' })).toBeInTheDocument()
   })
 })

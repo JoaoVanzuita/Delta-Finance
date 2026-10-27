@@ -20,8 +20,8 @@ calcula relatórios, gerencia faturas e recupera dados.
 - Node.js 24.22.0 e npm 11 para execução local do frontend.
 - Duas contas Meu Pluggy com aplicações pessoais e itemIds próprios para a
   validação real.
-- Acesso HTTPS público apenas se webhooks forem habilitados; a sincronização
-  programada funciona sem webhooks.
+- Acesso HTTPS público para produção; a sincronização programada não depende de
+  webhooks (removidos no S-04).
 
 ## 2. Preparar o ambiente
 
@@ -152,11 +152,9 @@ Cada banco pode exigir autorização independente.
    exibidas.
 7. Simule (em ambiente de teste) credencial inválida, timeout, `429` e resposta
    vazia; confirme que o histórico não é apagado.
-8. Simule uma transação `SOURCE_REMOVED` e confirme `CONFIRM_REMOVAL` e
-   `RESTORE`, sem duplicar a transação.
-9. Se usar webhooks, confirme a inscrição por integração, a validação do
-   segredo, a resposta 202 e o processamento assíncrono.
-10. Confirme que nenhum Connect Token é solicitado, chamado ou armazenado no
+8. Simule uma transação ausente na origem e confirme a remoção automática
+   `SOURCE_REMOVED`; ao reimportá-la, confirme a restauração sem duplicação.
+9. Confirme que nenhum Connect Token é solicitado, chamado ou armazenado no
     perfil pessoal.
 
 Resultado esperado: dados importados corretamente, sem duplicação, com estados
@@ -183,8 +181,8 @@ claros e histórico preservado.
    `creditBalance` do cartão. O crédito acumulado é aplicado à primeira fatura não
    paga em ordem de vencimento; se exceder a fatura, o residual segue para a
    seguinte, sem reabrir faturas pagas; confirme `appliedCredit` na fatura.
-9. Se o provedor não fornecer Bills, confirme que a fatura local continua
-   funcional e que o sistema não inventa dados.
+9. Confirme que a fatura local por ciclo continua funcional mesmo sem Bills do
+   provedor e que o sistema não inventa dados.
 10. Altere o dia de fechamento/vencimento e confirme que faturas já fechadas ou
     pagas não são reescritas.
 11. Registre uma transação após o fechamento e confirme que ela vai para o ciclo
@@ -334,8 +332,7 @@ backupado separadamente. Teste a restauração em um banco limpo e confirme:
 | `itemId` inválido/inexistente (HTTP 422) | Copiar o UUID do **item** em Itens Conectados (Dashboard → sua aplicação → Demo), não o UUID da página da conta (`accountId`). O item precisa ter sido criado pela mesma aplicação Meu Pluggy do Client ID e não ter sido removido. |
 | `ITEM_UNAVAILABLE` | Reconectar o item na origem e atualizar o itemId; a falha exige ação do usuário e não é retentada automaticamente. |
 | `itemId` mudou | Atualizar o vínculo local e reconciliar por IDs locais/fingerprint. |
-| Webhook não chega | Verificar HTTPS público, segredo, status da inscrição e logs sanitizados. |
-| Fatura divergente | Conferir ciclo, `billId`, parcelas, pagamentos e itens manuais; não inventar valores. |
+| Fatura divergente | Conferir ciclo, parcelas, pagamentos e itens manuais; não inventar valores. |
 
 ## 16. Protocolo SC-001
 
@@ -364,14 +361,14 @@ backupado separadamente. Teste a restauração em um banco limpo e confirme:
       efetivação.
 - [ ] Drill-down via `/reports/entries` com soma igual ao total, incluindo itens
       de fatura sem transação.
-- [ ] `CONFIRM_REMOVAL` e `RESTORE` de `SOURCE_REMOVED` sem duplicação.
-- [ ] Job de retenção expurgando `login_attempt`, `sync_run`, `webhook_event`,
-      `audit_event` e `idempotency_key` conforme prazos.
+- [ ] Remoção automática de `SOURCE_REMOVED` e restauração sem duplicação.
+- [ ] Job de retenção expurgando `login_attempt`, `sync_run`, `audit_event` e
+      `idempotency_key` conforme prazos.
 - [ ] Dump do PostgreSQL sem key ring não revela campos protegidos.
 - [ ] Runbook de recuperação assistida de senha documentado.
 - [x] Importação real validada com dois Meu Pluggy independentes.
 - [ ] Sincronização idempotente e sem perda histórica.
-- [ ] Faturas completas funcionando com dados locais e Bills quando disponíveis.
+- [ ] Faturas completas funcionando com dados locais e itens manuais.
 - [ ] Dashboard com resultado do período, saldo atual sem cartões e drill-down.
 - [x] Cinco usuários concluem cadastro e primeiro login em menos de 2 minutos.
 - [x] Um usuário conclui lançamento manual em menos de 90 segundos.

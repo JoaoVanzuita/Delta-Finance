@@ -113,12 +113,15 @@ class PluggyIntegrationSetupIT extends PostgresTestBase {
 
     JsonNode aliceTransactions =
         json(alice.get("/api/v1/transactions").andExpect(status().isOk()).andReturn());
-    assertThat(aliceTransactions.path("items").size()).isEqualTo(5);
+    assertThat(aliceTransactions.path("items").size()).isEqualTo(6);
     assertThat(aliceTransactions.toString())
         .contains("Padaria")
         .contains("Farmácia")
         .contains("Estorno Padaria")
+        .contains("Crédito cartão")
         .doesNotContain("Café");
+    assertThat(findTransaction(aliceTransactions, "Crédito cartão").path("type").asString())
+        .isEqualTo("REFUND");
     java.util.List<String> statuses = new java.util.ArrayList<>();
     java.util.List<String> currencies = new java.util.ArrayList<>();
     for (JsonNode item : aliceTransactions.path("items")) {
@@ -136,6 +139,88 @@ class PluggyIntegrationSetupIT extends PostgresTestBase {
     assertThat(bobTransactions.toString()).contains("Café").doesNotContain("Padaria");
 
     assertThat(PLUGGY.dataApiKeys()).contains("key-" + ALICE_CLIENT, "key-" + BOB_CLIENT);
+  }
+
+  @Test
+  void importaMetadadosDeParcelamentoDoProvedor() throws Exception {
+    PLUGGY.setInstallments("tx-c1", 1, 3);
+    configure(alice, ALICE_CLIENT, "secret-alice");
+    alice
+        .post("/api/v1/connections", Map.of("itemId", "item-alice-1"))
+        .andExpect(status().isCreated());
+
+    JsonNode card =
+        findAccount(
+            json(alice.get("/api/v1/accounts").andExpect(status().isOk()).andReturn()),
+            "Cartão Alfa");
+    JsonNode invoices =
+        json(
+            alice
+                .get("/api/v1/cards/" + card.path("id").asString() + "/invoices")
+                .andExpect(status().isOk())
+                .andReturn());
+    assertThat(invoices.path("items")).hasSize(1);
+    JsonNode detail =
+        json(
+            alice
+                .get("/api/v1/invoices/" + invoices.path("items").get(0).path("id").asString())
+                .andExpect(status().isOk())
+                .andReturn());
+    JsonNode installment = null;
+    for (JsonNode item : detail.path("items")) {
+      if ("INSTALLMENT".equals(item.path("kind").asString())) {
+        installment = item;
+      }
+    }
+    assertThat(installment).isNotNull();
+    assertThat(installment.path("installmentNumber").asInt()).isEqualTo(1);
+    assertThat(installment.path("totalInstallments").asInt()).isEqualTo(3);
+  }
+
+  @Test
+  void reembolsoParcialImportadoVinculaOriginalEPodeSerReligadoManualmente() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-a1",
+        new TransactionFixture(
+            "tx-extra-debit",
+            "acc-a1",
+            "Compra extra",
+            "-20.00",
+            "2026-10-19",
+            "POSTED",
+            "Compras"));
+    PLUGGY.addTransaction(
+        "acc-a1",
+        new TransactionFixture(
+            "tx-partial-refund",
+            "acc-a1",
+            "Reembolso parcial",
+            "5.00",
+            "2026-10-22",
+            "POSTED",
+            "Compras"));
+
+    configure(alice, ALICE_CLIENT, "secret-alice");
+    alice
+        .post("/api/v1/connections", Map.of("itemId", "item-alice-1"))
+        .andExpect(status().isCreated());
+
+    JsonNode transactions =
+        json(alice.get("/api/v1/transactions?limit=100").andExpect(status().isOk()).andReturn());
+    JsonNode refund = findTransaction(transactions, "Reembolso parcial");
+    JsonNode original = findTransaction(transactions, "Padaria");
+    JsonNode alternative = findTransaction(transactions, "Compra extra");
+    assertThat(refund.path("relatedTransactionId").asString())
+        .isEqualTo(original.path("id").asString());
+    assertThat(refund.path("categoryId").asString())
+        .isEqualTo(original.path("categoryId").asString());
+
+    alice
+        .patch(
+            "/api/v1/transactions/" + refund.path("id").asString(),
+            Map.of("relatedTransactionId", alternative.path("id").asString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.relatedTransactionId").value(alternative.path("id").asString()));
   }
 
   @Test
@@ -221,7 +306,7 @@ class PluggyIntegrationSetupIT extends PostgresTestBase {
     alice
         .get("/api/v1/transactions?origin=IMPORTED")
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items.length()").value(4));
+        .andExpect(jsonPath("$.items.length()").value(5));
   }
 
   private void configure(AuthTestClient client, String clientId, String secret) throws Exception {
@@ -273,6 +358,10 @@ class PluggyIntegrationSetupIT extends PostgresTestBase {
         "card-a1",
         new TransactionFixture(
             "tx-c1", "card-a1", "Loja", "-100.00", "2026-10-18", "POSTED", "Compras"));
+    PLUGGY.addTransaction(
+        "card-a1",
+        new TransactionFixture(
+            "tx-c2", "card-a1", "Crédito cartão", "30.00", "2026-10-19", "POSTED", "Compras"));
     PLUGGY.addTransaction(
         "acc-a2",
         new TransactionFixture(

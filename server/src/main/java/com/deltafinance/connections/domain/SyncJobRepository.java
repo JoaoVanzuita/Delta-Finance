@@ -11,6 +11,13 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, UUID> {
 
   Optional<SyncJob> findByIdAndUserId(UUID id, UUID userId);
 
+  @Query(
+      """
+      select j from SyncJob j
+      where j.status = com.deltafinance.connections.domain.SyncJobStatus.RUNNING
+      """)
+  List<SyncJob> runningJobs();
+
   List<SyncJob> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
   Optional<SyncJob> findFirstByUserIdAndConnectionIdAndJobTypeAndStatusInOrderByCreatedAtAsc(

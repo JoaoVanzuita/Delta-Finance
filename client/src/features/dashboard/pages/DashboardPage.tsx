@@ -49,7 +49,7 @@ export function DashboardPage() {
   const queryClient = useQueryClient()
   const [filters, setFilters] = useState<DashboardFiltersValue>(() => ({
     period: 'MONTH',
-    accountId: searchParams.get('accountId') ?? undefined,
+    accountIds: searchParams.getAll('accountId'),
   }))
   const [drillDown, setDrillDown] = useState<DrillDown | null>(null)
 

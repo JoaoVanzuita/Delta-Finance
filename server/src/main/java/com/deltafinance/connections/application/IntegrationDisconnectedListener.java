@@ -11,13 +11,17 @@ import org.springframework.stereotype.Component;
 public class IntegrationDisconnectedListener {
 
   private final PluggyConnectionRepository connectionRepository;
+  private final SyncJobService syncJobService;
 
-  public IntegrationDisconnectedListener(PluggyConnectionRepository connectionRepository) {
+  public IntegrationDisconnectedListener(
+      PluggyConnectionRepository connectionRepository, SyncJobService syncJobService) {
     this.connectionRepository = connectionRepository;
+    this.syncJobService = syncJobService;
   }
 
   @EventListener
   public void onDisconnected(IntegrationDisconnectedEvent event) {
+    syncJobService.cancelActiveForIntegration(event.userId(), event.integrationId());
     for (var connection :
         connectionRepository.findByIntegrationIdOrderByCreatedAtAsc(event.integrationId())) {
       if (connection.getStatus() != ConnectionStatus.ITEM_UNAVAILABLE) {

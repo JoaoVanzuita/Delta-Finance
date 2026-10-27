@@ -27,9 +27,9 @@ import { RootLayout } from './RootLayout'
 /**
  * Tabela de rotas.
  *
- * Rotas de negócio são adicionadas junto com as histórias correspondentes. Nesta
- * fase existem apenas identidade (login/registro/conta) e a página inicial; não
- * há links para telas ainda inexistentes.
+ * As rotas cobrem identidade, integração, contas, transações, faturas, dashboard, reconciliação,
+ * privacidade, investimentos, patrimônio e metas. Toda rota aponta para uma tela existente; novas
+ * telas devem ser adicionadas junto com a história correspondente.
  */
 export const router = createBrowserRouter([
   {

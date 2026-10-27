@@ -26,8 +26,8 @@ function messageFrom(caught: unknown, fallback: string): string {
 /**
  * Metas financeiras.
  *
- * <p>Metas apenas calculam progresso sobre alocações explícitas, patrimônio líquido ou dívida
- * inicial. Nenhuma ação move dinheiro, cria ordem ou executa operação bancária.
+ * <p>Metas apenas calculam progresso sobre alocações explícitas ou patrimônio líquido, sem
+ * movimentar dinheiro. Nenhuma ação cria ordem ou executa operação bancária.
  */
 export function GoalsPage() {
   const queryClient = useQueryClient()
@@ -204,6 +204,7 @@ function GoalCard({ goal, onChanged }: { readonly goal: Goal; readonly onChanged
             {TYPE_LABELS[goal.type] ?? goal.type} · Prazo: {formatDate(goal.targetDate)}
           </p>
           {goal.description ? <p className="text-sm text-ink">{goal.description}</p> : null}
+          {goal.notes ? <p className="text-sm text-ink-muted">{goal.notes}</p> : null}
         </div>
         <span className="rounded-card border border-line bg-surface-muted px-3 py-1 text-sm font-semibold text-ink">
           {STATUS_LABELS[goal.status] ?? goal.status}
@@ -251,7 +252,6 @@ function GoalCard({ goal, onChanged }: { readonly goal: Goal; readonly onChanged
 
       <p className="text-sm text-ink-muted">
         Regra: {RULE_LABELS[goal.progressRule] ?? goal.progressRule}
-        {goal.initialValue ? ` · Dívida inicial: ${formatMoney(goal.initialValue)}` : ''}
       </p>
       {unallocated > 0 ? (
         <p className="text-sm text-ink">Saldo não alocado: {formatMoney(goal.unallocatedAmount)}</p>
@@ -270,7 +270,8 @@ function GoalCard({ goal, onChanged }: { readonly goal: Goal; readonly onChanged
                 className="flex flex-col gap-1 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
               >
                 <span className="text-ink">
-                  {SOURCE_LABELS[allocation.sourceType] ?? allocation.sourceType} ·{' '}
+                  {SOURCE_LABELS[allocation.sourceType] ?? allocation.sourceType}
+                  {allocation.sourceName ? ` · ${allocation.sourceName}` : ''} ·{' '}
                   {MODE_LABELS[allocation.allocationMode] ?? allocation.allocationMode}
                 </span>
                 <span className="text-ink-muted">
@@ -281,6 +282,11 @@ function GoalCard({ goal, onChanged }: { readonly goal: Goal; readonly onChanged
                 <span className="numeric font-medium text-ink">
                   Contribuição: {formatMoney(allocation.contributionAmount)}
                 </span>
+                {allocation.capacityExceeded ? (
+                  <span className="w-full text-sm text-warning sm:w-auto">
+                    Capacidade da fonte excedida. Ajuste esta alocação explicitamente.
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -292,6 +298,10 @@ function GoalCard({ goal, onChanged }: { readonly goal: Goal; readonly onChanged
           <summary className="cursor-pointer text-sm font-medium text-ink">
             Histórico de progresso
           </summary>
+          <p className="mt-2 text-xs text-ink-muted">
+            Registro sob demanda: um snapshot por dia em que a meta é consultada ou alterada. Dias
+            sem acesso não geram ponto no histórico.
+          </p>
           <ul className="mt-2 space-y-1 text-sm text-ink-muted">
             {goal.progressHistory.map((entry) => (
               <li key={entry.referenceDate}>

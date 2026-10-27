@@ -13,6 +13,7 @@ const typeLabels: Record<string, string> = {
   CREDIT: 'Cartão de crédito',
   CASH: 'Dinheiro',
   WALLET: 'Carteira digital',
+  UNKNOWN: 'Tipo não informado',
 }
 
 const statusLabels: Record<string, string> = {

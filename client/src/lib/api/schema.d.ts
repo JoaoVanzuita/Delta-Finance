@@ -286,32 +286,13 @@ export interface paths {
         post?: never;
         /**
          * Exclui um lançamento manual
-         * @description Transações importadas não são apagadas; a remoção do histórico exige reconciliação explícita (`SOURCE_REMOVED`) ou exclusão da conta.
+         * @description Transações importadas não são apagadas; a ausência na origem é marcada automaticamente e a linha permanece no histórico.
          */
         delete: operations["deleteTransactionsId"];
         options?: never;
         head?: never;
         /** Corrige uma transação importada ou manual */
         patch: operations["patchTransactionsId"];
-        trace?: never;
-    };
-    "/transactions/{id}/source-removal": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["PathId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Revisa uma transação marcada como removida na origem */
-        post: operations["postTransactionsIdSourceRemoval"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/categories": {
@@ -744,30 +725,6 @@ export interface paths {
         patch: operations["patchWealthManualItemsId"];
         trace?: never;
     };
-    "/wealth/snapshots": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Lista snapshots patrimoniais datados
-         * @description Retorna apenas snapshots registrados; nunca infere saldos passados a partir dos dados atuais.
-         */
-        get: operations["getWealthSnapshots"];
-        put?: never;
-        /**
-         * Registra snapshot patrimonial de hoje
-         * @description Usa os dados atuais e a data de hoje em America/Sao_Paulo. No mesmo dia, o snapshot é atualizado de forma idempotente.
-         */
-        post: operations["postWealthSnapshots"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/goals": {
         parameters: {
             query?: never;
@@ -832,27 +789,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/webhooks/pluggy/{webhookToken}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Recebe evento Pluggy
-         * @description Endpoint opcional, habilitado apenas com HTTPS público. Valida o
-         *     segredo da inscrição, registra o eventId e responde 202 rapidamente.
-         */
-        post: operations["postWebhooksPluggyWebhookToken"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -909,6 +845,10 @@ export interface components {
             lastSuccessfulSyncAt?: string;
             lastErrorCode?: string;
             connectionCount?: number;
+            /** @description Limite da modalidade Meu Pluggy; conexões ITEM_UNAVAILABLE não ocupam vaga. */
+            connectionLimit?: number;
+            /** Format: date */
+            connectionLimitCheckedAt?: string;
         };
         ValidationResult: {
             valid: boolean;
@@ -946,15 +886,21 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            type: "BANK" | "CREDIT" | "CASH" | "WALLET";
+            type: "BANK" | "CREDIT" | "CASH" | "WALLET" | "UNKNOWN";
             subtype?: string;
             /** @enum {string} */
             origin: "IMPORTED" | "MANUAL";
             institutionName?: string;
             alias?: string;
             currency: string;
+            /** @description Saldo atual. Em contas manuais, é o saldo de referência ajustado pelos lançamentos efetivados e pagamentos de fatura com data igual ou posterior à data de referência; em contas importadas, é o saldo informado pelo provedor. */
             currentBalance: string;
-            /** Format: date-time */
+            /** @description Saldo de referência informado pelo usuário, sem ajustes. Para contas importadas, espelha o saldo do provedor. */
+            referenceBalance?: string;
+            /**
+             * Format: date-time
+             * @description Data a partir da qual os lançamentos ajustam o saldo de referência de uma conta manual.
+             */
             balanceReferenceAt?: string;
             /** @description ACTIVE, INACTIVE, UNAVAILABLE ou CLOSED; contas manuais desativadas usam INACTIVE. */
             status?: string;
@@ -962,6 +908,11 @@ export interface components {
             lastSyncAt?: string;
             notes?: string;
             cardProfile?: components["schemas"]["CardProfile"];
+            /**
+             * @description Estado da conexão de origem, separado do estado da conta.
+             * @enum {string|null}
+             */
+            connectionStatus?: "INCOMPLETE" | "ACTIVE" | "SYNCING" | "SYNCED" | "CREDENTIAL_FAILURE" | "ACTION_REQUIRED" | "AUTHORIZATION_EXPIRED" | "ITEM_UNAVAILABLE" | null;
         };
         ManualAccountRequest: {
             /** @enum {string} */
@@ -1017,7 +968,10 @@ export interface components {
              * @enum {string}
              */
             type: "DEBIT" | "CREDIT" | "TRANSFER" | "REFUND" | "CHARGEBACK" | "ADJUSTMENT";
-            /** @enum {string} */
+            /**
+             * @description Status efetivo. SOURCE_REMOVED é aplicado automaticamente quando a transação desaparece de uma leitura conclusiva e não vazia; se ela reaparecer, o status volta ao valor atual da origem.
+             * @enum {string}
+             */
             status: "PENDING" | "POSTED" | "SOURCE_REMOVED" | "RECONCILED";
             /** Format: date */
             postedOn: string;
@@ -1028,6 +982,7 @@ export interface components {
             /** @description Observações do usuário; nunca sobrescritas pela sincronização. */
             notes?: string;
             editedFields?: string[];
+            /** @description NONE, PENDING_MATCH, MATCHED ou SOURCE_REMOVED. Neste último, a transação está ausente na origem e fora dos totais; a restauração é automática se o identificador reaparecer. */
             reconciliationState?: string;
             /** Format: uuid */
             invoiceId?: string;
@@ -1082,11 +1037,11 @@ export interface components {
             /** Format: uuid */
             categoryId?: string;
             notes?: string;
-        };
-        SourceRemovalReviewRequest: {
-            /** @enum {string} */
-            action: "RESTORE" | "CONFIRM_REMOVAL";
-            reason?: string;
+            /**
+             * Format: uuid
+             * @description Despesa original de um reembolso/chargeback na mesma conta.
+             */
+            relatedTransactionId?: string;
         };
         Category: {
             /** Format: uuid */
@@ -1128,7 +1083,7 @@ export interface components {
             appliedCredit: string;
             minimumPayment?: string;
             /** @enum {string} */
-            source: "LOCAL" | "PROVIDER";
+            source: "LOCAL";
             /** @description Indica ajuste manual em fatura fechada/paga; não substitui o status de pagamento. */
             hasAdjustments: boolean;
             /** @description Quantidade de ajustes manuais. */
@@ -1158,7 +1113,7 @@ export interface components {
              */
             reportingEffect: "EXPENSE_INCREASE" | "EXPENSE_DECREASE" | "NONE";
             /** @enum {string} */
-            source: "IMPORTED" | "MANUAL" | "PROVIDER_BILL";
+            source: "IMPORTED" | "MANUAL";
             description: string;
             /** @description Magnitude positiva; a direção vem de reportingEffect. */
             amount: string;
@@ -1190,7 +1145,7 @@ export interface components {
              */
             transactionId?: string;
             /**
-             * @description Obrigatório; use NONE para itens espelho.
+             * @description Obrigatório; ignorado em itens espelho (transactionId presente), que são sempre gravados com NONE e têm a direção derivada do tipo e do total da fatura.
              * @enum {string}
              */
             reportingEffect: "EXPENSE_INCREASE" | "EXPENSE_DECREASE" | "NONE";
@@ -1215,7 +1170,7 @@ export interface components {
             /** @enum {string} */
             status: "PENDING" | "CONFIRMED" | "REVERSED";
             /** @enum {string} */
-            source: "MANUAL" | "IMPORTED" | "PROVIDER_BILL";
+            source: "MANUAL" | "IMPORTED";
         };
         InvoicePaymentRequest: {
             /** Format: uuid */
@@ -1317,7 +1272,7 @@ export interface components {
             /** Format: uuid */
             sourceId: string;
             /**
-             * @description Origem normalizada; distingue importado de manual no drill-down. Itens PROVIDER_BILL são normalizados para IMPORTED.
+             * @description Origem normalizada; distingue importado de manual no drill-down.
              * @enum {string}
              */
             origin: "IMPORTED" | "MANUAL";
@@ -1475,43 +1430,22 @@ export interface components {
         WealthManualItemList: {
             items: components["schemas"]["WealthManualItem"][];
         };
-        WealthSnapshot: {
-            /** Format: uuid */
-            id: string;
-            /** Format: date */
-            referenceDate: string;
-            grossAssets: string;
-            liabilities: string;
-            netWorth: string;
-            /** @enum {string} */
-            completeness: "COMPLETE" | "PARTIAL" | "ESTIMATED";
-            notes?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            items: components["schemas"]["WealthItem"][];
-        };
-        WealthSnapshotRequest: {
-            notes?: string;
-        };
-        WealthSnapshotList: {
-            items: components["schemas"]["WealthSnapshot"][];
-        };
         Goal: {
             /** Format: uuid */
             id: string;
             name: string;
             description?: string;
+            /** @description Observações livres da meta. */
+            notes?: string;
             /** @enum {string} */
-            type: "EMERGENCY_FUND" | "TRAVEL" | "PLANNED_PURCHASE" | "DEBT_REDUCTION" | "NET_WORTH";
+            type: "EMERGENCY_FUND" | "TRAVEL" | "PLANNED_PURCHASE" | "NET_WORTH";
             targetAmount: string;
             /** Format: date */
             targetDate?: string;
             /** @enum {string} */
             status: "ACTIVE" | "ACHIEVED" | "PAUSED" | "ARCHIVED" | "OVERDUE" | "CHANGED";
             /** @enum {string} */
-            progressRule: "ALLOCATIONS" | "NET_WORTH" | "DEBT_REDUCTION";
-            /** @description Dívida inicial; obrigatória para DEBT_REDUCTION. */
-            initialValue?: string;
+            progressRule: "ALLOCATIONS" | "NET_WORTH";
             /** Format: date-time */
             changedAt?: string;
             /** Format: date-time */
@@ -1531,15 +1465,19 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            sourceType: "MANUAL" | "ACCOUNT" | "INVESTMENT" | "MANUAL_ASSET" | "MANUAL_LIABILITY";
+            sourceType: "MANUAL" | "ACCOUNT" | "INVESTMENT" | "MANUAL_ASSET";
             /** Format: uuid */
             sourceId?: string;
+            /** @description Nome legível da fonte (conta, investimento ou item manual). */
+            sourceName?: string;
             /** @enum {string} */
             allocationMode: "FIXED_AMOUNT" | "PERCENTAGE";
             allocatedAmount?: string;
             percentage?: string;
             /** @description Contribuição efetiva após arredondamento e resíduo. */
             contributionAmount: string;
+            /** @description Indica que a alocação excede a capacidade da fonte e exige ajuste explícito. */
+            capacityExceeded?: boolean;
         };
         GoalProgressEntry: {
             /** Format: date */
@@ -1552,20 +1490,19 @@ export interface components {
         GoalRequest: {
             name: string;
             description?: string;
+            notes?: string;
             /** @enum {string} */
-            type: "EMERGENCY_FUND" | "TRAVEL" | "PLANNED_PURCHASE" | "DEBT_REDUCTION" | "NET_WORTH";
+            type: "EMERGENCY_FUND" | "TRAVEL" | "PLANNED_PURCHASE" | "NET_WORTH";
             targetAmount: string;
             /** Format: date */
             targetDate?: string;
             /** @enum {string} */
-            progressRule: "ALLOCATIONS" | "NET_WORTH" | "DEBT_REDUCTION";
-            /** @description Obrigatório para DEBT_REDUCTION. */
-            initialValue?: string;
+            progressRule: "ALLOCATIONS" | "NET_WORTH";
             allocations?: components["schemas"]["GoalAllocationRequest"][];
         };
         GoalAllocationRequest: {
             /** @enum {string} */
-            sourceType: "MANUAL" | "ACCOUNT" | "INVESTMENT" | "MANUAL_ASSET" | "MANUAL_LIABILITY";
+            sourceType: "MANUAL" | "ACCOUNT" | "INVESTMENT" | "MANUAL_ASSET";
             /** Format: uuid */
             sourceId?: string;
             /** @enum {string} */
@@ -1641,13 +1578,15 @@ export interface components {
     };
     parameters: {
         PathId: string;
-        /** @description Recomendado para retries de mutações. */
+        /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
         IdempotencyKey: string;
         Cursor: string;
         Limit: number;
         DateFrom: string;
         DateTo: string;
         AccountId: string;
+        /** @description Repetível (accountId=a&accountId=b) ou separado por vírgula. Sem o parâmetro, todas as contas e cartões entram. */
+        AccountIds: string[];
         CategoryId: string;
         TransactionType: "DEBIT" | "CREDIT" | "TRANSFER" | "REFUND" | "CHARGEBACK" | "ADJUSTMENT";
         Origin: "IMPORTED" | "MANUAL";
@@ -1917,10 +1856,7 @@ export interface operations {
     postConnections: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Recomendado para retries de mutações. */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2017,10 +1953,7 @@ export interface operations {
     postConnectionsIdSync: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Recomendado para retries de mutações. */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
+            header?: never;
             path: {
                 id: components["parameters"]["PathId"];
             };
@@ -2074,10 +2007,7 @@ export interface operations {
     postAccounts: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Recomendado para retries de mutações. */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -2223,7 +2153,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Recomendado para retries de mutações. */
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -2250,7 +2180,10 @@ export interface operations {
     deleteTransactionsId: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 id: components["parameters"]["PathId"];
             };
@@ -2272,7 +2205,10 @@ export interface operations {
     patchTransactionsId: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 id: components["parameters"]["PathId"];
             };
@@ -2294,37 +2230,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    postTransactionsIdSourceRemoval: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Recomendado para retries de mutações. */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                id: components["parameters"]["PathId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SourceRemovalReviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Revisão registrada. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Transaction"];
-                };
-            };
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
         };
@@ -2502,7 +2407,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Recomendado para retries de mutações. */
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2526,13 +2431,17 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
     deleteInvoiceItemsId: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 id: components["parameters"]["PathId"];
             };
@@ -2561,7 +2470,10 @@ export interface operations {
     patchInvoiceItemsId: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 id: components["parameters"]["PathId"];
             };
@@ -2621,7 +2533,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Recomendado para retries de mutações. */
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2741,7 +2653,8 @@ export interface operations {
                 period?: components["parameters"]["Period"];
                 from?: components["parameters"]["DateFrom"];
                 to?: components["parameters"]["DateTo"];
-                accountId?: components["parameters"]["AccountId"];
+                /** @description Repetível (accountId=a&accountId=b) ou separado por vírgula. Sem o parâmetro, todas as contas e cartões entram. */
+                accountId?: components["parameters"]["AccountIds"];
                 categoryId?: components["parameters"]["CategoryId"];
                 type?: components["parameters"]["TransactionType"];
                 origin?: components["parameters"]["Origin"];
@@ -2780,7 +2693,9 @@ export interface operations {
                 period?: components["parameters"]["Period"];
                 from?: components["parameters"]["DateFrom"];
                 to?: components["parameters"]["DateTo"];
-                accountId?: components["parameters"]["AccountId"];
+                /** @description Repetível (accountId=a&accountId=b) ou separado por vírgula. Sem o parâmetro, todas as contas e cartões entram. */
+                accountId?: components["parameters"]["AccountIds"];
+                categoryId?: components["parameters"]["CategoryId"];
                 type?: components["parameters"]["TransactionType"];
                 origin?: components["parameters"]["Origin"];
                 minAmount?: components["parameters"]["MinAmount"];
@@ -2818,9 +2733,13 @@ export interface operations {
                 period?: components["parameters"]["Period"];
                 from?: components["parameters"]["DateFrom"];
                 to?: components["parameters"]["DateTo"];
-                accountId?: components["parameters"]["AccountId"];
+                /** @description Repetível (accountId=a&accountId=b) ou separado por vírgula. Sem o parâmetro, todas as contas e cartões entram. */
+                accountId?: components["parameters"]["AccountIds"];
                 categoryId?: components["parameters"]["CategoryId"];
+                type?: components["parameters"]["TransactionType"];
                 origin?: components["parameters"]["Origin"];
+                minAmount?: components["parameters"]["MinAmount"];
+                maxAmount?: components["parameters"]["MaxAmount"];
             };
             header?: never;
             path?: never;
@@ -2854,7 +2773,8 @@ export interface operations {
                 period?: components["parameters"]["Period"];
                 from?: components["parameters"]["DateFrom"];
                 to?: components["parameters"]["DateTo"];
-                accountId?: components["parameters"]["AccountId"];
+                /** @description Repetível (accountId=a&accountId=b) ou separado por vírgula. Sem o parâmetro, todas as contas e cartões entram. */
+                accountId?: components["parameters"]["AccountIds"];
                 categoryId?: components["parameters"]["CategoryId"];
                 type?: components["parameters"]["TransactionType"];
                 origin?: components["parameters"]["Origin"];
@@ -3346,68 +3266,6 @@ export interface operations {
             };
         };
     };
-    getWealthSnapshots: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Histórico de snapshots. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WealthSnapshotList"];
-                };
-            };
-            /** @description Erro do cliente. */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    postWealthSnapshots: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["WealthSnapshotRequest"];
-            };
-        };
-        responses: {
-            /** @description Snapshot registrado ou atualizado. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WealthSnapshot"];
-                };
-            };
-            /** @description Erro do cliente. */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
     getGoals: {
         parameters: {
             query?: never;
@@ -3597,40 +3455,6 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
-            };
-        };
-    };
-    postWebhooksPluggyWebhookToken: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                webhookToken: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Evento aceito para processamento assíncrono. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description Evento duplicado; ignorado de forma idempotente. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

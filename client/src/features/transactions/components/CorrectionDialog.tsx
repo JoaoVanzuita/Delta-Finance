@@ -20,7 +20,21 @@ export function CorrectionDialog({ transaction, onClose }: CorrectionDialogProps
   const [amount, setAmount] = useState(transaction.amount)
   const [categoryId, setCategoryId] = useState(transaction.categoryId ?? '')
   const [notes, setNotes] = useState(transaction.notes ?? '')
+  const [relatedTransactionId, setRelatedTransactionId] = useState(
+    transaction.relatedTransactionId ?? '',
+  )
   const [error, setError] = useState<string | null>(null)
+  const refund = transaction.type === 'REFUND' || transaction.type === 'CHARGEBACK'
+  const originalsQuery = useQuery({
+    queryKey: ['transactions', 'refund-originals', transaction.accountId],
+    queryFn: () =>
+      financeApi.transactions({
+        accountId: transaction.accountId,
+        type: 'DEBIT',
+        limit: 100,
+      }),
+    enabled: refund,
+  })
 
   const correct = useMutation({
     mutationFn: () =>
@@ -30,6 +44,7 @@ export function CorrectionDialog({ transaction, onClose }: CorrectionDialogProps
         amount: amount.replace(',', '.'),
         categoryId: categoryId || undefined,
         notes,
+        relatedTransactionId: relatedTransactionId || undefined,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
@@ -147,6 +162,27 @@ export function CorrectionDialog({ transaction, onClose }: CorrectionDialogProps
                 ))}
             </select>
           </label>
+
+          {refund ? (
+            <label className="block text-sm">
+              <span className="font-medium text-ink">Despesa original</span>
+              <select
+                value={relatedTransactionId}
+                onChange={(event) => setRelatedTransactionId(event.target.value)}
+                className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
+              >
+                <option value="">Sem vínculo</option>
+                {(originalsQuery.data?.items ?? []).map((original) => (
+                  <option key={original.id} value={original.id}>
+                    {original.description ?? original.id} · {original.postedOn} · {original.amount}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-ink-muted">
+                O vínculo limita a redução ao valor da despesa original e herda a categoria.
+              </span>
+            </label>
+          ) : null}
 
           <label className="block text-sm">
             <span className="font-medium text-ink">Observações</span>

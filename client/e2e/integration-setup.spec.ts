@@ -64,6 +64,8 @@ async function installStub(page: Page): Promise<StubState> {
           clientIdMasked: state.configured ? 'clie…lice' : undefined,
           status: state.configured ? 'ACTIVE' : 'INCOMPLETE',
           connectionCount: state.connections.length,
+          connectionLimit: 5,
+          connectionLimitCheckedAt: '2026-10-22',
         }),
       })
       return
@@ -94,6 +96,8 @@ async function installStub(page: Page): Promise<StubState> {
           clientIdMasked: 'clie…lice',
           status: 'INCOMPLETE',
           connectionCount: state.connections.length,
+          connectionLimit: 5,
+          connectionLimitCheckedAt: '2026-10-22',
         }),
       })
       return

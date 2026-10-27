@@ -215,7 +215,9 @@ export function InvoiceItemDialog({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
-              <span className="font-medium text-ink">Valor (R$)</span>
+              <span className="font-medium text-ink">
+                {Number(totalInstallments) > 1 ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}
+              </span>
               <input
                 type="text"
                 inputMode="decimal"
@@ -279,6 +281,12 @@ export function InvoiceItemDialog({
               />
             </label>
           </div>
+          {!item && Number(totalInstallments) > 1 ? (
+            <p className="rounded-card border border-line bg-surface-muted p-3 text-xs text-ink-muted">
+              Serão criadas {totalInstallments} parcelas, uma por ciclo. A primeira fica nesta
+              fatura e as seguintes nas faturas futuras.
+            </p>
+          ) : null}
 
           <button
             type="submit"

@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Patrimônio consolidado, ativos/passivos manuais e snapshots datados. */
+/** Patrimônio consolidado e ativos/passivos manuais. */
 @RestController
 @RequestMapping("/api/v1/wealth")
 public class WealthController {
@@ -64,22 +64,5 @@ public class WealthController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void deleteManualItem(@PathVariable UUID id) {
     wealthService.deleteManual(authenticatedUser.requireId(), id);
-  }
-
-  @GetMapping("/snapshots")
-  public WealthSnapshotListResponse listSnapshots() {
-    return new WealthSnapshotListResponse(
-        wealthService.listSnapshots(authenticatedUser.requireId()).stream()
-            .map(WealthSnapshotResponse::from)
-            .toList());
-  }
-
-  @PostMapping("/snapshots")
-  @ResponseStatus(HttpStatus.CREATED)
-  public WealthSnapshotResponse createSnapshot(
-      @Valid @RequestBody(required = false) WealthSnapshotRequest request) {
-    return WealthSnapshotResponse.from(
-        wealthService.createSnapshot(
-            authenticatedUser.requireId(), request == null ? null : request.notes()));
   }
 }

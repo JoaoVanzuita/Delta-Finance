@@ -151,6 +151,67 @@ class AuthSessionIT extends PostgresTestBase {
   }
 
   @Test
+  void bloqueioPersistidoSobreviveAoFimDaJanelaDeslizante() throws Exception {
+    alice.register(USERNAME, PASSWORD);
+    for (int attempt = 1; attempt <= 5; attempt++) {
+      alice
+          .post(
+              "/api/v1/auth/login",
+              Map.of("username", USERNAME, "password", "senha errada bem longa"))
+          .andExpect(status().isUnauthorized());
+    }
+
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from login_attempt where blocked_until is not null",
+                Integer.class))
+        .isEqualTo(5);
+    jdbcTemplate.update(
+        "update login_attempt set attempted_at = now() - interval '20 minutes'"
+            + " where success = false");
+
+    alice
+        .post("/api/v1/auth/login", Map.of("username", USERNAME, "password", PASSWORD))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(header().exists("Retry-After"));
+  }
+
+  @Test
+  void bloqueioExpiradoPermiteNovoLogin() throws Exception {
+    alice.register(USERNAME, PASSWORD);
+    for (int attempt = 1; attempt <= 5; attempt++) {
+      alice
+          .post(
+              "/api/v1/auth/login",
+              Map.of("username", USERNAME, "password", "senha errada bem longa"))
+          .andExpect(status().isUnauthorized());
+    }
+    jdbcTemplate.update(
+        "update login_attempt set blocked_until = now() - interval '1 minute'"
+            + " where success = false");
+
+    alice.withoutSession().login(USERNAME, PASSWORD);
+    alice.get("/api/v1/auth/me").andExpect(status().isOk());
+  }
+
+  @Test
+  void bloqueioDeUmIpNaoAfetaOutroIp() throws Exception {
+    alice.register(USERNAME, PASSWORD);
+    for (int attempt = 1; attempt <= 5; attempt++) {
+      alice
+          .post(
+              "/api/v1/auth/login",
+              Map.of("username", USERNAME, "password", "senha errada bem longa"))
+          .andExpect(status().isUnauthorized());
+    }
+
+    alice
+        .postFromIp(
+            "/api/v1/auth/login", Map.of("username", USERNAME, "password", PASSWORD), "203.0.113.9")
+        .andExpect(status().isOk());
+  }
+
+  @Test
   void cookieDeSessaoInvalidoNaoConcedeAcesso() throws Exception {
     alice
         .withSession("sessao-inexistente")

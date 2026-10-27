@@ -38,9 +38,16 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
   de 10.000+ entradas comuns, sem chamada externa.
 - Sessão: cookie `HttpOnly`, `Secure`, `SameSite=Lax`, 30 minutos de inatividade
   e 12 horas absolutas; CSRF por cookie + header; logout invalida a sessão no
-  servidor.
+  servidor. O cliente também expira a sessão localmente nesses prazos, revalida
+  ao voltar o foco e limpa todo o cache financeiro em 401, logout, timeout ou
+  troca de usuário.
 - Login limitado a 5 falhas por 15 minutos por usuário+IP, com bloqueio de 15
-  minutos e contador zerado em sucesso.
+  minutos persistido a partir da falha que atingiu o limite e contador zerado em
+  sucesso. O fim do bloqueio sobrevive a reinícios e não depende da janela
+  deslizante.
+- Cadastro limitado a 5 tentativas por hora por IP, em memória, antes do custo de
+  Argon2id. Reiniciar a aplicação zera a janela; a limitação de instância única
+  está registrada em `docs/operations.md`.
 - Mensagens de erro de autenticação são genéricas e não revelam se o usuário
   existe.
 
@@ -62,24 +69,37 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
 - Erros usam `ProblemDetail` (RFC 9457) com código estável; respostas brutas do
   provedor não são repassadas ao cliente.
 - `audit_event` registra eventos de autenticação, senha, exportação, desconexão,
-  exclusão e sincronização sem conteúdo financeiro desnecessário.
-- `Idempotency-Key` evita duplicação de mutações; respostas são limitadas a 24 h
-  de retenção.
+  exclusão e sincronização sem conteúdo financeiro desnecessário. Acesso negado
+  (`AUTHORIZATION_DENIED`) e CSRF inválido (`CSRF_REJECTED`) registram método e
+  caminho sanitizado, com `user_id` nulo quando o usuário não é conhecido.
+- `Idempotency-Key` (8–128 caracteres) evita duplicação das escritas financeiras
+  críticas por 24 h: lançamentos (`POST`, `PATCH` e `DELETE` de transações),
+  itens de fatura (`POST`, `PATCH` e `DELETE`) e pagamentos de fatura (`POST`).
+  Respostas 2xx e 4xx são cifradas em `idempotency_key` e reproduzidas para o
+  mesmo usuário/chave/corpo; corpo divergente ou requisição concorrente retorna
+  `409`. Respostas 5xx liberam a reserva para um novo retry. Demais mutações
+  ignoram o cabeçalho; login, registro e CSRF ficam fora do filtro.
+- Webhooks foram removidos em 2026-10-25 (S-04); não há token/segredo de webhook
+  ativo.
 
 ## Exportação de dados
 
 - `GET /api/v1/me/export` gera, em streaming, um ZIP com JSON Lines e CSV por
-  conjunto de dados ativo do titular: perfil, contas, cartões, categorias,
-  transações, faturas, itens, pagamentos, correções, reconciliações, integrações
-  (somente metadados), conexões (sem itemId/HMAC), execuções de sincronização,
-  jobs, webhooks e auditoria sanitizada.
+  conjunto de dados ativo do titular: perfil, contas, cartões, posições de
+  investimento, ativos/passivos manuais, metas, alocações e histórico de metas,
+  categorias, transações, faturas, itens, pagamentos, correções, reconciliações,
+  integrações (somente metadados), conexões (sem itemId/HMAC), execuções de
+  sincronização, jobs e auditoria sanitizada.
 - O arquivo `manifest.json` documenta formato (`delta-finance-export`, versão 1),
-  data, fuso `America/Sao_Paulo`, moeda `BRL` e contagem por arquivo. Os nomes
-  `*.jsonl` e `*.csv` são estáveis para uso portátil.
+  data, fuso `America/Sao_Paulo`, moeda `BRL`, total de registros e contagem por
+  arquivo. Os nomes `*.jsonl` e `*.csv` são estáveis para uso portátil.
+- Datasets de recursos removidos (webhooks e snapshots patrimoniais) não são
+  gerados nem existem no schema desde a baseline `V001__baseline.sql`. O
+  histórico de metas permanece no dataset `goal_progress_snapshots`; a dívida
+  inicial não faz parte do schema nem da exportação.
 - Valores financeiros, descrições, apelidos e nomes de categoria são decifrados
   para o titular. Nunca são exportados: Client Secret, Client ID, API Key,
-  `password_hash`, tokens, chaves, HMACs, itens externos brutos e payloads de
-  webhook.
+  `password_hash`, tokens, chaves, HMACs e itens externos brutos.
 - Cada exportação registra `audit_event` do tipo `EXPORT_REQUESTED` com formato e
   versão, sem valores, descrições ou segredos. A consulta é sempre escopada por
   `user_id` da sessão; não há parâmetro para escolher outro titular.
@@ -90,7 +110,6 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
 |---|---|
 | `login_attempt` | 30 dias |
 | `sync_run` | 90 dias |
-| `webhook_event` | 90 dias |
 | `audit_event` | 1 ano |
 | `idempotency_key` | 24 h após `expires_at` |
 | Backups criptografados | 30 dias |
@@ -104,8 +123,9 @@ contas, transações e histórico; `deleteImportedData=true` apaga somente os da
 de origem importada, mantendo contas manuais, lançamentos nessas contas e categorias.
 
 A exclusão de conta exige senha + a palavra `EXCLUIR`, revoga todas as sessões,
-cancela jobs, apaga credenciais e dados ativos e mantém o tombstone. Cópias de
-backup expiram em até 30 dias; o usuário é informado disso antes de confirmar.
+cancela jobs, apaga credenciais e todos os dados ativos (incluindo investimentos,
+patrimônio e metas) e mantém o tombstone. Cópias de backup expiram em até 30
+dias; o usuário é informado disso antes de confirmar.
 Outros usuários da instalação não são afetados. O procedimento operacional está
 em `docs/runbooks/deletion.md`.
 
@@ -124,9 +144,10 @@ em `docs/runbooks/deletion.md`.
 - Cookie de sessão `__Host-delta_session` (`HttpOnly`, `Secure`, `SameSite=Lax`,
   path `/`) e CSRF por cookie `XSRF-TOKEN` + header `X-XSRF-TOKEN`. Mutações sem
   token válido retornam `403`.
-- Rate limits: login com 5 falhas/15 min por usuário+IP e bloqueio de 15 min;
-  chamadas à Pluggy usam o limitador do provedor (`RateLimit-Reset`/
-  `Retry-After`). Não há limite genérico por IP na API além desses controles.
+- Rate limits: login com 5 falhas/15 min por usuário+IP e bloqueio de 15 min
+  persistido; cadastro com 5 tentativas/hora por IP em memória; chamadas à Pluggy
+  usam o limitador do provedor (`RateLimit-Reset`/`Retry-After`). Não há limite
+  genérico para as demais rotas.
 - Actuator exposto apenas na rede interna do Compose; Swagger desabilitado em
   produção.
 
@@ -139,7 +160,7 @@ completa está em `specs/001-finance/data-model.md` e `research.md`; resumo:
 |---|---|---|
 | Texto claro | `user_id`, IDs locais, datas, tipo, status, moeda, origem, ciclo, timestamps | índices B-tree e filtros SQL |
 | HMAC | `username_hash`, `ip_hash`, `dedup_key`, `fingerprint`, hashes de IDs externos e de nome de categoria | igualdade/unicidade; não reversível |
-| Cifrado | valores, saldos, descrições, apelidos, instituição, nomes de categoria, totais de fatura, juros, pagamentos, observações, Client ID/Secret, segredo de webhook | decifrado em memória no backend; sem `LIKE`, soma ou ordenação no banco |
+| Cifrado | valores, saldos, descrições, apelidos, instituição, nomes de categoria, totais de fatura, juros, pagamentos, observações, Client ID/Secret | decifrado em memória no backend; sem `LIKE`, soma ou ordenação no banco |
 | Hash de senha | `password_hash` | somente verificação Argon2id |
 | Metadado de auditoria | evento, resultado, código, contadores | sanitizado, retenção de 1 ano |
 
@@ -158,6 +179,9 @@ administrador que controle backend e chaves; não há conhecimento zero.
 - Gate de cobertura: 80% de linhas no domínio e 100% dos caminhos críticos de
   autorização e dinheiro (`Money`, `OwnershipGuard`, `AuthenticatedUser`) em
   `server/pom.xml`.
+- Testes de segurança da Fase 1: `AuthSessionIT`, `IdempotencyIT`,
+  `RegistrationRateLimitIT`, `PasswordResetIT`, `PasswordResetNonWebIT`,
+  `SecurityHeadersIT`, `OwnershipGuardTest` e `SessionExpiry.test.tsx`.
 
 ### Resultado do ZAP baseline
 
@@ -180,10 +204,11 @@ autenticadas não fazem parte do baseline passivo e são cobertas por
 
 Não há e-mail transacional. O operador executa
 `deploy/scripts/reset-password.sh` apenas após verificar a identidade por canal
-independente. O mecanismo exige `DELTA_OPERATOR_RESET_TOKEN`, gera senha
-temporária aleatória, revoga todas as sessões, limpa bloqueios de login e grava
-`PASSWORD_RESET_ASSISTED` sem a senha. Procedimento e walkthrough em
-`docs/runbooks/password-reset.md`.
+independente. O mecanismo exige `DELTA_OPERATOR_RESET_TOKEN` (propriedade
+`delta.operator.reset.token`), gera senha temporária aleatória, revoga todas as
+sessões por JDBC — inclusive no modo `web-application-type=none` —, limpa
+bloqueios de login e grava `PASSWORD_RESET_ASSISTED` sem a senha. Procedimento e
+walkthrough em `docs/runbooks/password-reset.md`.
 
 
 ## Reportar vulnerabilidades

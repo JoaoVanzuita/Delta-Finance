@@ -17,4 +17,6 @@ public interface PluggyConnectionRepository extends JpaRepository<PluggyConnecti
   List<PluggyConnection> findByIntegrationIdOrderByCreatedAtAsc(UUID integrationId);
 
   long countByIntegrationId(UUID integrationId);
+
+  long countByIntegrationIdAndStatusNot(UUID integrationId, ConnectionStatus status);
 }

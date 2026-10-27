@@ -2,6 +2,7 @@ package com.deltafinance.integrations.api;
 
 import com.deltafinance.integrations.application.IntegrationView;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /** Resposta da integração; Client Secret e API Key nunca aparecem. */
@@ -13,7 +14,9 @@ public record IntegrationResponse(
     Instant lastSyncAttemptAt,
     Instant lastSuccessfulSyncAt,
     String lastErrorCode,
-    long connectionCount) {
+    long connectionCount,
+    int connectionLimit,
+    LocalDate connectionLimitCheckedAt) {
 
   public static IntegrationResponse from(IntegrationView view) {
     return new IntegrationResponse(
@@ -24,6 +27,8 @@ public record IntegrationResponse(
         view.lastSyncAttemptAt(),
         view.lastSuccessfulSyncAt(),
         view.lastErrorCode(),
-        view.connectionCount());
+        view.connectionCount(),
+        view.connectionLimit(),
+        view.connectionLimitCheckedAt());
   }
 }

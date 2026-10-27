@@ -60,9 +60,6 @@ class RetentionJobIT extends PostgresTestBase {
     insertSyncRun(now, Duration.ofDays(91), "SUCCESS");
     insertSyncRun(now, Duration.ofDays(89), "EMPTY");
 
-    insertWebhookEvent(now, Duration.ofDays(91), "old-event");
-    insertWebhookEvent(now, Duration.ofDays(89), "new-event");
-
     insertAuditEvent(now, Duration.ofDays(366), "LOGIN_SUCCESS");
     insertAuditEvent(now, Duration.ofDays(364), "LOGOUT");
 
@@ -77,13 +74,11 @@ class RetentionJobIT extends PostgresTestBase {
 
     assertThat(result.loginAttempts()).isEqualTo(1);
     assertThat(result.syncRuns()).isEqualTo(1);
-    assertThat(result.webhookEvents()).isEqualTo(1);
     assertThat(result.auditEvents()).isEqualTo(1);
     assertThat(result.idempotencyKeys()).isEqualTo(1);
 
     assertThat(count("login_attempt")).isEqualTo(1);
     assertThat(count("sync_run")).isEqualTo(1);
-    assertThat(count("webhook_event")).isEqualTo(1);
     assertThat(count("audit_event")).isEqualTo(1);
     assertThat(count("idempotency_key")).isEqualTo(1);
     assertThat(
@@ -130,24 +125,6 @@ class RetentionJobIT extends PostgresTestBase {
         startedAt,
         startedAt,
         startedAt);
-  }
-
-  private void insertWebhookEvent(Timestamp now, Duration age, String eventId) {
-    Timestamp receivedAt = Timestamp.from(now.toInstant().minus(age));
-    jdbcTemplate.update(
-        "insert into webhook_event"
-            + " (id, user_id, integration_id, connection_id, provider_event_id, payload_hash,"
-            + " status, received_at, created_at, updated_at, version)"
-            + " values (?, ?, ?, ?, ?, ?, 'RECEIVED', ?, ?, ?, 0)",
-        UUID.randomUUID(),
-        user.id(),
-        integrationId,
-        connectionId,
-        eventId,
-        new byte[] {7, 8},
-        receivedAt,
-        receivedAt,
-        receivedAt);
   }
 
   private void insertAuditEvent(Timestamp now, Duration age, String eventType) {

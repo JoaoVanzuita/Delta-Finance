@@ -10,4 +10,5 @@ public record TransactionCorrectionRequest(
     LocalDate postedOn,
     String amount,
     UUID categoryId,
-    @Size(max = 2000, message = "As observações devem ter no máximo 2000 caracteres.") String notes) {}
+    @Size(max = 2000, message = "As observações devem ter no máximo 2000 caracteres.") String notes,
+    UUID relatedTransactionId) {}

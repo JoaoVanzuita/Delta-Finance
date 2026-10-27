@@ -81,6 +81,23 @@ public final class AuthTestClient {
     return mockMvc.perform(withBody(withCookies(request(HttpMethod.POST, path)), body));
   }
 
+  public ResultActions postWithHeader(String path, Object body, String name, String value)
+      throws Exception {
+    return mockMvc.perform(
+        withBody(withCookies(request(HttpMethod.POST, path)).header(name, value), body));
+  }
+
+  /** Executa um POST simulando outro IP de origem (rate limit por IP). */
+  public ResultActions postFromIp(String path, Object body, String remoteAddress) throws Exception {
+    return mockMvc.perform(
+        withBody(withCookies(request(HttpMethod.POST, path)), body)
+            .with(
+                request -> {
+                  request.setRemoteAddr(remoteAddress);
+                  return request;
+                }));
+  }
+
   public ResultActions put(String path, Object body) throws Exception {
     return mockMvc.perform(withBody(withCookies(request(HttpMethod.PUT, path)), body));
   }
@@ -89,8 +106,18 @@ public final class AuthTestClient {
     return mockMvc.perform(withBody(withCookies(request(HttpMethod.PATCH, path)), body));
   }
 
+  public ResultActions patchWithHeader(String path, Object body, String name, String value)
+      throws Exception {
+    return mockMvc.perform(
+        withBody(withCookies(request(HttpMethod.PATCH, path)).header(name, value), body));
+  }
+
   public ResultActions delete(String path) throws Exception {
     return mockMvc.perform(withCookies(request(HttpMethod.DELETE, path)));
+  }
+
+  public ResultActions deleteWithHeader(String path, String name, String value) throws Exception {
+    return mockMvc.perform(withCookies(request(HttpMethod.DELETE, path)).header(name, value));
   }
 
   public String sessionId() {

@@ -75,6 +75,7 @@ export function InvoiceDetailPage() {
   const invoice = invoiceQuery.data
   const items = invoice.items ?? []
   const payments = invoice.payments ?? []
+  const paid = invoice.status === 'PAID'
   const cardAccount = (accountsQuery.data?.items ?? []).find(
     (account) => account.id === invoice.cardAccountId,
   )
@@ -90,6 +91,12 @@ export function InvoiceDetailPage() {
 
       <InvoiceStatus invoice={invoice} creditBalance={cardAccount?.cardProfile?.creditBalance} />
 
+      {paid ? (
+        <p className="rounded-card border border-line bg-surface-muted p-3 text-sm text-ink-muted">
+          Fatura paga é histórica: itens, valores e pagamentos não podem mais ser alterados.
+        </p>
+      ) : null}
+
       {remove.isError ? (
         <p
           role="alert"
@@ -104,13 +111,15 @@ export function InvoiceDetailPage() {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-ink">Itens da fatura</h2>
-          <button
-            type="button"
-            onClick={() => setItemDialog('new')}
-            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
-          >
-            Adicionar item
-          </button>
+          {!paid ? (
+            <button
+              type="button"
+              onClick={() => setItemDialog('new')}
+              className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
+            >
+              Adicionar item
+            </button>
+          ) : null}
         </div>
 
         {items.length === 0 ? (
@@ -135,11 +144,7 @@ export function InvoiceDetailPage() {
                     </p>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs">
                       <span className="rounded-card border border-line bg-surface-muted px-2 py-0.5 text-ink">
-                        {item.source === 'IMPORTED'
-                          ? 'Importado'
-                          : item.source === 'PROVIDER_BILL'
-                            ? 'Bill do provedor'
-                            : 'Manual'}
+                        {item.source === 'IMPORTED' ? 'Importado' : 'Manual'}
                       </span>
                       {item.transactionId ? (
                         <span className="rounded-card border border-line bg-surface-muted px-2 py-0.5 text-ink">
@@ -154,7 +159,7 @@ export function InvoiceDetailPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {!item.transactionId ? (
+                  {!paid && !item.transactionId ? (
                     <>
                       <button
                         type="button"
@@ -196,13 +201,15 @@ export function InvoiceDetailPage() {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-ink">Pagamentos</h2>
-          <button
-            type="button"
-            onClick={() => setPaymentDialog(true)}
-            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
-          >
-            Registrar pagamento
-          </button>
+          {!paid ? (
+            <button
+              type="button"
+              onClick={() => setPaymentDialog(true)}
+              className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+            >
+              Registrar pagamento
+            </button>
+          ) : null}
         </div>
         {payments.length === 0 ? (
           <p className="rounded-card border border-line bg-surface p-4 text-sm text-ink-muted">

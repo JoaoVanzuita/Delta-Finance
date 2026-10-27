@@ -16,8 +16,6 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.session.FindByIndexNameSessionRepository;
-import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,10 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
  * identidade por um canal independente. O serviço:
  *
  * <ul>
- *   <li>exige um token operacional configurado em {@code delta.security.operator-reset-token};
+ *   <li>exige um token operacional configurado em {@code delta.operator.reset.token};
  *   <li>só altera contas {@code ACTIVE}, com mensagem genérica para conta inexistente;
  *   <li>gera uma senha temporária aleatória, substitui o hash e nunca a registra em log/auditoria;
- *   <li>revoga todas as sessões, limpa bloqueios de login e registra evento sanitizado.
+ *   <li>revoga todas as sessões via JDBC, sem depender de contexto web;
+ *   <li>limpa bloqueios de login e registra evento sanitizado.
  * </ul>
  *
  * <p>Nunca aceita {@code user_id} de requisição HTTP: o mecanismo é exclusivamente operacional.
@@ -46,7 +45,6 @@ public class AssistedPasswordResetService {
 
   private final AppUserRepository userRepository;
   private final PasswordEncoder passwordEncoder;
-  private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
   private final IndexHmacService hmacService;
   private final JdbcTemplate jdbcTemplate;
   private final AuditService auditService;
@@ -57,15 +55,14 @@ public class AssistedPasswordResetService {
   public AssistedPasswordResetService(
       AppUserRepository userRepository,
       PasswordEncoder passwordEncoder,
-      FindByIndexNameSessionRepository<? extends Session> sessionRepository,
       IndexHmacService hmacService,
       JdbcTemplate jdbcTemplate,
       AuditService auditService,
       Clock clock,
-      @Value("${delta.security.operator-reset-token:}") String operatorToken) {
+      @Value("${delta.operator.reset.token:${delta.security.operator-reset-token:}}")
+          String operatorToken) {
     this.userRepository = userRepository;
     this.passwordEncoder = passwordEncoder;
-    this.sessionRepository = sessionRepository;
     this.hmacService = hmacService;
     this.jdbcTemplate = jdbcTemplate;
     this.auditService = auditService;
@@ -101,12 +98,14 @@ public class AssistedPasswordResetService {
     user.changePasswordHash(passwordEncoder.encode(temporaryPassword));
     userRepository.save(user);
 
-    int sessionsRevoked = 0;
-    for (String sessionId :
-        sessionRepository.findByPrincipalName(user.getUsernameNormalized()).keySet()) {
-      sessionRepository.deleteById(sessionId);
-      sessionsRevoked++;
-    }
+    Integer activeSessions =
+        jdbcTemplate.queryForObject(
+            "select count(*) from spring_session where principal_name = ?",
+            Integer.class,
+            user.getUsernameNormalized());
+    int sessionsRevoked = activeSessions == null ? 0 : activeSessions;
+    jdbcTemplate.update(
+        "delete from spring_session where principal_name = ?", user.getUsernameNormalized());
     jdbcTemplate.update(
         "delete from login_attempt where username_hash = ?",
         hmacService.usernameHash(user.getUsernameNormalized()));

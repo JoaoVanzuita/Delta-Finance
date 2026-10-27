@@ -48,9 +48,11 @@ O script roda um processo efêmero com
 `--delta.crypto.rotation.run=true`, executa `KeyRotationJob` e encerra com
 código 0 se não houver falhas. O job:
 
-- percorre todos os campos cifrados conhecidos (`pluggy_integration`,
-  `financial_account`, `transaction`, `invoice`, `invoice_item`,
-  `invoice_payment`, correções, webhook, cartão etc.);
+- percorre todos os campos cifrados ativos (`pluggy_integration`,
+  `pluggy_connection`, `financial_account`, `card_profile`, `transaction`,
+  `invoice`, `invoice_item`, `invoice_payment`, correções, `investment_position`,
+  `manual_asset_liability`, `financial_goal`, `goal_allocation`,
+  `goal_progress_snapshot` e `idempotency_key.response_body`);
 - regrava cada valor com a versão ativa, preservando o AAD
   (`user_id`, tabela, coluna, ID do registro);
 - processa em lotes por ID e é idempotente;
@@ -76,6 +78,7 @@ Consulta auxiliar (não revela texto claro):
 select count(*) from transaction where get_byte(amount_effective_enc, 1) < 2;
 select count(*) from financial_account where get_byte(alias_enc, 1) < 2;
 select count(*) from invoice where get_byte(total_enc, 1) < 2;
+select count(*) from idempotency_key where get_byte(response_body_enc, 1) < 2;
 ```
 
 ## 5. Remover a chave antiga

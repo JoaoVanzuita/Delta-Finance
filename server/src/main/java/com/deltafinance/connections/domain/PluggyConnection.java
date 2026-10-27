@@ -154,6 +154,13 @@ public class PluggyConnection extends BaseEntity {
     }
   }
 
+  /** Libera um estado {@code SYNCING} interrompido, preservando o último estado conhecido. */
+  public void releaseSync() {
+    if (this.status == ConnectionStatus.SYNCING) {
+      this.status = this.lastSyncAt == null ? ConnectionStatus.ACTIVE : ConnectionStatus.SYNCED;
+    }
+  }
+
   /** Atualiza metadados fornecidos pelo item durante uma leitura bem-sucedida. */
   public void updateProviderMetadata(
       byte[] institutionNameEnc, Instant consentExpiresAt, Instant nextAutoSyncAt) {

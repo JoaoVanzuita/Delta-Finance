@@ -4,6 +4,13 @@ description: "Task list for the Delta Finance MVP implementation"
 
 # Tasks: MVP de Finanças Pessoais Familiares
 
+> **Nota de 2026-10-25/26:** registros de webhooks (T074/T085 e testes
+> relacionados), de Bills experimentais (T123/T133), da revisão manual
+> `RESTORE`/`CONFIRM_REMOVAL` (T192), de snapshots patrimoniais (T157) e da
+> redução de dívida nas metas (T165/T167) são históricos. Esses recursos foram
+> removidos pelos cortes S-04, S-05, S-08, S-02 e S-03; consulte
+> [`analise-simplificacao.md`](../../docs/analise-simplificacao.md).
+
 **Input**: Design documents from `/specs/001-finance/`
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`,

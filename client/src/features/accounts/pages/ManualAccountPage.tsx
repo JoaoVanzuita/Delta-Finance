@@ -90,7 +90,9 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
     return 'CASH'
   })
   const [alias, setAlias] = useState(account?.alias ?? '')
-  const [referenceBalance, setReferenceBalance] = useState(account?.currentBalance ?? '0.00')
+  const [referenceBalance, setReferenceBalance] = useState(
+    account?.referenceBalance ?? account?.currentBalance ?? '0.00',
+  )
   const [referenceDate, setReferenceDate] = useState(
     account?.balanceReferenceAt ?? todayReference(),
   )
@@ -174,8 +176,8 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
           {editing ? 'Editar conta manual' : 'Nova conta manual'}
         </h1>
         <p className="max-w-xl text-sm leading-relaxed text-ink-muted">
-          Use o saldo e a data de referência informados por você. O tipo não pode ser alterado
-          depois da criação.
+          Use o saldo e a data de referência informados por você. O saldo atual soma os lançamentos
+          efetivados a partir dessa data. O tipo não pode ser alterado depois da criação.
         </p>
       </header>
 

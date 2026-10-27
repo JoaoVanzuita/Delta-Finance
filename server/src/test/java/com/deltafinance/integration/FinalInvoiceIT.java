@@ -197,6 +197,282 @@ class FinalInvoiceIT extends PostgresTestBase {
     assertThat(detailSum.setScale(2)).isEqualByComparingTo("95.00");
   }
 
+  @Test
+  void itemManualComTotalDeParcelasUmCompoeOsRelatorios() throws Exception {
+    createCardTransaction("-10.00", "2026-10-03");
+    String firstId = firstInvoiceId();
+    alice
+        .post(
+            "/api/v1/invoices/" + firstId + "/items",
+            Map.of(
+                "kind",
+                "INTEREST",
+                "reportingEffect",
+                "EXPENSE_INCREASE",
+                "description",
+                "Tarifa avulsa",
+                "amount",
+                "10.00",
+                "occurredOn",
+                "2026-10-05",
+                "totalInstallments",
+                1))
+        .andExpect(status().isCreated());
+
+    assertThat(summary().path("expenses").asString()).isEqualTo("20.00");
+    JsonNode entries = entries("from=2026-10-01&to=2026-10-31");
+    assertThat(entries.path("items").toString()).contains("Tarifa avulsa");
+  }
+
+  @Test
+  void filtroQueIsolaReducaoNaoProduzDespesaNegativa() throws Exception {
+    createCardTransaction("-50.00", "2026-10-03");
+    String firstId = firstInvoiceId();
+    alice
+        .post(
+            "/api/v1/invoices/" + firstId + "/items",
+            Map.of(
+                "kind",
+                "CREDIT",
+                "reportingEffect",
+                "EXPENSE_DECREASE",
+                "description",
+                "Crédito isolado",
+                "amount",
+                "30.00",
+                "occurredOn",
+                "2026-10-05"))
+        .andExpect(status().isCreated());
+
+    JsonNode summary = summary("from=2026-10-01&to=2026-10-31&type=REFUND");
+    assertThat(summary.path("expenses").asString()).isEqualTo("0.00");
+
+    JsonNode categories = categories("from=2026-10-01&to=2026-10-31&type=REFUND");
+    for (JsonNode category : categories) {
+      assertThat(new BigDecimal(category.path("amount").asString()).signum())
+          .isGreaterThanOrEqualTo(0);
+    }
+    JsonNode series = timeseries("from=2026-10-01&to=2026-10-31&period=MONTH&type=REFUND");
+    for (JsonNode bucket : series) {
+      assertThat(new BigDecimal(bucket.path("expenses").asString()).signum())
+          .isGreaterThanOrEqualTo(0);
+    }
+  }
+
+  @Test
+  void filtroRefundNaoIncluiJurosETarifas() throws Exception {
+    createCardTransaction("-100.00", "2026-10-03");
+    String firstId = firstInvoiceId();
+    alice
+        .post(
+            "/api/v1/invoices/" + firstId + "/items",
+            Map.of(
+                "kind",
+                "INTEREST",
+                "reportingEffect",
+                "EXPENSE_INCREASE",
+                "description",
+                "Juros do ciclo",
+                "amount",
+                "20.00",
+                "occurredOn",
+                "2026-10-05"))
+        .andExpect(status().isCreated());
+    alice
+        .post(
+            "/api/v1/invoices/" + firstId + "/items",
+            Map.of(
+                "kind",
+                "CREDIT",
+                "reportingEffect",
+                "EXPENSE_DECREASE",
+                "description",
+                "Crédito do ciclo",
+                "amount",
+                "30.00",
+                "occurredOn",
+                "2026-10-05"))
+        .andExpect(status().isCreated());
+
+    JsonNode entries = entries("from=2026-10-01&to=2026-10-31&type=REFUND");
+    String body = entries.path("items").toString();
+    assertThat(body).contains("Crédito do ciclo").doesNotContain("Juros do ciclo");
+
+    assertThat(summary("from=2026-10-01&to=2026-10-31&type=REFUND").path("expenses").asString())
+        .isEqualTo("0.00");
+  }
+
+  @Test
+  void resumoCategoriasSerieEEntriesUsamAMesmaProjecao() throws Exception {
+    createCardTransaction("-100.00", "2026-10-03");
+    String firstId = firstInvoiceId();
+    alice
+        .post(
+            "/api/v1/invoices/" + firstId + "/items",
+            Map.of(
+                "kind", "CREDIT",
+                "reportingEffect", "EXPENSE_DECREASE",
+                "description", "Crédito",
+                "amount", "30.00",
+                "occurredOn", "2026-10-05"))
+        .andExpect(status().isCreated());
+
+    assertThat(summary().path("expenses").asString()).isEqualTo("70.00");
+
+    BigDecimal categoryTotal = BigDecimal.ZERO;
+    for (JsonNode category : categories("from=2026-10-01&to=2026-10-31&period=MONTH")) {
+      categoryTotal = categoryTotal.add(new BigDecimal(category.path("amount").asString()));
+    }
+    assertThat(categoryTotal).isEqualByComparingTo("70.00");
+
+    BigDecimal seriesTotal = BigDecimal.ZERO;
+    for (JsonNode bucket : timeseries("from=2026-10-01&to=2026-10-31&period=MONTH")) {
+      seriesTotal = seriesTotal.add(new BigDecimal(bucket.path("expenses").asString()));
+    }
+    assertThat(seriesTotal).isEqualByComparingTo("70.00");
+
+    BigDecimal drillDown = BigDecimal.ZERO;
+    for (JsonNode item : entries("from=2026-10-01&to=2026-10-31").path("items")) {
+      BigDecimal amount = new BigDecimal(item.path("amount").asString());
+      drillDown = amount.signum() < 0 ? drillDown.add(amount.abs()) : drillDown.subtract(amount);
+    }
+    assertThat(drillDown).isEqualByComparingTo("70.00");
+  }
+
+  @Test
+  void correcaoDeCompraParceladaPropagaParaTodasAsParcelas() throws Exception {
+    createCardTransaction("-120.00", "2026-10-03");
+    String transactionId = null;
+    for (JsonNode transaction : transactions().path("items")) {
+      if ("Compra -120.00".equals(transaction.path("description").asString())) {
+        transactionId = transaction.path("id").asString();
+      }
+    }
+    assertThat(transactionId).isNotNull();
+    String firstId = firstInvoiceId();
+
+    alice
+        .post(
+            "/api/v1/invoices/" + firstId + "/items",
+            Map.of(
+                "kind", "PURCHASE",
+                "reportingEffect", "NONE",
+                "description", "Compra -120.00",
+                "amount", "120.00",
+                "occurredOn", "2026-10-03",
+                "transactionId", transactionId,
+                "totalInstallments", 3))
+        .andExpect(status().isCreated());
+
+    alice
+        .patch(
+            "/api/v1/transactions/" + transactionId,
+            Map.of(
+                "amount", "-150.00", "description", "Compra corrigida", "postedOn", "2026-10-03"))
+        .andExpect(status().isOk());
+
+    int corrected = 0;
+    for (JsonNode invoice : invoices().path("items")) {
+      JsonNode detail = invoiceDetail(invoice.path("id").asString());
+      for (JsonNode item : detail.path("items")) {
+        if ("Compra corrigida".equals(item.path("description").asString())) {
+          assertThat(item.path("amount").asString()).isEqualTo("150.00");
+          corrected++;
+        }
+      }
+    }
+    assertThat(corrected).isEqualTo(3);
+  }
+
+  @Test
+  void creditoExcedenteNaoDeixaDespesaNegativaEContinuaComoCredito() throws Exception {
+    createCardTransaction("-100.00", "2026-10-03");
+    String firstId = firstInvoiceId();
+    alice
+        .post(
+            "/api/v1/invoices/" + firstId + "/items",
+            Map.of(
+                "kind", "CREDIT",
+                "reportingEffect", "EXPENSE_DECREASE",
+                "description", "Crédito excedente",
+                "amount", "150.00",
+                "occurredOn", "2026-10-05"))
+        .andExpect(status().isCreated());
+
+    assertThat(summary().path("expenses").asString()).isEqualTo("0.00");
+    assertThat(invoiceDetail(firstId).path("total").asString()).isEqualTo("0.00");
+    assertThat(
+            json(alice
+                    .get("/api/v1/accounts/" + cardId)
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString())
+                .path("cardProfile")
+                .path("creditBalance")
+                .asString())
+        .isEqualTo("50.00");
+  }
+
+  private String firstInvoiceId() throws Exception {
+    for (JsonNode invoice : invoices().path("items")) {
+      if ("2026-10-05".equals(invoice.path("closingDate").asString())) {
+        return invoice.path("id").asString();
+      }
+    }
+    throw new AssertionError("Fatura de fechamento 2026-10-05 não encontrada.");
+  }
+
+  private JsonNode summary(String query) throws Exception {
+    return json(
+        alice
+            .get("/api/v1/dashboard/summary?" + query)
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode categories(String query) throws Exception {
+    return json(
+        alice
+            .get("/api/v1/dashboard/categories?" + query)
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode timeseries(String query) throws Exception {
+    return json(
+        alice
+            .get("/api/v1/dashboard/timeseries?" + query)
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode entries(String query) throws Exception {
+    return json(
+        alice
+            .get("/api/v1/reports/entries?" + query + "&limit=100")
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private JsonNode transactions() throws Exception {
+    return json(
+        alice
+            .get("/api/v1/transactions?limit=100&accountId=" + cardId)
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
   private void createCardTransaction(String amount, String postedOn) throws Exception {
     Map<String, Object> request = new LinkedHashMap<>();
     request.put("accountId", cardId);

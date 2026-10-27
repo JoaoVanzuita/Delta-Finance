@@ -81,6 +81,7 @@ public class ExportService {
     manifest.put("exportedAt", clock.now().toString());
     manifest.put("timezone", "America/Sao_Paulo");
     manifest.put("currency", "BRL");
+    manifest.put("recordCount", totalRecords);
     manifest.put("files", files);
     manifest.put(
         "notes",
@@ -221,6 +222,244 @@ public class ExportService {
               return row;
             }),
         new Dataset(
+            "investment_positions",
+            List.of(
+                "id",
+                "broker",
+                "assetName",
+                "ticker",
+                "quantity",
+                "referencePrice",
+                "referenceDate",
+                "notes",
+                "origin",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, broker, asset_name_enc, ticker_enc, quantity_enc,"
+                + " reference_price_enc, reference_date, notes_enc, origin, created_at, updated_at"
+                + " from investment_position where user_id = ? order by reference_date desc, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("broker", rs.getString("broker"));
+              row.put(
+                  "assetName",
+                  decrypt(
+                      userId,
+                      "investment_position",
+                      "asset_name",
+                      id,
+                      rs.getBytes("asset_name_enc")));
+              row.put(
+                  "ticker",
+                  decrypt(userId, "investment_position", "ticker", id, rs.getBytes("ticker_enc")));
+              row.put(
+                  "quantity",
+                  decrypt(
+                      userId, "investment_position", "quantity", id, rs.getBytes("quantity_enc")));
+              row.put(
+                  "referencePrice",
+                  decrypt(
+                      userId,
+                      "investment_position",
+                      "reference_price",
+                      id,
+                      rs.getBytes("reference_price_enc")));
+              row.put("referenceDate", date(rs, "reference_date"));
+              row.put(
+                  "notes",
+                  decrypt(userId, "investment_position", "notes", id, rs.getBytes("notes_enc")));
+              row.put("origin", rs.getString("origin"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "manual_asset_liabilities",
+            List.of(
+                "id",
+                "kind",
+                "type",
+                "description",
+                "referenceValue",
+                "referenceDate",
+                "notes",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, kind, type, description_enc, reference_value_enc,"
+                + " reference_date, notes_enc, created_at, updated_at from manual_asset_liability"
+                + " where user_id = ? order by reference_date desc, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("kind", rs.getString("kind"));
+              row.put("type", rs.getString("type"));
+              row.put(
+                  "description",
+                  decrypt(
+                      userId,
+                      "manual_asset_liability",
+                      "description",
+                      id,
+                      rs.getBytes("description_enc")));
+              row.put(
+                  "referenceValue",
+                  decrypt(
+                      userId,
+                      "manual_asset_liability",
+                      "reference_value",
+                      id,
+                      rs.getBytes("reference_value_enc")));
+              row.put("referenceDate", date(rs, "reference_date"));
+              row.put(
+                  "notes",
+                  decrypt(userId, "manual_asset_liability", "notes", id, rs.getBytes("notes_enc")));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "financial_goals",
+            List.of(
+                "id",
+                "name",
+                "description",
+                "notes",
+                "type",
+                "targetAmount",
+                "targetDate",
+                "status",
+                "progressRule",
+                "changedAt",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, name_enc, description_enc, notes_enc, type, target_amount_enc,"
+                + " target_date, status, progress_rule, changed_at, created_at, updated_at"
+                + " from financial_goal where user_id = ? order by created_at, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put(
+                  "name", decrypt(userId, "financial_goal", "name", id, rs.getBytes("name_enc")));
+              row.put(
+                  "description",
+                  decrypt(
+                      userId, "financial_goal", "description", id, rs.getBytes("description_enc")));
+              row.put(
+                  "notes",
+                  decrypt(userId, "financial_goal", "notes", id, rs.getBytes("notes_enc")));
+              row.put("type", rs.getString("type"));
+              row.put(
+                  "targetAmount",
+                  decrypt(
+                      userId,
+                      "financial_goal",
+                      "target_amount",
+                      id,
+                      rs.getBytes("target_amount_enc")));
+              row.put("targetDate", date(rs, "target_date"));
+              row.put("status", rs.getString("status"));
+              row.put("progressRule", rs.getString("progress_rule"));
+              row.put("changedAt", instant(rs, "changed_at"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "goal_allocations",
+            List.of(
+                "id",
+                "goalId",
+                "ordinal",
+                "sourceType",
+                "sourceId",
+                "allocationMode",
+                "allocatedAmount",
+                "allocationRatio",
+                "effectiveFrom",
+                "effectiveTo",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, goal_id, ordinal, source_type, source_id, allocation_mode,"
+                + " allocated_amount_enc, allocation_ratio, effective_from, effective_to,"
+                + " created_at, updated_at from goal_allocation where user_id = ?"
+                + " order by goal_id, ordinal, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("goalId", uuid(rs, "goal_id"));
+              row.put("ordinal", rs.getInt("ordinal"));
+              row.put("sourceType", rs.getString("source_type"));
+              row.put("sourceId", uuid(rs, "source_id"));
+              row.put("allocationMode", rs.getString("allocation_mode"));
+              row.put(
+                  "allocatedAmount",
+                  decrypt(
+                      userId,
+                      "goal_allocation",
+                      "allocated_amount",
+                      id,
+                      rs.getBytes("allocated_amount_enc")));
+              row.put("allocationRatio", rs.getBigDecimal("allocation_ratio"));
+              row.put("effectiveFrom", date(rs, "effective_from"));
+              row.put("effectiveTo", date(rs, "effective_to"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "goal_progress_snapshots",
+            List.of(
+                "id",
+                "goalId",
+                "referenceDate",
+                "currentValue",
+                "percentage",
+                "remaining",
+                "ruleVersion",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, goal_id, reference_date, current_value_enc, percentage,"
+                + " remaining_enc, rule_version, created_at, updated_at from goal_progress_snapshot"
+                + " where user_id = ? order by reference_date desc, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("goalId", uuid(rs, "goal_id"));
+              row.put("referenceDate", date(rs, "reference_date"));
+              row.put(
+                  "currentValue",
+                  decrypt(
+                      userId,
+                      "goal_progress_snapshot",
+                      "current_value",
+                      id,
+                      rs.getBytes("current_value_enc")));
+              row.put("percentage", rs.getBigDecimal("percentage"));
+              row.put(
+                  "remaining",
+                  decrypt(
+                      userId,
+                      "goal_progress_snapshot",
+                      "remaining",
+                      id,
+                      rs.getBytes("remaining_enc")));
+              row.put("ruleVersion", rs.getString("rule_version"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
             "categories",
             List.of("id", "name", "kind", "predefinedKey", "active", "createdAt", "updatedAt"),
             "select id, user_id, name_enc, kind, predefined_key, active, created_at, updated_at"
@@ -266,13 +505,16 @@ public class ExportService {
                 "notes",
                 "editedFields",
                 "reconciliationState",
+                "installmentNumber",
+                "totalInstallments",
                 "createdAt",
                 "updatedAt"),
             "select id, user_id, account_id, category_id, source, type, status, posted_on,"
                 + " source_posted_on, currency, amount_source_enc, amount_effective_enc,"
                 + " description_source_enc, description_effective_enc, related_transaction_id,"
                 + " invoice_id, adjustment_reason_enc, notes_enc, edited_fields,"
-                + " reconciliation_state, created_at, updated_at from transaction"
+                + " reconciliation_state, installment_number, total_installments, created_at,"
+                + " updated_at from transaction"
                 + " where user_id = ? order by posted_on, id",
             rs -> {
               UUID id = uuid(rs, "id");
@@ -333,6 +575,8 @@ public class ExportService {
                   "notes", decrypt(userId, "transaction", "notes", id, rs.getBytes("notes_enc")));
               row.put("editedFields", stringArray(rs, "edited_fields"));
               row.put("reconciliationState", rs.getString("reconciliation_state"));
+              row.put("installmentNumber", rs.getObject("installment_number", Integer.class));
+              row.put("totalInstallments", rs.getObject("total_installments", Integer.class));
               row.put("createdAt", instant(rs, "created_at"));
               row.put("updatedAt", instant(rs, "updated_at"));
               return row;
@@ -702,49 +946,6 @@ public class ExportService {
               row.put("maxAttempts", rs.getInt("max_attempts"));
               row.put("lastErrorCode", rs.getString("last_error_code"));
               row.put("createdAt", instant(rs, "created_at"));
-              return row;
-            }),
-        new Dataset(
-            "webhook_subscriptions",
-            List.of("id", "integrationId", "eventTypes", "status", "createdAt", "updatedAt"),
-            "select id, integration_id, event_types, status, created_at, updated_at"
-                + " from webhook_subscription where user_id = ?",
-            rs -> {
-              Map<String, Object> row = new LinkedHashMap<>();
-              row.put("id", uuid(rs, "id"));
-              row.put("integrationId", uuid(rs, "integration_id"));
-              row.put("eventTypes", stringArray(rs, "event_types"));
-              row.put("status", rs.getString("status"));
-              row.put("createdAt", instant(rs, "created_at"));
-              row.put("updatedAt", instant(rs, "updated_at"));
-              return row;
-            }),
-        new Dataset(
-            "webhook_events",
-            List.of(
-                "id",
-                "integrationId",
-                "connectionId",
-                "eventType",
-                "status",
-                "attempts",
-                "errorCode",
-                "receivedAt",
-                "processedAt"),
-            "select id, integration_id, connection_id, event_type, status, attempts, error_code,"
-                + " received_at, processed_at from webhook_event where user_id = ?"
-                + " order by received_at, id",
-            rs -> {
-              Map<String, Object> row = new LinkedHashMap<>();
-              row.put("id", uuid(rs, "id"));
-              row.put("integrationId", uuid(rs, "integration_id"));
-              row.put("connectionId", uuid(rs, "connection_id"));
-              row.put("eventType", rs.getString("event_type"));
-              row.put("status", rs.getString("status"));
-              row.put("attempts", rs.getInt("attempts"));
-              row.put("errorCode", rs.getString("error_code"));
-              row.put("receivedAt", instant(rs, "received_at"));
-              row.put("processedAt", instant(rs, "processed_at"));
               return row;
             }),
         new Dataset(

@@ -4,6 +4,10 @@
 **Data da análise:** 22/10/2026  
 **Versão:** 1.0
 
+> **Nota de 2026-10-26:** análise histórica. Webhooks foram removidos no S-04; a
+> sincronização programada é o único caminho de atualização. O escopo vigente
+> está em [`analise-simplificacao.md`](analise-simplificacao.md), seção 11.
+
 ## 1. Objetivo e premissas
 
 O sistema permitirá que vários familiares utilizem uma mesma instalação para acompanhar suas próprias contas bancárias, cartões de crédito e transações. O projeto será self-hosted, sem finalidade comercial, e usará Java/Spring Boot no backend, PostgreSQL, React/TypeScript no frontend e Docker Compose.

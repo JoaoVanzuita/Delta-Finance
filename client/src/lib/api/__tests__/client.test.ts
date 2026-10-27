@@ -41,6 +41,38 @@ describe('api client', () => {
     expect(init.body).toBe(JSON.stringify({ value: 1 }))
   })
 
+  it('envia Idempotency-Key nas escritas financeiras críticas', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({ ok: true })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.post('/transactions', {})
+    await api.patch('/transactions/tx-1', {})
+    await api.delete('/transactions/tx-1')
+    await api.post('/invoices/inv-1/items', {})
+    await api.patch('/invoice-items/item-1', {})
+    await api.delete('/invoice-items/item-1')
+    await api.post('/invoices/inv-1/payments', {})
+
+    for (const [url, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
+      expect(url).toMatch(/^\/api\/v1\//)
+      expect(new Headers(init.headers).get('Idempotency-Key')).toBeTruthy()
+    }
+  })
+
+  it('não envia Idempotency-Key nas demais mutações', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({ ok: true })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.post('/accounts', {})
+    await api.post('/connections', {})
+    await api.patch('/goals/goal-1', {})
+    await api.delete('/investments/positions/pos-1')
+
+    for (const [, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
+      expect(new Headers(init.headers).get('Idempotency-Key')).toBeNull()
+    }
+  })
+
   it('traduz ProblemDetail em ApiError com erros por campo', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(

@@ -55,6 +55,7 @@ public class InvoiceReportingService {
    */
   public record InvoiceReportItem(
       UUID itemId,
+      UUID transactionId,
       UUID invoiceId,
       UUID cardAccountId,
       String kind,
@@ -89,6 +90,7 @@ public class InvoiceReportingService {
           result.add(
               new InvoiceReportItem(
                   item.getId(),
+                  item.getTransactionId(),
                   invoiceId,
                   cardAccountId,
                   item.getKind().name(),
@@ -101,6 +103,39 @@ public class InvoiceReportingService {
         }
         running = applyToInvoiceTotal(running, item, amount);
       }
+    }
+    return result;
+  }
+
+  /** Transações com plano de parcelas ativo; cada uma deve ser representada pelas parcelas. */
+  public Set<UUID> installmentTransactionIds(UUID userId) {
+    return Set.copyOf(itemRepository.findInstallmentTransactionIds(userId));
+  }
+
+  /** Parcelas vinculadas a transação no intervalo, para substituir o valor total da compra. */
+  public List<InvoiceReportItem> installmentItems(
+      UUID userId, LocalDate from, LocalDate toExclusive, UUID accountId) {
+    List<InvoiceItem> candidates =
+        itemRepository.findLinkedInstallmentsForReporting(userId, from, toExclusive, accountId);
+    if (candidates.isEmpty()) {
+      return List.of();
+    }
+    Map<UUID, UUID> cardByInvoice = cardAccountsByInvoice(userId);
+    List<InvoiceReportItem> result = new ArrayList<>(candidates.size());
+    for (InvoiceItem item : candidates) {
+      result.add(
+          new InvoiceReportItem(
+              item.getId(),
+              item.getTransactionId(),
+              item.getInvoiceId(),
+              cardByInvoice.get(item.getInvoiceId()),
+              item.getKind().name(),
+              item.getReportingEffect().name(),
+              item.getSource().name(),
+              decryptDescription(item),
+              decryptAmount(item),
+              item.getOccurredOn(),
+              BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN)));
     }
     return result;
   }

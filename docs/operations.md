@@ -50,6 +50,11 @@ tem acesso.
   único job ativo por conexão/tipo. `POST /api/v1/connections/{id}/sync`
   enfileira a consulta dos dados já disponíveis e responde `202`, sem forçar a
   instituição de origem a atualizar.
+- **Carga inicial e reconexão** validam o estado do item antes de importar,
+  salvam conexão/integração no estado de erro quando necessário e registram
+  `sync_run` com contadores e resultado. Transações sem valor ou data são
+  descartadas e contabilizadas em `failed_count`; a execução fica `PARTIAL` com
+  `error_code=IMPORT_MISSING_FIELDS`.
 - **Janelas configuráveis** (`DELTA_SYNC_*`, padrão entre parênteses):
   carga inicial de 12 meses (`INITIAL_WINDOW_MONTHS=12`); reprocessamento diário
   de 7 dias com sobreposição (`DAILY_WINDOW_DAYS=7`); reconciliação mensal de 12
@@ -68,19 +73,31 @@ tem acesso.
   usuário e não entram em retry automático.
 - **Estados**: `INCOMPLETE`, `ACTIVE`, `SYNCING`, `SYNCED`,
   `CREDENTIAL_FAILURE`, `ACTION_REQUIRED`, `AUTHORIZATION_EXPIRED`,
-  `ITEM_UNAVAILABLE`. A expiração anual da aplicação
+  `ITEM_UNAVAILABLE`. O limite da modalidade (`connectionLimit`) e a data de
+  verificação vêm do backend; conexões `ITEM_UNAVAILABLE` não ocupam vaga.
+- **Contas ausentes** em uma leitura completa de contas ficam `UNAVAILABLE` sem
+  apagar transações ou histórico; o saldo deixa de contá-las e não há duplicação
+  quando a nova autorização expõe uma conta com outro ID. A expiração anual da aplicação
   (`USER_AUTHORIZATION_EXPIRED`) é distinta do consentimento bancário de cada
   item (`CONSENT_EXPIRED`); ambos exigem reautorização e atualização do itemId,
   com histórico preservado.
-- **Lista vazia** produz `EMPTY` e não marca remoções. `SOURCE_REMOVED` só é
-  atribuído quando uma leitura conclusiva e não vazia deixa de trazer a
-  transação; `POST /api/v1/transactions/{id}/source-removal` permite
-  `RESTORE` (validado na origem) ou `CONFIRM_REMOVAL`, sempre preservando a
-  linha e a auditoria.
-- **Webhooks** são opcionais (`DELTA_PLUGGY_WEBHOOKS_ENABLED=false`), exigem
-  HTTPS público, segredo por inscrição e `eventId` idempotente. São apenas sinal
-  para consultar os dados completos; a sincronização programada continua sendo a
-  reconciliação.
+- **Lista vazia** produz `EMPTY` e não marca remoções. Uma leitura conclusiva e
+  não vazia que deixa de trazer a transação grava `status=SOURCE_REMOVED` e
+  `reconciliation_state=SOURCE_REMOVED`; o valor sai imediatamente dos totais e
+  a linha permanece no histórico. Se a origem voltar a trazer o identificador, a
+  transação é restaurada automaticamente. Leitura truncada (limite de páginas ou
+  cursor inválido) é inconclusiva e não marca ausências.
+- **Recuperação e cancelamento** (ADR-0004): `SYNCING` e `lastSyncAttemptAt` são
+  persistidos antes das chamadas externas. Todo job `RUNNING` encontrado no start
+  é órfão: vira `sync_run` com `INTERRUPTED`, volta para `RETRY`/`FAILED` e libera
+  `SYNCING` na conexão/integração. O timeout padrão é
+  `DELTA_SYNC_JOB_TIMEOUT=10m`. Remover/desconectar cancela o token em memória e
+  a importação para antes do próximo lote; o worker atrasado não sobrescreve o
+  job. Vale para instância única.
+- **Sugestões de movimento interno** são geradas ao concluir uma sincronização,
+  a carga inicial e a reconexão, mantendo o dashboard coerente.
+- **Webhooks:** removidos em 2026-10-25 (S-04). A atualização continua pela
+  sincronização programada e pela consulta manual.
 - **Painel** `/settings/integration` mostra estado, última tentativa, último
   sucesso, fila, histórico (`GET /api/v1/sync/status` e `/sync/runs`) e ações de
   consultar agora, atualizar itemId e remover conexão.
@@ -88,6 +105,28 @@ tem acesso.
   `delta.sync.jobs` e `delta.sync.records` via Actuator. Alertas recomendados:
   falhas repetidas, fila acumulada, `AUTHORIZATION_EXPIRED`/`CONSENT_EXPIRED` e
   ausência de sincronização bem-sucedida no período esperado.
+
+## Faturas de cartão
+
+- A fatura do ciclo e o item espelho são gerados por evento logo após a
+  transação ser importada, criada manualmente ou corrigida. Não é necessário
+  abrir a tela de faturas para o dashboard refletir a compra.
+- Transação `PENDING` ou com remoção na origem pendente tem o espelho suspenso
+  (`invoice_item.removed_at` + `mirror_suspended=true`) e sai dos totais. Quando
+  volta a ser efetiva, o item é reativado na mesma fatura ou recriado na primeira
+  fatura aberta.
+- Fatura paga não é reescrita. Inclusão, edição e remoção de item retornam
+  `409 INVOICE_PAID_IMMUTABLE`; correção de valor/data/descrição de compra
+  vinculada retorna `409 TRANSACTION_PAID_INVOICE`.
+- Atraso prevalece sobre pagamento parcial: fatura vencida com saldo fica
+  `OVERDUE`.
+- Correção de compra parcelada propaga valor, descrição e data para todas as
+  parcelas; a âncora muda de ciclo quando necessário.
+- Se a fatura não refletir uma compra, verifique se o cartão tem
+  `card_profile` (fechamento/vencimento), se a transação está efetiva e se a
+  fatura não está paga.
+- Não há feature flag: o ciclo de vida automático está sempre ativo e o rollback
+  é por deploy/reversão do código (ADR-0005).
 
 ## Investimentos manuais
 
@@ -98,7 +137,7 @@ tem acesso.
 - O total é `quantidade × preço unitário`; quando apenas o total é informado, o
   preço unitário é `total ÷ quantidade`, arredondado a 8 casas decimais. Valores e
   datas são os informados pelo usuário, nunca cotação de mercado.
-- Não há importação automática, sincronização, webhook, recomendação de compra,
+- Não há importação automática, sincronização, recomendação de compra,
   venda ou alocação, nem criação de ordens. A disponibilidade dos conectores
   XP/Santander no Meu Pluggy permanece não validada até o gate real; o módulo não
   depende do MVP bancário.
@@ -113,17 +152,16 @@ tem acesso.
   compõem o total.
 - Valores manuais e de referência são os informados pelo usuário, não cotação de
   mercado.
-- Snapshots são **explícitos** (`POST /api/v1/wealth/snapshots`), datados e
-  incluem a composição item a item. Reenviar no mesmo dia atualiza o snapshot do
-  dia; não há reconstrução retroativa nem inferência de saldo passado.
+- Snapshots patrimoniais foram removidos em 2026-10-26 (S-02); a visão atual não
+  reconstrói saldos passados. As tabelas foram removidas pela baseline
+  `V001__baseline.sql`.
 - `completeness` é `COMPLETE`, `PARTIAL` (dados ausentes) ou `ESTIMATED` (fonte com
   referência há mais de 30 dias). Lacunas de histórico não são preenchidas.
 
 ## Metas
 
 - Módulo pós-MVP (`/goals`, `/api/v1/goals`). Regras de progresso:
-  `ALLOCATIONS` (alocações explícitas), `NET_WORTH` (patrimônio líquido atual) e
-  `DEBT_REDUCTION` (dívida inicial obrigatória).
+  `ALLOCATIONS` (alocações explícitas) e `NET_WORTH` (patrimônio líquido atual).
 - Alocações `FIXED_AMOUNT` são exatas; `PERCENTAGE` usa
   `floor(valor-alvo × percentual ÷ 100, 2)`, com o resíduo na última alocação
   percentual. Percentuais abaixo de 100% mantêm saldo não alocado visível, sem
@@ -135,22 +173,29 @@ tem acesso.
 - Estados: `ACTIVE`, `ACHIEVED`, `PAUSED`, `ARCHIVED`, `OVERDUE`, `CHANGED`.
   `ACHIEVED` e `OVERDUE` são derivados; `PAUSED` e `ARCHIVED` congelam o
   progresso; alteração material marca `CHANGED` e exige reconhecimento explícito.
-- O snapshot diário é único por meta e dia, gravado ao criar/consultar meta ativa;
-  pausar ou arquivar preserva o último snapshot. Não há job dedicado, movimento de
-  dinheiro nem criação de ordens.
+- O snapshot de progresso é único por meta e dia e é gravado **sob demanda** ao
+  criar, consultar ou alterar o estado da meta ativa; pausar ou arquivar preserva
+  o último snapshot. Não há job diário dedicado, então dias sem acesso podem não
+  gerar ponto no histórico. Não há movimento de dinheiro nem criação de ordens.
 - Excluir uma meta remove suas alocações e seu histórico; a UI exige confirmação.
 
 ## Banco e migrações
 
 - PostgreSQL 18.6, volume `pgdata`.
 - Migrações Flyway em `server/src/main/resources/db/migration/`, aplicadas no
-  start. Nunca edite uma migração já aplicada; crie a próxima versão.
-- `MigrationIT` valida banco vazio, snapshot da versão anterior e
-  idempotência.
-- `V007__investments.sql`, `V008__wealth.sql` e `V009__goals.sql` criam as tabelas
-  dos módulos secundário e posteriores. Descrições, valores, dívida inicial e
-  composições de snapshot são cifrados; metadados de consulta (corretora, origem,
-  tipo, estado, percentual e datas) ficam em claro para consulta e ordenação.
+  start. A baseline consolidada é `V001__baseline.sql` (2026-10-26); as migrações
+  históricas estão em `docs/archive/migrations-v001-v019/`. Nunca edite uma
+  migração já aplicada; crie a próxima versão (`V002` em diante).
+- `MigrationIT` valida banco vazio, snapshot da versão anterior, aplicação
+  idempotente e ausência de objetos legados.
+- `idempotency_key` guarda replay apenas de transações, itens de fatura e
+  pagamentos; as demais mutações ignoram `Idempotency-Key`.
+- Descrições, valores e histórico de metas são cifrados; metadados de consulta
+  (corretora, origem, tipo, estado, percentual e datas) ficam em claro para
+  consulta e ordenação.
+- O schema ativo tem 24 tabelas de domínio, mais as tabelas de sessão do Spring
+  e o histórico do Flyway. Webhooks, snapshots patrimoniais, Bills e dívida
+  inicial não fazem parte da baseline.
 - Acesso administrativo local:
 
 ```bash
@@ -169,8 +214,20 @@ docker compose exec db psql -U "$DELTA_DB_USER" -d "$DELTA_DB_NAME"
 
 ## Retenção de dados
 
-Prazos implementados pelo `RetentionJob`: `login_attempt` 30 dias, `sync_run` e
-`webhook_event` 90 dias, `audit_event` 1 ano, `idempotency_key` 24 h.
+Prazos implementados pelo `RetentionJob`: `login_attempt` 30 dias, `sync_run` 90
+dias, `audit_event` 1 ano, `idempotency_key` 24 h.
+
+## Autenticação e limites
+
+- Login: 5 falhas em 15 minutos por usuário+IP. O bloqueio de 15 minutos é
+  persistido em `login_attempt.blocked_until` e sobrevive a reinícios.
+- Cadastro: 5 tentativas por hora por IP, aplicadas antes do Argon2id. O contador
+  fica em memória; reiniciar a aplicação zera a janela.
+- A implantação de referência usa uma instância. Se o servidor for escalado
+  horizontalmente, o limite de cadastro precisa migrar para banco ou Redis para
+  ser compartilhado; o bloqueio de login já é persistido no PostgreSQL.
+- O client expira a sessão após 30 minutos de inatividade ou 12 horas, mas a
+  decisão final continua no servidor.
 
 ## Observabilidade e alertas
 
@@ -183,9 +240,10 @@ Prazos implementados pelo `RetentionJob`: `login_attempt` 30 dias, `sync_run` e
 ## Recuperação assistida de senha
 
 O MVP não usa e-mail transacional. O procedimento assistido, com verificação de
-identidade pelo operador, invalidação de sessões e auditoria, é implementado em
+identidade pelo operador, invalidação de sessões e auditoria, é implementado
 pelo `AssistedPasswordResetService` e por `deploy/scripts/reset-password.sh`;
-procedimento em `runbooks/password-reset.md`.
+procedimento em `runbooks/password-reset.md`. As sessões são revogadas por JDBC,
+portanto o runner funciona com `--spring.main.web-application-type=none`.
 
 ## Segurança operacional
 

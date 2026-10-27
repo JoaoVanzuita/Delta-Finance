@@ -149,4 +149,17 @@ public class PluggyIntegration extends BaseEntity {
       this.status = previousStatus;
     }
   }
+
+  /** Libera um estado {@code SYNCING} interrompido sem apagar credenciais ou histórico. */
+  public void releaseSync() {
+    if (this.status == IntegrationStatus.SYNCING) {
+      if (this.lastSuccessfulSyncAt != null) {
+        this.status = IntegrationStatus.SYNCED;
+      } else if (hasCredentials()) {
+        this.status = IntegrationStatus.ACTIVE;
+      } else {
+        this.status = IntegrationStatus.INCOMPLETE;
+      }
+    }
+  }
 }

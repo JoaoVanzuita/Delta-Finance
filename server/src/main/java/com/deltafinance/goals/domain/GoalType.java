@@ -5,6 +5,5 @@ public enum GoalType {
   EMERGENCY_FUND,
   TRAVEL,
   PLANNED_PURCHASE,
-  DEBT_REDUCTION,
   NET_WORTH
 }

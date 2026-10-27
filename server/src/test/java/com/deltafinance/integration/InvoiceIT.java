@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.deltafinance.connections.application.SyncJobService;
 import com.deltafinance.integrations.infrastructure.PluggyRateLimiter;
 import com.deltafinance.support.AuthTestClient;
 import com.deltafinance.support.PluggyStub;
 import com.deltafinance.support.PluggyStub.AccountFixture;
+import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,11 +46,13 @@ class InvoiceIT extends PostgresTestBase {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private JsonMapper jsonMapper;
+  @Autowired private SyncJobService syncJobService;
   @Autowired private PluggyRateLimiter rateLimiter;
 
   private AuthTestClient alice;
   private String cardId;
   private String bankId;
+  private String connectionId;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -73,6 +78,17 @@ class InvoiceIT extends PostgresTestBase {
     alice
         .post("/api/v1/connections", Map.of("itemId", "item-alice"))
         .andExpect(status().isCreated());
+    connectionId =
+        json(alice
+                .get("/api/v1/connections")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+            .path("items")
+            .get(0)
+            .path("id")
+            .asString();
 
     for (JsonNode account : accounts().path("items")) {
       if ("CREDIT".equals(account.path("type").asString())) {
@@ -148,6 +164,19 @@ class InvoiceIT extends PostgresTestBase {
     assertThat(detail.path("status").asString()).isEqualTo("PAID");
     assertThat(detail.path("outstanding").asString()).isEqualTo("0.00");
     assertThat(transactions().path("items").size()).isEqualTo(transactionsBefore);
+  }
+
+  @Test
+  void estornoAutomaticoViraEspelhoSemEfeitoDeRelatorio() throws Exception {
+    createCardTransaction("DEBIT", "-100.00", "2026-10-20");
+    createCardTransaction("REFUND", "20.00", "2026-10-21");
+
+    JsonNode invoice = invoices().path("items").get(0);
+    JsonNode detail = invoiceDetail(invoice.path("id").asString());
+    JsonNode refund = findItem(detail.path("items"), "REFUND");
+    assertThat(refund.path("transactionId").asString()).isNotBlank();
+    assertThat(refund.path("reportingEffect").asString()).isEqualTo("NONE");
+    assertThat(detail.path("total").asString()).isEqualTo("80.00");
   }
 
   @Test
@@ -310,14 +339,352 @@ class InvoiceIT extends PostgresTestBase {
   }
 
   @Test
+  void compraParceladaEmTresCiclosSubstituiEspelhoEProjetaParcelas() throws Exception {
+    createCardTransaction("DEBIT", "-300.00", "2026-10-03");
+    invoices();
+    JsonNode transaction = transactions().path("items").get(0);
+    String transactionId = transaction.path("id").asString();
+    String firstInvoiceId = transaction.path("invoiceId").asString();
+
+    JsonNode firstInstallment =
+        json(
+            alice
+                .post(
+                    "/api/v1/invoices/" + firstInvoiceId + "/items",
+                    Map.of(
+                        "kind", "INSTALLMENT",
+                        "reportingEffect", "NONE",
+                        "description", "Compra parcelada",
+                        "amount", "100.00",
+                        "occurredOn", "2026-10-03",
+                        "transactionId", transactionId,
+                        "installmentNumber", 1,
+                        "totalInstallments", 3))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(firstInstallment.path("installmentNumber").asInt()).isEqualTo(1);
+    assertThat(firstInstallment.path("totalInstallments").asInt()).isEqualTo(3);
+
+    JsonNode list = invoices();
+    assertThat(list.path("items")).hasSize(3);
+    for (JsonNode invoice : list.path("items")) {
+      JsonNode detail = invoiceDetail(invoice.path("id").asString());
+      assertThat(detail.path("total").asString()).isEqualTo("100.00");
+      assertThat(detail.path("items")).hasSize(1);
+      assertThat(detail.path("items").get(0).path("kind").asString()).isEqualTo("INSTALLMENT");
+      assertThat(detail.path("items").get(0).path("installmentNumber").asInt()).isBetween(1, 3);
+    }
+  }
+
+  @Test
   void cartaoSemCicloNaoGeraFaturas() throws Exception {
-    createCardTransaction("DEBIT", "-40.00", "2026-10-03");
     jdbcTemplate.update(
         "delete from card_profile where account_id = ?", java.util.UUID.fromString(cardId));
+    createCardTransaction("DEBIT", "-40.00", "2026-10-03");
 
     assertThat(invoices().path("items")).isEmpty();
     JsonNode transaction = transactions().path("items").get(0);
     assertThat(transaction.path("invoiceId").isNull()).isTrue();
+  }
+
+  @Test
+  void transacaoPendenteSuspendeEEspelhoEReativaAoTornarEfetiva() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-card",
+        new TransactionFixture(
+            "tx-pendente",
+            "acc-card",
+            "Compra pendente",
+            "-100.00",
+            "2026-10-20",
+            "PENDING",
+            null));
+    sync();
+
+    assertThat(summary("from=2026-10-01&to=2026-10-31").path("expenses").asString())
+        .isEqualTo("0.00");
+    assertThat(invoices().path("items")).isEmpty();
+
+    PLUGGY.setTransactions(
+        "acc-card",
+        List.of(
+            new TransactionFixture(
+                "tx-pendente",
+                "acc-card",
+                "Compra pendente",
+                "-100.00",
+                "2026-10-20",
+                "POSTED",
+                null)));
+    sync();
+
+    JsonNode first = invoices().path("items").get(0);
+    assertThat(first.path("total").asString()).isEqualTo("100.00");
+    String invoiceId = first.path("id").asString();
+    assertThat(invoiceDetail(invoiceId).path("items")).hasSize(1);
+
+    PLUGGY.setTransactions(
+        "acc-card",
+        List.of(
+            new TransactionFixture(
+                "tx-pendente",
+                "acc-card",
+                "Compra pendente",
+                "-100.00",
+                "2026-10-20",
+                "PENDING",
+                null)));
+    sync();
+
+    JsonNode suspended = invoiceDetail(invoiceId);
+    assertThat(suspended.path("total").asString()).isEqualTo("0.00");
+    assertThat(suspended.path("items")).isEmpty();
+
+    PLUGGY.setTransactions(
+        "acc-card",
+        List.of(
+            new TransactionFixture(
+                "tx-pendente",
+                "acc-card",
+                "Compra pendente",
+                "-100.00",
+                "2026-10-20",
+                "POSTED",
+                null)));
+    sync();
+
+    JsonNode restored = invoiceDetail(invoiceId);
+    assertThat(restored.path("total").asString()).isEqualTo("100.00");
+    assertThat(restored.path("items")).hasSize(1);
+  }
+
+  @Test
+  void remocaoNaOrigemSuspendeEspelhoAteReativacao() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-card",
+        new TransactionFixture(
+            "tx-removida", "acc-card", "Compra removida", "-100.00", "2026-10-20", "POSTED", null));
+    PLUGGY.addTransaction(
+        "acc-card",
+        new TransactionFixture(
+            "tx-viva", "acc-card", "Compra viva", "-40.00", "2026-10-21", "POSTED", null));
+    sync();
+
+    JsonNode invoice = invoices().path("items").get(0);
+    String invoiceId = invoice.path("id").asString();
+    assertThat(invoice.path("total").asString()).isEqualTo("140.00");
+
+    // Mantém uma transação viva para que a lista vazia não seja tratada como inconclusiva.
+    PLUGGY.setTransactions(
+        "acc-card",
+        List.of(
+            new TransactionFixture(
+                "tx-viva", "acc-card", "Compra viva", "-40.00", "2026-10-21", "POSTED", null)));
+    sync();
+
+    JsonNode removed = findTransactionByDescription(transactions(), "Compra removida");
+    assertThat(removed.path("status").asString()).isEqualTo("SOURCE_REMOVED");
+    assertThat(removed.path("reconciliationState").asString()).isEqualTo("SOURCE_REMOVED");
+    JsonNode suspended = invoiceDetail(invoiceId);
+    assertThat(suspended.path("total").asString()).isEqualTo("40.00");
+    assertThat(suspended.path("items")).hasSize(1);
+
+    PLUGGY.setTransactions(
+        "acc-card",
+        List.of(
+            new TransactionFixture(
+                "tx-removida",
+                "acc-card",
+                "Compra removida",
+                "-100.00",
+                "2026-10-20",
+                "POSTED",
+                null),
+            new TransactionFixture(
+                "tx-viva", "acc-card", "Compra viva", "-40.00", "2026-10-21", "POSTED", null)));
+    sync();
+
+    JsonNode restored = findTransactionByDescription(transactions(), "Compra removida");
+    assertThat(restored.path("reconciliationState").asString()).isEqualTo("NONE");
+    assertThat(invoiceDetail(invoiceId).path("total").asString()).isEqualTo("140.00");
+    assertThat(invoiceDetail(invoiceId).path("items")).hasSize(2);
+  }
+
+  @Test
+  void faturaPagaNaoAceitaItensNemCorrecaoDeCompra() throws Exception {
+    String transactionId = createCardTransaction("DEBIT", "-100.00", "2026-10-20");
+    JsonNode invoice = invoices().path("items").get(0);
+    String invoiceId = invoice.path("id").asString();
+    alice
+        .post(
+            "/api/v1/invoices/" + invoiceId + "/payments",
+            Map.of("paymentAccountId", bankId, "amount", "100.00", "paidOn", "2026-10-21"))
+        .andExpect(status().isCreated());
+    assertThat(invoiceDetail(invoiceId).path("status").asString()).isEqualTo("PAID");
+
+    alice
+        .post(
+            "/api/v1/invoices/" + invoiceId + "/items",
+            Map.of(
+                "kind", "INTEREST",
+                "reportingEffect", "EXPENSE_INCREASE",
+                "description", "Juros após pagamento",
+                "amount", "10.00",
+                "occurredOn", "2026-10-22"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("INVOICE_PAID_IMMUTABLE"));
+    alice
+        .patch("/api/v1/transactions/" + transactionId, Map.of("amount", "120.00"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("TRANSACTION_PAID_INVOICE"));
+    alice
+        .patch("/api/v1/transactions/" + transactionId, Map.of("description", "Compra corrigida"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("TRANSACTION_PAID_INVOICE"));
+    alice
+        .delete("/api/v1/transactions/" + transactionId)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("TRANSACTION_PAID_INVOICE"));
+
+    assertThat(invoiceDetail(invoiceId).path("total").asString()).isEqualTo("100.00");
+    assertThat(invoiceDetail(invoiceId).path("items")).hasSize(1);
+  }
+
+  @Test
+  void faturaVencidaComPagamentoParcialFicaOverdue() throws Exception {
+    createCardTransaction("DEBIT", "-100.00", "2026-09-03");
+    JsonNode invoice = invoices().path("items").get(0);
+    String invoiceId = invoice.path("id").asString();
+    assertThat(invoice.path("dueDate").asString()).isEqualTo("2026-10-15");
+    assertThat(invoice.path("status").asString()).isEqualTo("OVERDUE");
+
+    alice
+        .post(
+            "/api/v1/invoices/" + invoiceId + "/payments",
+            Map.of("paymentAccountId", bankId, "amount", "40.00", "paidOn", "2026-10-20"))
+        .andExpect(status().isCreated());
+
+    JsonNode partial = invoiceDetail(invoiceId);
+    assertThat(partial.path("status").asString()).isEqualTo("OVERDUE");
+    assertThat(partial.path("outstanding").asString()).isEqualTo("60.00");
+
+    alice
+        .post(
+            "/api/v1/invoices/" + invoiceId + "/payments",
+            Map.of("paymentAccountId", bankId, "amount", "60.00", "paidOn", "2026-10-21"))
+        .andExpect(status().isCreated());
+    assertThat(invoiceDetail(invoiceId).path("status").asString()).isEqualTo("PAID");
+  }
+
+  @Test
+  void exclusaoDeLancamentoManualDeCartaoRemoveEspelhoERecalcula() throws Exception {
+    String transactionId = createCardTransaction("DEBIT", "-100.00", "2026-10-20");
+    JsonNode invoice = invoices().path("items").get(0);
+    String invoiceId = invoice.path("id").asString();
+    assertThat(invoiceDetail(invoiceId).path("total").asString()).isEqualTo("100.00");
+
+    alice.delete("/api/v1/transactions/" + transactionId).andExpect(status().isNoContent());
+
+    JsonNode detail = invoiceDetail(invoiceId);
+    assertThat(detail.path("total").asString()).isEqualTo("0.00");
+    assertThat(detail.path("items")).isEmpty();
+  }
+
+  @Test
+  void correcaoDeCompraAtualizaEspelhoEMudaDeCiclo() throws Exception {
+    String transactionId = createCardTransaction("DEBIT", "-100.00", "2026-10-20");
+    JsonNode first = invoices().path("items").get(0);
+    String firstId = first.path("id").asString();
+
+    alice
+        .patch(
+            "/api/v1/transactions/" + transactionId,
+            Map.of("amount", "120.00", "description", "Compra corrigida"))
+        .andExpect(status().isOk());
+
+    JsonNode detail = invoiceDetail(firstId);
+    assertThat(detail.path("total").asString()).isEqualTo("120.00");
+    assertThat(detail.path("items").get(0).path("amount").asString()).isEqualTo("120.00");
+    assertThat(detail.path("items").get(0).path("description").asString())
+        .isEqualTo("Compra corrigida");
+
+    alice
+        .patch("/api/v1/transactions/" + transactionId, Map.of("postedOn", "2026-11-06"))
+        .andExpect(status().isOk());
+
+    JsonNode transaction = findTransactionByDescription(transactions(), "Compra corrigida");
+    assertThat(transaction.path("postedOn").asString()).isEqualTo("2026-11-06");
+    assertThat(invoiceDetail(firstId).path("total").asString()).isEqualTo("0.00");
+
+    JsonNode moved = null;
+    for (JsonNode invoice : invoices().path("items")) {
+      if ("2026-12-05".equals(invoice.path("closingDate").asString())) {
+        moved = invoice;
+      }
+    }
+    assertThat(moved).isNotNull();
+    assertThat(moved.path("id").asString()).isEqualTo(transaction.path("invoiceId").asString());
+    assertThat(invoiceDetail(moved.path("id").asString()).path("total").asString())
+        .isEqualTo("120.00");
+  }
+
+  @Test
+  void dashboardMostraSaldoDevedorLogoAposCompraNoCartaoSemAbrirFaturas() throws Exception {
+    createCardTransaction("DEBIT", "-100.00", "2026-10-20");
+
+    JsonNode summary = summary("from=2026-10-01&to=2026-10-31");
+    assertThat(summary.path("expenses").asString()).isEqualTo("100.00");
+    assertThat(summary.path("cardOutstandingBalance").asString()).isEqualTo("100.00");
+  }
+
+  @Test
+  void syncDeCompraDeCartaoAtualizaDashboardSemAbrirFaturas() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-card",
+        new TransactionFixture(
+            "tx-dashboard",
+            "acc-card",
+            "Compra sincronizada",
+            "-80.00",
+            "2026-10-20",
+            "POSTED",
+            null));
+    sync();
+
+    JsonNode summary = summary("from=2026-10-01&to=2026-10-31");
+    assertThat(summary.path("expenses").asString()).isEqualTo("80.00");
+    assertThat(summary.path("cardOutstandingBalance").asString()).isEqualTo("80.00");
+
+    sync();
+    assertThat(invoices().path("items")).hasSize(1);
+  }
+
+  private void sync() throws Exception {
+    alice
+        .post("/api/v1/connections/" + connectionId + "/sync", null)
+        .andExpect(status().isAccepted());
+    syncJobService.processNext("invoice-it", "invoice-it");
+  }
+
+  private JsonNode summary(String query) throws Exception {
+    return json(
+        alice
+            .get("/api/v1/dashboard/summary?" + query)
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
+  }
+
+  private static JsonNode findTransactionByDescription(JsonNode transactions, String description) {
+    for (JsonNode item : transactions.path("items")) {
+      if (description.equals(item.path("description").asString())) {
+        return item;
+      }
+    }
+    throw new AssertionError("Transação não encontrada: " + description);
   }
 
   private JsonNode updateProfile(int closing, int due, String limit) throws Exception {
@@ -336,14 +703,22 @@ class InvoiceIT extends PostgresTestBase {
     updateProfile(closing, due, limit);
   }
 
-  private void createCardTransaction(String type, String amount, String postedOn) throws Exception {
+  private String createCardTransaction(String type, String amount, String postedOn)
+      throws Exception {
     Map<String, Object> request = new LinkedHashMap<>();
     request.put("accountId", cardId);
     request.put("type", type);
     request.put("postedOn", postedOn);
     request.put("amount", amount);
     request.put("description", "Compra " + amount);
-    alice.post("/api/v1/transactions", request).andExpect(status().isCreated());
+    return json(alice
+            .post("/api/v1/transactions", request)
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString())
+        .path("id")
+        .asString();
   }
 
   private JsonNode invoices() throws Exception {

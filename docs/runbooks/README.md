@@ -16,6 +16,10 @@ os arquivos abaixo são criados quando o procedimento correspondente é validado
 | `password-reset.md` | recuperação assistida de senha (sem e-mail transacional) | disponível |
 | `pluggy-acceptance.md` | gate real com duas aplicações Meu Pluggy independentes | disponível; execução real pendente |
 
+Os procedimentos de limpeza de webhooks, snapshots patrimoniais e dívida inicial
+foram executados pela baseline `V001__baseline.sql` e estão arquivados em
+[`docs/archive/runbooks/`](../archive/runbooks/).
+
 ## Princípios
 
 - Nenhum runbook pede para colar segredos em canais, issues ou logs. Use o

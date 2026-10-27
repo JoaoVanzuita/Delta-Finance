@@ -1,9 +1,16 @@
-As migrações Flyway versionadas ficam neste diretório (V001, V002, ...).
+# Migrações Flyway
+
+A baseline atual é o arquivo `V001__baseline.sql`, consolidado em 2026-10-26 a
+partir das migrações `V001`–`V019`. Ele já contém o schema ativo, sem webhooks,
+snapshots patrimoniais, Bills ou dívida inicial. As migrações históricas estão
+arquivadas em
+[`docs/archive/migrations-v001-v019/`](../../../../../../docs/archive/migrations-v001-v019/).
 
 ## Regras
 
 - Nome: `V<versão>__<descrição>.sql`, versão numérica crescente e imutável.
 - Uma migração aplicada **nunca** é editada; correções exigem nova versão.
+- A próxima migração é `V002`; não reutilize números das migrações arquivadas.
 - Toda migração deve ser compatível com a versão anterior da aplicação durante
   o deploy (expand/contract), porque server antigo e novo podem coexistir por
   alguns segundos.
@@ -15,6 +22,20 @@ As migrações Flyway versionadas ficam neste diretório (V001, V002, ...).
   transação; a migração precisa ser marcada como não transacional).
 - Toda migração é testada em banco vazio e em snapshot da versão anterior
   (`MigrationIT`). Falha de migração impede o start e, portanto, o readiness.
+
+## Recriar o banco local
+
+Como a `V001` é uma baseline consolidada, um banco antigo em `V019` não pode ser
+atualizado por ela. Para recriar:
+
+```bash
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
+docker compose restart server
+```
+
+O Flyway aplica `V001__baseline.sql` no próximo start. Faça backup antes de
+qualquer recriação.
 
 ## Expand/contract
 
@@ -33,7 +54,6 @@ publique a aplicação que sempre a preenche e só depois aplique `NOT NULL`.
 ```bash
 cd server
 ./mvnw verify                 # inclui MigrationIT (Testcontainers)
-./mvnw verify -Dflyway.target=001   # limita a versão aplicada
 ```
 
 O `PostgresTestBase` suporta `snapshot`/`restore` via `pg_dump`/`pg_restore`,

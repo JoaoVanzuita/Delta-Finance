@@ -10,7 +10,6 @@ import {
   type WealthManualItem,
   type WealthManualItemInput,
   type WealthOverview,
-  type WealthSnapshot,
 } from '@/features/integration/api'
 
 import { ManualItemForm } from '../components/ManualItemForm'
@@ -18,7 +17,6 @@ import { COMPLETENESS_LABELS, SOURCE_LABELS, formatDate, formatMoney } from '../
 
 const OVERVIEW_KEY = ['wealth', 'overview'] as const
 const MANUAL_KEY = ['wealth', 'manual-items'] as const
-const SNAPSHOTS_KEY = ['wealth', 'snapshots'] as const
 
 function messageFrom(caught: unknown, fallback: string): string {
   return caught instanceof ApiError ? caught.message : fallback
@@ -27,8 +25,8 @@ function messageFrom(caught: unknown, fallback: string): string {
 /**
  * Visão patrimonial consolidada.
  *
- * <p>Mostra a composição com lacunas explícitas, valores de referência e snapshots datados. Nunca
- * apresenta valor manual como cotação de mercado nem infere saldos passados.
+ * <p>Mostra a composição com lacunas explícitas e valores de referência. Nunca apresenta valor
+ * manual como cotação de mercado.
  */
 export function WealthPage() {
   const queryClient = useQueryClient()
@@ -39,10 +37,6 @@ export function WealthPage() {
   const manualQuery = useQuery({
     queryKey: MANUAL_KEY,
     queryFn: () => financeApi.wealthManualItems(),
-  })
-  const snapshotsQuery = useQuery({
-    queryKey: SNAPSHOTS_KEY,
-    queryFn: () => financeApi.wealthSnapshots(),
   })
 
   const [message, setMessage] = useState<string | null>(null)
@@ -68,21 +62,7 @@ export function WealthPage() {
     },
   })
 
-  const createSnapshot = useMutation({
-    mutationFn: () => financeApi.createWealthSnapshot({}),
-    onSuccess: () => {
-      setError(null)
-      setMessage('Snapshot de hoje registrado.')
-      void queryClient.invalidateQueries({ queryKey: SNAPSHOTS_KEY })
-    },
-    onError: (caught) => {
-      setMessage(null)
-      setError(messageFrom(caught, 'Não foi possível registrar o snapshot.'))
-    },
-  })
-
   const manualItems = manualQuery.data?.items ?? []
-  const snapshots = snapshotsQuery.data?.items ?? []
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8">
@@ -170,57 +150,6 @@ export function WealthPage() {
               <ManualItemRow key={item.id} item={item} onChanged={invalidateWealth} />
             ))}
           </ul>
-        ) : null}
-      </section>
-
-      <section
-        aria-labelledby="wealth-snapshots-heading"
-        className="space-y-4 rounded-card border border-line bg-surface p-4 sm:p-5"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h2 id="wealth-snapshots-heading" className="text-lg font-semibold text-ink">
-              Histórico de snapshots
-            </h2>
-            <p className="text-sm leading-relaxed text-ink-muted">
-              Os snapshots guardam apenas os dados registrados em cada dia; não há reconstrução
-              retroativa a partir de saldos atuais.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={createSnapshot.isPending}
-            onClick={() => createSnapshot.mutate()}
-            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:opacity-60"
-          >
-            {createSnapshot.isPending ? 'Registrando…' : 'Registrar snapshot de hoje'}
-          </button>
-        </div>
-
-        {snapshotsQuery.isLoading ? (
-          <p role="status" aria-live="polite" className="text-sm text-ink-muted">
-            Carregando snapshots…
-          </p>
-        ) : null}
-        {snapshotsQuery.isError ? (
-          <p role="alert" className="text-sm text-expense">
-            {messageFrom(snapshotsQuery.error, 'Não foi possível carregar os snapshots.')}
-          </p>
-        ) : null}
-        {snapshotsQuery.isSuccess && snapshots.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nenhum snapshot registrado</p>
-        ) : null}
-        {snapshots.length > 0 ? (
-          <ul className="space-y-3">
-            {snapshots.map((snapshot) => (
-              <SnapshotRow key={snapshot.id} snapshot={snapshot} />
-            ))}
-          </ul>
-        ) : null}
-        {snapshots.length < 2 ? (
-          <p className="rounded-card border border-warning/40 bg-warning/5 p-3 text-sm text-ink">
-            Histórico insuficiente para comparar períodos. Nenhum saldo passado é inferido.
-          </p>
         ) : null}
       </section>
     </div>
@@ -427,7 +356,7 @@ function ManualItemRow({
       {confirming ? (
         <div className="space-y-2 rounded-card border border-warning/40 bg-warning/5 p-3">
           <p className="text-sm text-ink">
-            Excluir este item manual? Ele deixará de compor o patrimônio e os próximos snapshots.
+            Excluir este item manual? Ele deixará de compor o patrimônio.
           </p>
           <button
             type="button"
@@ -444,69 +373,6 @@ function ManualItemRow({
         <p role="alert" className="text-sm text-expense">
           {error}
         </p>
-      ) : null}
-    </li>
-  )
-}
-
-function SnapshotRow({ snapshot }: { readonly snapshot: WealthSnapshot }) {
-  return (
-    <li className="space-y-2 rounded-card border border-line bg-surface-muted p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-medium text-ink">
-            {formatDate(snapshot.referenceDate)}
-            <span className="ml-2 text-xs font-normal text-ink-muted">
-              {COMPLETENESS_LABELS[snapshot.completeness] ?? snapshot.completeness}
-            </span>
-          </p>
-          {snapshot.notes ? <p className="text-sm text-ink-muted">{snapshot.notes}</p> : null}
-        </div>
-      </div>
-      <dl className="grid gap-2 sm:grid-cols-3">
-        <div>
-          <dt className="text-xs text-ink-muted">Patrimônio bruto</dt>
-          <dd className="numeric text-sm font-semibold text-ink">
-            {formatMoney(snapshot.grossAssets)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-ink-muted">Passivos</dt>
-          <dd className="numeric text-sm font-semibold text-ink">
-            {formatMoney(snapshot.liabilities)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-ink-muted">Patrimônio líquido</dt>
-          <dd className="numeric text-sm font-semibold text-ink">
-            {formatMoney(snapshot.netWorth)}
-          </dd>
-        </div>
-      </dl>
-      {snapshot.items.length > 0 ? (
-        <details>
-          <summary className="cursor-pointer text-sm font-medium text-ink">
-            Composição do snapshot
-          </summary>
-          <ul className="mt-2 divide-y divide-line">
-            {snapshot.items.map((item) => (
-              <li
-                key={`${item.sourceType}-${item.sourceId}`}
-                className="flex items-center justify-between gap-2 py-2 text-sm"
-              >
-                <span className="text-ink">
-                  {item.description}
-                  {!item.included ? (
-                    <span className="ml-2 text-xs text-expense">
-                      Não incluído: {item.exclusionReason}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="numeric font-medium text-ink">{formatMoney(item.value)}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
       ) : null}
     </li>
   )

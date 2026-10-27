@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.deltafinance.connections.application.SyncJobService;
 import com.deltafinance.integrations.infrastructure.PluggyRateLimiter;
 import com.deltafinance.support.AuthTestClient;
 import com.deltafinance.support.PluggyStub;
 import com.deltafinance.support.PluggyStub.AccountFixture;
+import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -45,6 +47,7 @@ class InternalMatchIT extends PostgresTestBase {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private JsonMapper jsonMapper;
+  @Autowired private SyncJobService syncJobService;
   @Autowired private PluggyRateLimiter rateLimiter;
 
   private AuthTestClient alice;
@@ -100,6 +103,37 @@ class InternalMatchIT extends PostgresTestBase {
   }
 
   @Test
+  void sincronizacaoGeraSugestoesSemAbrirATelaDeReconciliacao() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-alice",
+        new TransactionFixture(
+            "tx-transfer-out",
+            "acc-alice",
+            "Saída para carteira",
+            "-100.00",
+            "2026-10-22",
+            "POSTED",
+            null));
+    String wallet = createAccount("CASH", "Carteira");
+    createManualTransaction("CREDIT", wallet, "100.00", "Entrada da conta", "2026-10-22");
+
+    alice
+        .post("/api/v1/connections/" + connectionId() + "/sync", null)
+        .andExpect(status().isAccepted());
+    syncJobService.processNext("internal-match-it", "internal-match-it");
+
+    JsonNode summary =
+        json(
+            alice
+                .get("/api/v1/dashboard/summary?from=2026-10-01&to=2026-10-31")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(summary.path("pendingInternalMatches").asInt()).isEqualTo(1);
+  }
+
+  @Test
   void sugereConfirmaEExcluiTransferenciaInterna() throws Exception {
     String wallet = createAccount("CASH", "Carteira");
     String debit = createTransaction("DEBIT", bankAccountId, "-100.00", "2026-10-22");
@@ -131,6 +165,18 @@ class InternalMatchIT extends PostgresTestBase {
         .isEqualTo("MATCHED");
     assertThat(findById(transactions, credit).path("reconciliationState").asString())
         .isEqualTo("MATCHED");
+
+    alice
+        .patch("/api/v1/transactions/" + debit, Map.of("amount", "-90.00"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CONFLICT"));
+    alice
+        .patch("/api/v1/transactions/" + debit, Map.of("postedOn", "2026-10-23"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("CONFLICT"));
+    alice
+        .patch("/api/v1/transactions/" + debit, Map.of("description", "Transferência revista"))
+        .andExpect(status().isOk());
 
     alice
         .post("/api/v1/internal-matches/" + match.path("id").asString() + "/confirm", null)
@@ -230,6 +276,39 @@ class InternalMatchIT extends PostgresTestBase {
     jdbcTemplate.execute("delete from transaction_correction");
     jdbcTemplate.execute("delete from external_identity_history");
     jdbcTemplate.execute("delete from transaction");
+  }
+
+  private String connectionId() throws Exception {
+    return json(alice
+            .get("/api/v1/connections")
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString())
+        .path("items")
+        .get(0)
+        .path("id")
+        .asString();
+  }
+
+  private String createManualTransaction(
+      String type, String accountId, String amount, String description, String postedOn)
+      throws Exception {
+    return json(alice
+            .post(
+                "/api/v1/transactions",
+                Map.of(
+                    "accountId", accountId,
+                    "type", type,
+                    "amount", amount,
+                    "description", description,
+                    "postedOn", postedOn))
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString())
+        .path("id")
+        .asString();
   }
 
   private String createAccount(String type, String alias) throws Exception {

@@ -107,7 +107,7 @@ class FinalFinancialRulesIT extends PostgresTestBase {
     assertThat(summary.path("income").asString()).isEqualTo("300.00");
     assertThat(summary.path("expenses").asString()).isEqualTo("25.00");
     assertThat(summary.path("periodResult").asString()).isEqualTo("275.00");
-    assertThat(summary.path("currentBalance").asString()).isEqualTo("1100.00");
+    assertThat(summary.path("currentBalance").asString()).isEqualTo("1375.00");
 
     JsonNode transactions = transactions();
     long transferLegs =

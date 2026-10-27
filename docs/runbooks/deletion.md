@@ -32,8 +32,11 @@ retenção ou verificação de que uma conta foi encerrada sem afetar outras.
 - `financial_account` do titular e, por cascade, transações, cartões, faturas,
   itens, pagamentos, correções, histórico de identidade externa e movimentos
   internos.
-- Categorias, integração Pluggy, conexões, jobs, execuções de sincronização,
-  webhooks e chaves de idempotência.
+- Tabelas dos módulos mantidos `goal_progress_snapshot`, `goal_allocation`,
+  `financial_goal`, `investment_position` e `manual_asset_liability` do titular,
+  apagadas explicitamente porque o tombstone de `app_user` não dispara o cascade.
+- Categorias, integração Pluggy, conexões, jobs, execuções de sincronização e
+  chaves de idempotência.
 - Tentativas de login indexadas pelo HMAC do nome normalizado.
 - Credenciais da integração (Client ID/Secret cifrados) e cache de API Key.
 
@@ -55,8 +58,14 @@ Execute como operador, sem abrir dados de outro usuário:
 select status, deleted_at from app_user where id = '<user-id>';
 
 -- Dados financeiros ativos do titular devem estar zerados.
-select count(*) from financial_account where user_id = '<user-id>';
-select count(*) from pluggy_integration where user_id = '<user-id>';
+select 'financial_account' as tabela, count(*) from financial_account where user_id = '<user-id>'
+union all select 'transaction', count(*) from transaction where user_id = '<user-id>'
+union all select 'investment_position', count(*) from investment_position where user_id = '<user-id>'
+union all select 'manual_asset_liability', count(*) from manual_asset_liability where user_id = '<user-id>'
+union all select 'financial_goal', count(*) from financial_goal where user_id = '<user-id>'
+union all select 'goal_allocation', count(*) from goal_allocation where user_id = '<user-id>'
+union all select 'goal_progress_snapshot', count(*) from goal_progress_snapshot where user_id = '<user-id>'
+union all select 'pluggy_integration', count(*) from pluggy_integration where user_id = '<user-id>';
 
 -- Auditoria deve conter os dois eventos, com metadata apenas sanitizada.
 select event_type, metadata from audit_event
@@ -85,9 +94,11 @@ O job diário `RetentionJob` (03:30 em `America/Sao_Paulo`, configurável por
 |---|---|
 | `login_attempt` | 30 dias |
 | `sync_run` | 90 dias |
-| `webhook_event` | 90 dias |
 | `audit_event` | 1 ano |
 | `idempotency_key` | 24 h após `expires_at` |
+
+As tabelas de webhook e snapshot patrimonial foram removidas pela baseline
+`V001__baseline.sql`; só existem em backups anteriores a 2026-10-26.
 
 Falha do job não apaga dados vigentes. Verifique o log sanitizado
 `Retenção executada` e as contagens. Se o job falhar repetidamente, trate como

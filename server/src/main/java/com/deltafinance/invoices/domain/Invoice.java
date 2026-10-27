@@ -43,12 +43,6 @@ public class Invoice extends BaseEntity {
   @Column(name = "adjustment_count", nullable = false)
   private int adjustmentCount;
 
-  @Column(name = "provider_bill_id_enc", columnDefinition = "bytea")
-  private byte[] providerBillIdEnc;
-
-  @Column(name = "provider_bill_id_hash", columnDefinition = "bytea")
-  private byte[] providerBillIdHash;
-
   @Column(name = "total_enc", nullable = false, columnDefinition = "bytea")
   private byte[] totalEnc;
 
@@ -156,14 +150,6 @@ public class Invoice extends BaseEntity {
     return adjustmentCount;
   }
 
-  public byte[] getProviderBillIdEnc() {
-    return providerBillIdEnc;
-  }
-
-  public byte[] getProviderBillIdHash() {
-    return providerBillIdHash;
-  }
-
   public byte[] getTotalEnc() {
     return totalEnc;
   }
@@ -204,11 +190,5 @@ public class Invoice extends BaseEntity {
   public void markAdjustment() {
     this.hasAdjustments = true;
     this.adjustmentCount++;
-  }
-
-  public void attachProviderBill(byte[] enc, byte[] hash, InvoiceSource source) {
-    this.providerBillIdEnc = Objects.requireNonNull(enc, "enc");
-    this.providerBillIdHash = Objects.requireNonNull(hash, "hash");
-    this.source = Objects.requireNonNull(source, "source");
   }
 }

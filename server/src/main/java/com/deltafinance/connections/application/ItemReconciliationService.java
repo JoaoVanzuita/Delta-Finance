@@ -4,14 +4,17 @@ import com.deltafinance.accounts.application.AccountImportService;
 import com.deltafinance.connections.domain.ConnectionStatus;
 import com.deltafinance.connections.domain.PluggyConnection;
 import com.deltafinance.connections.domain.PluggyConnectionRepository;
+import com.deltafinance.connections.domain.SyncRun;
+import com.deltafinance.connections.domain.SyncRunRepository;
+import com.deltafinance.connections.domain.SyncRunStatus;
 import com.deltafinance.integrations.application.IntegrationService;
 import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
 import com.deltafinance.integrations.infrastructure.PluggyException;
-import com.deltafinance.integrations.infrastructure.PluggyItemInvalidException;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
+import com.deltafinance.reconciliation.application.InternalMatchService;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
@@ -21,7 +24,9 @@ import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.ErrorCode;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.time.Clock;
+import com.deltafinance.transactions.application.ImportStats;
 import com.deltafinance.transactions.application.TransactionImportService;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -48,6 +53,9 @@ public class ItemReconciliationService {
   private final CryptoService cryptoService;
   private final IndexHmacService hmacService;
   private final AuditService auditService;
+  private final SyncRunRepository syncRunRepository;
+  private final SyncStateService stateService;
+  private final InternalMatchService internalMatchService;
   private final Clock clock;
 
   public ItemReconciliationService(
@@ -60,6 +68,9 @@ public class ItemReconciliationService {
       CryptoService cryptoService,
       IndexHmacService hmacService,
       AuditService auditService,
+      SyncRunRepository syncRunRepository,
+      SyncStateService stateService,
+      InternalMatchService internalMatchService,
       Clock clock) {
     this.connectionRepository = connectionRepository;
     this.integrationService = integrationService;
@@ -70,6 +81,9 @@ public class ItemReconciliationService {
     this.cryptoService = cryptoService;
     this.hmacService = hmacService;
     this.auditService = auditService;
+    this.syncRunRepository = syncRunRepository;
+    this.stateService = stateService;
+    this.internalMatchService = internalMatchService;
     this.clock = clock;
   }
 
@@ -101,6 +115,9 @@ public class ItemReconciliationService {
 
     // Valida antes de alterar qualquer campo persistido.
     PluggyModels.PluggyItem item = fetchItem(integration, normalizedItemId);
+    Instant startedAt = clock.now();
+    SyncRun run =
+        new SyncRun(userId, integration.getId(), connection.getId(), startedAt, "item-reconcile");
     byte[] itemEnc =
         cryptoService.encrypt(
             normalizedItemId,
@@ -116,18 +133,52 @@ public class ItemReconciliationService {
     connection.updateProviderMetadata(
         institutionEnc, item.consentExpiresAt(), item.nextAutoSyncAt());
 
+    SyncStateService.SyncFailure itemFailure = stateService.fromItem(item, startedAt);
+    if (itemFailure != null) {
+      stateService.apply(integration, connection, itemFailure, startedAt);
+      connectionRepository.save(connection);
+      integrationService.save(integration);
+      finishRun(run, itemFailure.runStatus(), 0, 0, 0, 0, 0, itemFailure.errorCode());
+      auditService.record(
+          userId,
+          AuditEventType.ITEM_ID_CHANGED,
+          "pluggy_connection",
+          connection.getId(),
+          Map.of("changed", changed));
+      return connection;
+    }
+
     try {
       accountImportService.importAccounts(integration, connection.getId(), normalizedItemId);
-      transactionImportService.importInitial(integration, connection.getId());
+      ImportStats stats =
+          transactionImportService.importInitial(integration, connection.getId(), true);
       connection.recordSync(clock.now(), ConnectionStatus.SYNCED);
       connectionRepository.save(connection);
+      integration.markActive();
+      integration.recordSyncSuccess(clock.now());
+      integrationService.save(integration);
+      try {
+        internalMatchService.suggest(userId);
+      } catch (RuntimeException ignored) {
+        // A reconexão continua válida mesmo se a geração de sugestões falhar.
+      }
+      finishRun(
+          run,
+          stats.read() == 0
+              ? SyncRunStatus.EMPTY
+              : stats.failed() > 0 ? SyncRunStatus.PARTIAL : SyncRunStatus.SUCCESS,
+          stats.read(),
+          stats.created(),
+          stats.updated(),
+          stats.skipped(),
+          stats.failed(),
+          stats.failed() > 0 ? "IMPORT_MISSING_FIELDS" : null);
     } catch (PluggyException exception) {
-      connection.recordError(
-          "IMPORT_FAILED",
-          exception instanceof PluggyItemInvalidException
-              ? ConnectionStatus.ITEM_UNAVAILABLE
-              : ConnectionStatus.ACTION_REQUIRED);
+      SyncStateService.SyncFailure failure = stateService.fromException(exception);
+      stateService.apply(integration, connection, failure, clock.now());
       connectionRepository.save(connection);
+      integrationService.save(integration);
+      finishRun(run, failure.runStatus(), 0, 0, 0, 0, 0, failure.errorCode());
       throw exception;
     }
 
@@ -138,6 +189,19 @@ public class ItemReconciliationService {
         connection.getId(),
         Map.of("changed", changed));
     return connection;
+  }
+
+  private void finishRun(
+      SyncRun run,
+      SyncRunStatus status,
+      int read,
+      int created,
+      int updated,
+      int skipped,
+      int failed,
+      String errorCode) {
+    run.finish(status, read, created, updated, skipped, failed, errorCode, clock.now());
+    syncRunRepository.save(run);
   }
 
   private PluggyModels.PluggyItem fetchItem(PluggyIntegration integration, String itemId) {

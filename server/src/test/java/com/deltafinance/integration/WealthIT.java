@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Patrimônio consolidado (T155).
  *
  * <p>Cobre ativos/passivos manuais, consolidação de contas/cartões/investimentos sem dupla
- * contagem, snapshots datados, lacunas, dados desatualizados, histórico insuficiente e isolamento.
+ * contagem, lacunas, dados desatualizados, estimativa e isolamento.
  */
 @AutoConfigureMockMvc
 class WealthIT extends PostgresTestBase {
@@ -150,35 +150,6 @@ class WealthIT extends PostgresTestBase {
   }
 
   @Test
-  void registraSnapshotDatadoEAtualizaNoMesmoDia() throws Exception {
-    createManualItem("ASSET", "INVESTMENT", "Reserva", "500.00", freshDate(), null);
-    createManualItem("LIABILITY", "LOAN", "Empréstimo", "200.00", freshDate(), null);
-
-    JsonNode first = createSnapshot("Fechamento do dia");
-    assertThat(first.path("referenceDate").asString()).isEqualTo(today().toString());
-    assertThat(first.path("grossAssets").asString()).isEqualTo("1600.00");
-    assertThat(first.path("liabilities").asString()).isEqualTo("300.00");
-    assertThat(first.path("netWorth").asString()).isEqualTo("1300.00");
-    assertThat(first.path("completeness").asString()).isEqualTo("COMPLETE");
-    assertThat(first.path("items")).hasSize(5);
-
-    createManualItem("ASSET", "CASH", "Reserva extra", "100.00", freshDate(), null);
-    JsonNode updated = createSnapshot("Atualizado");
-    assertThat(updated.path("id").asString()).isEqualTo(first.path("id").asString());
-    assertThat(updated.path("netWorth").asString()).isEqualTo("1400.00");
-    assertThat(updated.path("items")).hasSize(6);
-
-    JsonNode snapshots = snapshots(alice);
-    assertThat(snapshots.path("items")).hasSize(1);
-    assertThat(snapshots.path("items").get(0).path("netWorth").asString()).isEqualTo("1400.00");
-    assertThat(
-            jdbcTemplate.queryForObject(
-                "select count(*) from audit_event where event_type = 'WEALTH_SNAPSHOT_CREATED'",
-                Long.class))
-        .isEqualTo(2L);
-  }
-
-  @Test
   void sinalizaLacunasEPrecedenciaDeCompletudeParcial() throws Exception {
     createManualItem("ASSET", "INVESTMENT", "Ativo antigo", "500.00", today().minusDays(60), null);
 
@@ -233,14 +204,12 @@ class WealthIT extends PostgresTestBase {
   }
 
   @Test
-  void isolaItensESnapshotsEntreUsuarios() throws Exception {
+  void isolaItensManuaisEntreUsuarios() throws Exception {
     String aliceItem =
         createManualItem("ASSET", "OTHER", "Ativo Alice", "100.00", freshDate(), null)
             .path("id")
             .asString();
-    createSnapshot(null);
 
-    assertThat(snapshots(bob).path("items")).isEmpty();
     assertThat(manualItems(bob).path("items")).isEmpty();
     assertThat(overview(bob).path("items")).isEmpty();
 
@@ -252,7 +221,6 @@ class WealthIT extends PostgresTestBase {
     bob.delete("/api/v1/wealth/manual-items/" + aliceItem).andExpect(status().isNotFound());
 
     assertThat(manualItems(alice).path("items")).hasSize(1);
-    assertThat(snapshots(alice).path("items")).hasSize(1);
   }
 
   @Test
@@ -374,30 +342,6 @@ class WealthIT extends PostgresTestBase {
     return json(
         client
             .get("/api/v1/wealth/manual-items")
-            .andExpect(status().isOk())
-            .andReturn()
-            .getResponse()
-            .getContentAsString());
-  }
-
-  private JsonNode createSnapshot(String notes) throws Exception {
-    Map<String, Object> body = new LinkedHashMap<>();
-    if (notes != null) {
-      body.put("notes", notes);
-    }
-    return json(
-        alice
-            .post("/api/v1/wealth/snapshots", body)
-            .andExpect(status().isCreated())
-            .andReturn()
-            .getResponse()
-            .getContentAsString());
-  }
-
-  private JsonNode snapshots(AuthTestClient client) throws Exception {
-    return json(
-        client
-            .get("/api/v1/wealth/snapshots")
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()

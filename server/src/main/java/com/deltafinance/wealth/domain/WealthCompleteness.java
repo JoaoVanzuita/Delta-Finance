@@ -1,6 +1,6 @@
 package com.deltafinance.wealth.domain;
 
-/** Completude de uma visão ou snapshot patrimonial. */
+/** Completude da visão patrimonial. */
 public enum WealthCompleteness {
   COMPLETE,
   PARTIAL,

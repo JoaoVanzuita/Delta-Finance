@@ -54,6 +54,5 @@
 ## 5. Segurança
 
 - Não cole Client Secret em ticket/chat.
-- Não habilite webhooks sem HTTPS público e segredo por inscrição.
 - Em caso de troca de titularidade, desconecte e remova as credenciais antes de
   transferir o host.

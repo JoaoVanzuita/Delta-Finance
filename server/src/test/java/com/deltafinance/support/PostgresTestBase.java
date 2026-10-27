@@ -172,12 +172,8 @@ public abstract class PostgresTestBase {
     jdbcTemplate.execute("delete from goal_progress_snapshot");
     jdbcTemplate.execute("delete from goal_allocation");
     jdbcTemplate.execute("delete from financial_goal");
-    jdbcTemplate.execute("delete from wealth_snapshot_item");
-    jdbcTemplate.execute("delete from wealth_snapshot");
     jdbcTemplate.execute("delete from manual_asset_liability");
     jdbcTemplate.execute("delete from investment_position");
-    jdbcTemplate.execute("delete from webhook_event");
-    jdbcTemplate.execute("delete from webhook_subscription");
     jdbcTemplate.execute("delete from sync_run");
     jdbcTemplate.execute("delete from sync_job");
     jdbcTemplate.execute("delete from invoice_item_correction");

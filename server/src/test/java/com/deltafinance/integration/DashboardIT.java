@@ -199,7 +199,7 @@ class DashboardIT extends PostgresTestBase {
     assertThat(summary.path("expenses").asString()).isEqualTo("610.00");
     assertThat(summary.path("periodResult").asString()).isEqualTo("390.00");
 
-    assertThat(summary.path("currentBalance").asString()).isEqualTo("1100.00");
+    assertThat(summary.path("currentBalance").asString()).isEqualTo("1850.00");
     assertThat(summary.path("currentBalanceReferenceAt").asString()).isNotBlank();
     assertThat(summary.path("cardOutstandingBalance").asString()).isEqualTo("310.00");
     assertThat(summary.path("lastSuccessfulSyncAt").asString()).isNotBlank();
@@ -219,11 +219,88 @@ class DashboardIT extends PostgresTestBase {
   }
 
   @Test
+  void pagamentoDeFaturaComContaManualReduzSaldoAtualSemAlterarReferencia() throws Exception {
+    String invoiceId = invoices().path("items").get(0).path("id").asString();
+    alice
+        .post(
+            "/api/v1/invoices/" + invoiceId + "/payments",
+            Map.of(
+                "paymentAccountId", aliceCashId,
+                "amount", "50.00",
+                "paidOn", "2026-10-20"))
+        .andExpect(status().isCreated());
+
+    JsonNode cash = null;
+    for (JsonNode account : accounts(alice).path("items")) {
+      if (aliceCashId.equals(account.path("id").asString())) {
+        cash = account;
+      }
+    }
+    assertThat(cash).isNotNull();
+    assertThat(cash.path("currentBalance").asString()).isEqualTo("800.00");
+    assertThat(cash.path("referenceBalance").asString()).isEqualTo("100.00");
+  }
+
+  @Test
+  void creditoDeCartaoReduzDespesaSemAumentarReceita() throws Exception {
+    createManualTransaction(
+        "CREDIT", aliceCardId, "50.00", "Crédito do cartão", "2026-10-09", null);
+    invoices();
+
+    JsonNode summary = summary(alice, "from=2026-10-01&to=2026-10-31&period=MONTH");
+    assertThat(summary.path("income").asString()).isEqualTo("1000.00");
+    // O crédito de 50 entrou depois do fechamento e vira crédito para o próximo ciclo.
+    assertThat(summary.path("expenses").asString()).isEqualTo("600.00");
+    // O crédito entrou depois do fechamento: vira crédito para o próximo ciclo, não reduz a
+    // fatura já fechada.
+    assertThat(summary.path("cardOutstandingBalance").asString()).isEqualTo("310.00");
+  }
+
+  @Test
+  void compraParceladaContaUmaParcelaPorCicloNoDashboard() throws Exception {
+    JsonNode cardTransactions =
+        json(
+            alice
+                .get("/api/v1/transactions?limit=100&accountId=" + aliceCardId)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    JsonNode purchase = cardTransactions.path("items").get(0);
+    String transactionId = purchase.path("id").asString();
+    String firstInvoiceId = purchase.path("invoiceId").asString();
+
+    alice
+        .post(
+            "/api/v1/invoices/" + firstInvoiceId + "/items",
+            Map.of(
+                "kind", "INSTALLMENT",
+                "reportingEffect", "NONE",
+                "description", "Compra parcelada",
+                "amount", "100.00",
+                "occurredOn", "2026-10-03",
+                "transactionId", transactionId,
+                "installmentNumber", 1,
+                "totalInstallments", 3))
+        .andExpect(status().isCreated());
+
+    JsonNode october = summary(alice, "from=2026-10-01&to=2026-10-31&period=MONTH");
+    assertThat(october.path("income").asString()).isEqualTo("1000.00");
+    assertThat(october.path("expenses").asString()).isEqualTo("410.00");
+    assertThat(october.path("cardOutstandingBalance").asString()).isEqualTo("310.00");
+
+    JsonNode november = summary(alice, "from=2026-11-01&to=2026-11-30&period=MONTH");
+    assertThat(november.path("expenses").asString()).isEqualTo("100.00");
+    JsonNode december = summary(alice, "from=2026-12-01&to=2026-12-31&period=MONTH");
+    assertThat(december.path("expenses").asString()).isEqualTo("100.00");
+  }
+
+  @Test
   void filtrosAplicamContaOrigemCategoriaEFaixaDeValor() throws Exception {
     JsonNode cashOnly = summary(alice, "from=2026-10-01&to=2026-10-31&accountId=" + aliceCashId);
     assertThat(cashOnly.path("income").asString()).isEqualTo("1000.00");
     assertThat(cashOnly.path("expenses").asString()).isEqualTo("200.00");
-    assertThat(cashOnly.path("currentBalance").asString()).isEqualTo("100.00");
+    assertThat(cashOnly.path("currentBalance").asString()).isEqualTo("850.00");
     assertThat(cashOnly.path("cardOutstandingBalance").asString()).isEqualTo("0.00");
     assertThat(cashOnly.path("pendingCount").asInt()).isZero();
     assertThat(cashOnly.path("lastSuccessfulSyncAt").isNull()).isTrue();
@@ -246,6 +323,46 @@ class DashboardIT extends PostgresTestBase {
         .get("/api/v1/dashboard/summary?from=2020-01-01&to=2026-12-31")
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+  }
+
+  @Test
+  void filtroAceitaMultiplasContasECartoes() throws Exception {
+    JsonNode cashAndBank =
+        summary(
+            alice,
+            "from=2026-10-01&to=2026-10-31&accountId=" + aliceCashId + "&accountId=" + aliceBankId);
+    assertThat(cashAndBank.path("income").asString()).isEqualTo("1000.00");
+    assertThat(cashAndBank.path("expenses").asString()).isEqualTo("300.00");
+    assertThat(cashAndBank.path("currentBalance").asString()).isEqualTo("1850.00");
+    assertThat(cashAndBank.path("cardOutstandingBalance").asString()).isEqualTo("0.00");
+    assertThat(cashAndBank.path("pendingCount").asInt()).isEqualTo(1);
+
+    JsonNode cashAndCard =
+        summary(
+            alice,
+            "from=2026-10-01&to=2026-10-31&accountId=" + aliceCashId + "&accountId=" + aliceCardId);
+    assertThat(cashAndCard.path("expenses").asString()).isEqualTo("510.00");
+    assertThat(cashAndCard.path("currentBalance").asString()).isEqualTo("850.00");
+    assertThat(cashAndCard.path("cardOutstandingBalance").asString()).isEqualTo("310.00");
+
+    JsonNode entries =
+        json(
+            alice
+                .get(
+                    "/api/v1/reports/entries?from=2026-10-01&to=2026-10-31&limit=100"
+                        + "&accountId="
+                        + aliceCashId
+                        + "&accountId="
+                        + aliceBankId)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    BigDecimal sum = BigDecimal.ZERO;
+    for (JsonNode entry : entries.path("items")) {
+      sum = sum.add(new BigDecimal(entry.path("amount").asString()));
+    }
+    assertThat(sum.setScale(2)).isEqualByComparingTo("700.00");
   }
 
   @Test

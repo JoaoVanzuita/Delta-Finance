@@ -111,7 +111,8 @@ class SyncJobIT extends PostgresTestBase {
     assertThat(third).isNotEqualTo(first);
     assertThat(syncJobService.processNext("worker-1", "corr-2")).isPresent();
     assertThat(transactions(alice).path("items").size()).isEqualTo(2);
-    assertThat(countRuns()).isEqualTo(2);
+    // Carga inicial + duas execuções da fila.
+    assertThat(countRuns()).isEqualTo(3);
   }
 
   @Test
@@ -136,7 +137,8 @@ class SyncJobIT extends PostgresTestBase {
     }
 
     assertThat(transactions(alice).path("items").size()).isEqualTo(2);
-    assertThat(countRuns()).isEqualTo(1);
+    // Carga inicial + uma execução da fila.
+    assertThat(countRuns()).isEqualTo(2);
   }
 
   @Test

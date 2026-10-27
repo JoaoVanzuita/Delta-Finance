@@ -115,6 +115,33 @@ class SecurityHeadersIT extends PostgresTestBase {
                     new jakarta.servlet.http.Cookie(
                         AuthTestClient.SESSION_COOKIE, alice.sessionId())))
         .andExpect(status().isForbidden());
+
+    Map<String, Object> audit =
+        jdbcTemplate.queryForMap(
+            "select event_type, metadata::text as metadata from audit_event"
+                + " where event_type = 'CSRF_REJECTED' order by created_at desc limit 1");
+    assertThat(String.valueOf(audit.get("metadata")))
+        .contains("POST")
+        .contains("/api/v1/auth/password");
+  }
+
+  @Test
+  void csrfAnonimoTambemEhAuditadoSemUsuario() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    jsonMapper.writeValueAsString(
+                        Map.of("username", "sem.csrf", "password", PASSWORD))))
+        .andExpect(status().isForbidden());
+
+    Integer events =
+        jdbcTemplate.queryForObject(
+            "select count(*) from audit_event"
+                + " where event_type = 'CSRF_REJECTED' and user_id is null",
+            Integer.class);
+    assertThat(events).isGreaterThanOrEqualTo(1);
   }
 
   @Test

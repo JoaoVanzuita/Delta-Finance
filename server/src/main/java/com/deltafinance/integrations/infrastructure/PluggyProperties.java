@@ -15,8 +15,6 @@ public class PluggyProperties {
 
   private LocalDate connectionLimitCheckedAt = LocalDate.of(2026, 10, 22);
 
-  private boolean webhooksEnabled;
-
   private Duration requestTimeout = Duration.ofSeconds(30);
 
   public String getBaseUrl() {
@@ -41,14 +39,6 @@ public class PluggyProperties {
 
   public void setConnectionLimitCheckedAt(LocalDate connectionLimitCheckedAt) {
     this.connectionLimitCheckedAt = connectionLimitCheckedAt;
-  }
-
-  public boolean isWebhooksEnabled() {
-    return webhooksEnabled;
-  }
-
-  public void setWebhooksEnabled(boolean webhooksEnabled) {
-    this.webhooksEnabled = webhooksEnabled;
   }
 
   public Duration getRequestTimeout() {

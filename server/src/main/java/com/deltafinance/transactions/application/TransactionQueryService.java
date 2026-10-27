@@ -12,13 +12,14 @@ import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionSource;
 import com.deltafinance.transactions.domain.TransactionStatus;
 import com.deltafinance.transactions.domain.TransactionType;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 /** Consulta paginada de transações, sempre escopada pelo usuário da sessão. */
@@ -47,31 +48,134 @@ public class TransactionQueryService {
       String type,
       String source,
       LocalDate from,
-      LocalDate to) {
+      LocalDate to,
+      BigDecimal minAmount,
+      BigDecimal maxAmount) {
+    validateAmountRange(minAmount, maxAmount);
     Cursor cursor = decode(pageRequest.cursor());
-    Pageable pageable = org.springframework.data.domain.PageRequest.of(0, pageRequest.limit() + 1);
-    List<Transaction> rows =
-        transactionRepository.findPage(
-            userId,
-            accountId,
-            categoryId,
-            parse(TransactionStatus.class, status, "status"),
-            parse(TransactionType.class, type, "type"),
-            parse(TransactionSource.class, source, "origin"),
-            from,
-            to,
-            cursor == null ? null : cursor.postedOn(),
-            cursor == null ? null : cursor.id(),
-            pageable);
+    TransactionStatus parsedStatus = parse(TransactionStatus.class, status, "status");
+    TransactionType parsedType = parse(TransactionType.class, type, "type");
+    TransactionSource parsedSource = parse(TransactionSource.class, source, "origin");
 
-    boolean hasMore = rows.size() > pageRequest.limit();
-    List<Transaction> page = hasMore ? rows.subList(0, pageRequest.limit()) : rows;
+    if (minAmount == null && maxAmount == null) {
+      List<Transaction> rows =
+          cursor == null
+              ? transactionRepository.findPage(
+                  userId,
+                  accountId,
+                  categoryId,
+                  parsedStatus,
+                  parsedType,
+                  parsedSource,
+                  from,
+                  to,
+                  org.springframework.data.domain.PageRequest.of(0, pageRequest.limit() + 1))
+              : transactionRepository.findPageAfter(
+                  userId,
+                  accountId,
+                  categoryId,
+                  parsedStatus,
+                  parsedType,
+                  parsedSource,
+                  from,
+                  to,
+                  cursor.postedOn(),
+                  cursor.id(),
+                  org.springframework.data.domain.PageRequest.of(0, pageRequest.limit() + 1));
+      return toPage(rows, pageRequest.limit());
+    }
+
+    // Valores são cifrados: a faixa é aplicada após a decifragem. Varra páginas em blocos até
+    // reunir limit + 1 correspondências, para que hasMore/nextCursor continuem corretos.
+    int limit = pageRequest.limit();
+    int fetchSize = PageRequest.MAX_LIMIT;
+    List<Transaction> matches = new ArrayList<>(limit + 1);
+    Cursor scan = cursor;
+    while (matches.size() <= limit) {
+      List<Transaction> rows =
+          scan == null
+              ? transactionRepository.findPage(
+                  userId,
+                  accountId,
+                  categoryId,
+                  parsedStatus,
+                  parsedType,
+                  parsedSource,
+                  from,
+                  to,
+                  org.springframework.data.domain.PageRequest.of(0, fetchSize))
+              : transactionRepository.findPageAfter(
+                  userId,
+                  accountId,
+                  categoryId,
+                  parsedStatus,
+                  parsedType,
+                  parsedSource,
+                  from,
+                  to,
+                  scan.postedOn(),
+                  scan.id(),
+                  org.springframework.data.domain.PageRequest.of(0, fetchSize));
+      if (rows.isEmpty()) {
+        break;
+      }
+      for (Transaction row : rows) {
+        if (withinRange(effectiveAmount(row), minAmount, maxAmount)) {
+          matches.add(row);
+          if (matches.size() > limit) {
+            break;
+          }
+        }
+      }
+      if (matches.size() > limit || rows.size() < fetchSize) {
+        break;
+      }
+      Transaction last = rows.getLast();
+      scan = new Cursor(last.getPostedOn(), last.getId());
+    }
+
+    boolean hasMore = matches.size() > limit;
+    List<Transaction> page = hasMore ? matches.subList(0, limit) : matches;
     List<TransactionView> views = page.stream().map(this::toView).toList();
     String nextCursor =
         hasMore && !page.isEmpty()
             ? encode(page.getLast().getPostedOn(), page.getLast().getId())
             : null;
     return hasMore ? CursorPage.of(views, nextCursor) : CursorPage.last(views);
+  }
+
+  private CursorPage<TransactionView> toPage(List<Transaction> rows, int limit) {
+    boolean hasMore = rows.size() > limit;
+    List<Transaction> page = hasMore ? rows.subList(0, limit) : rows;
+    List<TransactionView> views = page.stream().map(this::toView).toList();
+    String nextCursor =
+        hasMore && !page.isEmpty()
+            ? encode(page.getLast().getPostedOn(), page.getLast().getId())
+            : null;
+    return hasMore ? CursorPage.of(views, nextCursor) : CursorPage.last(views);
+  }
+
+  private BigDecimal effectiveAmount(Transaction transaction) {
+    return new BigDecimal(
+        cryptoService.decryptString(
+            transaction.getAmountEffectiveEnc(),
+            new CryptoContext(
+                transaction.getUserId(), "transaction", "amount_effective", transaction.getId())));
+  }
+
+  private static void validateAmountRange(BigDecimal minAmount, BigDecimal maxAmount) {
+    if (minAmount != null && maxAmount != null && minAmount.compareTo(maxAmount) > 0) {
+      throw new ValidationException(
+          "minAmount", "O valor mínimo não pode ser maior que o valor máximo.");
+    }
+  }
+
+  private static boolean withinRange(BigDecimal value, BigDecimal min, BigDecimal max) {
+    BigDecimal magnitude = value.abs();
+    if (min != null && magnitude.compareTo(min.abs()) < 0) {
+      return false;
+    }
+    return max == null || magnitude.compareTo(max.abs()) <= 0;
   }
 
   /** Retorna uma transação do usuário ou lança 404. */

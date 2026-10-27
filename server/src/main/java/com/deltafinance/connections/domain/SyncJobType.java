@@ -4,7 +4,6 @@ package com.deltafinance.connections.domain;
 public enum SyncJobType {
   SYNC_INTEGRATION,
   SYNC_CONNECTION,
-  PROCESS_WEBHOOK,
   RECALCULATE_INVOICE,
   RECONCILE
 }

@@ -61,7 +61,6 @@ class GoalsIT extends PostgresTestBase {
                 "100.00",
                 "ALLOCATIONS",
                 null,
-                null,
                 List.of(percentage("33.33"), percentage("33.33"), percentage("33.34"))));
 
     assertThat(goal.path("currentValue").asString()).isEqualTo("100.00");
@@ -93,7 +92,6 @@ class GoalsIT extends PostgresTestBase {
                 "1000.00",
                 "ALLOCATIONS",
                 null,
-                null,
                 List.of(percentage("30.00"), percentage("20.00"))));
 
     assertThat(goal.path("currentValue").asString()).isEqualTo("500.00");
@@ -115,7 +113,6 @@ class GoalsIT extends PostgresTestBase {
                 "1000.00",
                 "ALLOCATIONS",
                 null,
-                null,
                 List.of(fixed("MANUAL", null, "1200.00"))));
 
     assertThat(goal.path("currentValue").asString()).isEqualTo("1200.00");
@@ -127,61 +124,12 @@ class GoalsIT extends PostgresTestBase {
   }
 
   @Test
-  void reducaoDeDividaUsaDividaInicialComoDenominador() throws Exception {
-    JsonNode goal =
-        createGoal(
-            alice,
-            goalBody(
-                "Quitar cartão",
-                "DEBT_REDUCTION",
-                "10000.00",
-                "DEBT_REDUCTION",
-                "10000.00",
-                null,
-                List.of(fixed("MANUAL", null, "2500.00"))));
-
-    assertThat(goal.path("currentValue").asString()).isEqualTo("2500.00");
-    assertThat(goal.path("percentage").asString()).isEqualTo("25.00");
-    assertThat(goal.path("remainingAmount").asString()).isEqualTo("7500.00");
-    assertThat(goal.path("status").asString()).isEqualTo("ACTIVE");
-
-    alice
-        .post(
-            "/api/v1/goals",
-            goalBody(
-                "Dívida sem inicial",
-                "DEBT_REDUCTION",
-                "1000.00",
-                "DEBT_REDUCTION",
-                null,
-                null,
-                List.of(fixed("MANUAL", null, "100.00"))))
-        .andExpect(status().isUnprocessableEntity())
-        .andExpect(jsonPath("$.errors[0].field").value("initialValue"));
-
-    alice
-        .post(
-            "/api/v1/goals",
-            goalBody(
-                "Dívida inicial zero",
-                "DEBT_REDUCTION",
-                "1000.00",
-                "DEBT_REDUCTION",
-                "0.00",
-                null,
-                List.of(fixed("MANUAL", null, "100.00"))))
-        .andExpect(status().isUnprocessableEntity())
-        .andExpect(jsonPath("$.errors[0].field").value("initialValue"));
-  }
-
-  @Test
   void metaDePatrimonioLiquidoRecalculaComOsDadosAtuais() throws Exception {
     createManualAsset("Reserva", "1500.00");
 
     JsonNode goal =
         createGoal(
-            alice,
-            goalBody("Patrimônio", "NET_WORTH", "1000.00", "NET_WORTH", null, null, List.of()));
+            alice, goalBody("Patrimônio", "NET_WORTH", "1000.00", "NET_WORTH", null, List.of()));
 
     assertThat(goal.path("currentValue").asString()).isEqualTo("1500.00");
     assertThat(goal.path("percentage").asString()).isEqualTo("100.00");
@@ -201,7 +149,6 @@ class GoalsIT extends PostgresTestBase {
                 "1000.00",
                 "NET_WORTH",
                 null,
-                null,
                 List.of(fixed("MANUAL", null, "100.00"))))
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("allocations"));
@@ -217,7 +164,6 @@ class GoalsIT extends PostgresTestBase {
                     "EMERGENCY_FUND",
                     "1000.00",
                     "ALLOCATIONS",
-                    null,
                     today().plusDays(10).toString(),
                     List.of(fixed("MANUAL", null, "500.00"))))
             .path("id")
@@ -232,7 +178,6 @@ class GoalsIT extends PostgresTestBase {
                 "EMERGENCY_FUND",
                 "2000.00",
                 "ALLOCATIONS",
-                null,
                 today().plusDays(10).toString(),
                 List.of(fixed("MANUAL", null, "500.00"))));
     assertThat(changed.path("status").asString()).isEqualTo("CHANGED");
@@ -250,7 +195,6 @@ class GoalsIT extends PostgresTestBase {
             "EMERGENCY_FUND",
             "2000.00",
             "ALLOCATIONS",
-            null,
             today().minusDays(1).toString(),
             List.of(fixed("MANUAL", null, "500.00"))));
     setStatus(alice, id, "ACTIVE");
@@ -268,7 +212,6 @@ class GoalsIT extends PostgresTestBase {
             "EMERGENCY_FUND",
             "2000.00",
             "ALLOCATIONS",
-            null,
             today().minusDays(1).toString(),
             List.of(fixed("MANUAL", null, "900.00"))));
     JsonNode frozen = getGoal(alice, id);
@@ -290,7 +233,6 @@ class GoalsIT extends PostgresTestBase {
                 "1000.00",
                 "ALLOCATIONS",
                 null,
-                null,
                 List.of(fixed("MANUAL", null, "1000.00"))));
     assertThat(achieved.path("status").asString()).isEqualTo("ACHIEVED");
     assertThat(achieved.path("progressHistory")).hasSize(1);
@@ -310,7 +252,6 @@ class GoalsIT extends PostgresTestBase {
             "1000.00",
             "ALLOCATIONS",
             null,
-            null,
             List.of(fixed("ACCOUNT", accountId, "800.00"))));
 
     alice
@@ -321,7 +262,6 @@ class GoalsIT extends PostgresTestBase {
                 "TRAVEL",
                 "1000.00",
                 "ALLOCATIONS",
-                null,
                 null,
                 List.of(fixed("ACCOUNT", accountId, "300.00"))))
         .andExpect(status().isUnprocessableEntity())
@@ -335,7 +275,6 @@ class GoalsIT extends PostgresTestBase {
             "1000.00",
             "ALLOCATIONS",
             null,
-            null,
             List.of(fixed("ACCOUNT", accountId, "200.00"))));
 
     alice
@@ -346,7 +285,6 @@ class GoalsIT extends PostgresTestBase {
                 "PLANNED_PURCHASE",
                 "1000.00",
                 "ALLOCATIONS",
-                null,
                 null,
                 List.of(percentageSource("ACCOUNT", accountId, "50.00"))))
         .andExpect(status().isUnprocessableEntity())
@@ -361,7 +299,6 @@ class GoalsIT extends PostgresTestBase {
                 "1000.00",
                 "ALLOCATIONS",
                 null,
-                null,
                 List.of(percentage("60.00"), percentage("50.00"))))
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("allocations"));
@@ -375,7 +312,6 @@ class GoalsIT extends PostgresTestBase {
                 "1000.00",
                 "ALLOCATIONS",
                 null,
-                null,
                 List.of(mixed("100.00", "10.00"))))
         .andExpect(status().isUnprocessableEntity());
 
@@ -387,7 +323,6 @@ class GoalsIT extends PostgresTestBase {
                 "TRAVEL",
                 "1000.00",
                 "ALLOCATIONS",
-                null,
                 null,
                 List.of(fixed("ACCOUNT", null, "100.00"))))
         .andExpect(status().isUnprocessableEntity())
@@ -401,7 +336,6 @@ class GoalsIT extends PostgresTestBase {
                 "TRAVEL",
                 "1000.00",
                 "ALLOCATIONS",
-                null,
                 null,
                 List.of(fixed("MANUAL", accountId, "100.00"))))
         .andExpect(status().isUnprocessableEntity())
@@ -419,7 +353,6 @@ class GoalsIT extends PostgresTestBase {
                     "1000.00",
                     "ALLOCATIONS",
                     null,
-                    null,
                     List.of(fixed("MANUAL", null, "100.00"))))
             .path("id")
             .asString();
@@ -435,7 +368,7 @@ class GoalsIT extends PostgresTestBase {
     bob.get("/api/v1/goals/" + id).andExpect(status().isNotFound());
     bob.patch(
             "/api/v1/goals/" + id,
-            goalBody("Invasão", "TRAVEL", "1.00", "ALLOCATIONS", null, null, List.of()))
+            goalBody("Invasão", "TRAVEL", "1.00", "ALLOCATIONS", null, List.of()))
         .andExpect(status().isNotFound());
     bob.post("/api/v1/goals/" + id + "/status", Map.of("status", "PAUSED"))
         .andExpect(status().isNotFound());
@@ -462,7 +395,6 @@ class GoalsIT extends PostgresTestBase {
                     "1000.00",
                     "ALLOCATIONS",
                     null,
-                    null,
                     List.of(fixed("MANUAL", null, "100.00"))))
             .path("id")
             .asString();
@@ -474,7 +406,6 @@ class GoalsIT extends PostgresTestBase {
             "TRAVEL",
             "2000.00",
             "ALLOCATIONS",
-            null,
             null,
             List.of(fixed("MANUAL", null, "500.00"))));
     setStatus(alice, id, "PAUSED");
@@ -492,26 +423,176 @@ class GoalsIT extends PostgresTestBase {
   @Test
   void validaCamposObrigatorios() throws Exception {
     alice
-        .post(
-            "/api/v1/goals",
-            goalBody(" ", "TRAVEL", "1000.00", "ALLOCATIONS", null, null, List.of()))
+        .post("/api/v1/goals", goalBody(" ", "TRAVEL", "1000.00", "ALLOCATIONS", null, List.of()))
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("name"));
     alice
-        .post(
-            "/api/v1/goals",
-            goalBody("X", "INVALID", "1000.00", "ALLOCATIONS", null, null, List.of()))
+        .post("/api/v1/goals", goalBody("X", "INVALID", "1000.00", "ALLOCATIONS", null, List.of()))
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("type"));
     alice
-        .post(
-            "/api/v1/goals", goalBody("X", "TRAVEL", "0.00", "ALLOCATIONS", null, null, List.of()))
+        .post("/api/v1/goals", goalBody("X", "TRAVEL", "0.00", "ALLOCATIONS", null, List.of()))
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("targetAmount"));
     alice
-        .post("/api/v1/goals", goalBody("X", "TRAVEL", "1000.00", "INVALID", null, null, List.of()))
+        .post("/api/v1/goals", goalBody("X", "TRAVEL", "1000.00", "INVALID", null, List.of()))
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("progressRule"));
+  }
+
+  @Test
+  void valorFixoAcimaDaCapacidadeNaoEhTruncadoSilenciosamente() throws Exception {
+    String accountId = createManualAccount("Conta em queda", "1000.00");
+    JsonNode goal =
+        createGoal(
+            alice,
+            goalBody(
+                "Reserva",
+                "EMERGENCY_FUND",
+                "1000.00",
+                "ALLOCATIONS",
+                null,
+                List.of(fixed("ACCOUNT", accountId, "800.00"))));
+    assertThat(goal.path("currentValue").asString()).isEqualTo("800.00");
+
+    alice
+        .patch("/api/v1/accounts/" + accountId, Map.of("referenceBalance", "500.00"))
+        .andExpect(status().isOk());
+
+    JsonNode refreshed = getGoal(alice, goal.path("id").asString());
+    assertThat(refreshed.path("currentValue").asString()).isEqualTo("800.00");
+    assertThat(refreshed.path("percentage").asString()).isEqualTo("80.00");
+    JsonNode allocation = refreshed.path("allocations").get(0);
+    assertThat(allocation.path("contributionAmount").asString()).isEqualTo("800.00");
+    assertThat(allocation.path("capacityExceeded").asBoolean()).isTrue();
+  }
+
+  @Test
+  void multiplasMetasNaoContamOMesmoSaldoIntegralmente() throws Exception {
+    String accountId = createManualAccount("Conta compartilhada", "1000.00");
+    String firstId =
+        createGoal(
+                alice,
+                goalBody(
+                    "Meta A",
+                    "EMERGENCY_FUND",
+                    "1000.00",
+                    "ALLOCATIONS",
+                    null,
+                    List.of(percentageSource("ACCOUNT", accountId, "50.00"))))
+            .path("id")
+            .asString();
+    String secondId =
+        createGoal(
+                alice,
+                goalBody(
+                    "Meta B",
+                    "TRAVEL",
+                    "1000.00",
+                    "ALLOCATIONS",
+                    null,
+                    List.of(percentageSource("ACCOUNT", accountId, "50.00"))))
+            .path("id")
+            .asString();
+
+    alice
+        .patch("/api/v1/accounts/" + accountId, Map.of("referenceBalance", "600.00"))
+        .andExpect(status().isOk());
+
+    JsonNode first = getGoal(alice, firstId);
+    JsonNode second = getGoal(alice, secondId);
+    BigDecimal total =
+        new BigDecimal(first.path("currentValue").asString())
+            .add(new BigDecimal(second.path("currentValue").asString()));
+    assertThat(total).isEqualByComparingTo("600.00");
+    assertThat(first.path("allocations").get(0).path("capacityExceeded").asBoolean())
+        .isNotEqualTo(second.path("allocations").get(0).path("capacityExceeded").asBoolean());
+  }
+
+  @Test
+  void recusaFonteEmMoedaDiferenteDeBrl() throws Exception {
+    String accountId = createManualAccount("Conta USD", "100.00", "USD");
+
+    alice
+        .post(
+            "/api/v1/goals",
+            goalBody(
+                "Meta em dólar",
+                "TRAVEL",
+                "1000.00",
+                "ALLOCATIONS",
+                null,
+                List.of(fixed("ACCOUNT", accountId, "50.00"))))
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.errors[0].field").value("allocations"));
+  }
+
+  @Test
+  void persisteObservacoesEExpoeNomeDaFonte() throws Exception {
+    String accountId = createManualAccount("Conta reserva", "1000.00");
+    Map<String, Object> body =
+        goalBody(
+            "Reserva 2027",
+            "EMERGENCY_FUND",
+            "1000.00",
+            "ALLOCATIONS",
+            null,
+            List.of(fixed("ACCOUNT", accountId, "500.00")));
+    body.put("notes", "Guardar para a viagem de 2027.");
+
+    JsonNode created = createGoal(alice, body);
+    assertThat(created.path("notes").asString()).isEqualTo("Guardar para a viagem de 2027.");
+    assertThat(created.path("allocations").get(0).path("sourceName").asString())
+        .isEqualTo("Conta reserva");
+
+    String id = created.path("id").asString();
+    assertThat(getGoal(alice, id).path("notes").asString())
+        .isEqualTo("Guardar para a viagem de 2027.");
+    assertThat(listGoals(alice).path("items").get(0).path("notes").asString())
+        .isEqualTo("Guardar para a viagem de 2027.");
+
+    Map<String, Object> noNotes =
+        goalBody(
+            "Reserva 2027",
+            "EMERGENCY_FUND",
+            "1000.00",
+            "ALLOCATIONS",
+            null,
+            List.of(fixed("ACCOUNT", accountId, "500.00")));
+    JsonNode cleared = patchGoal(alice, id, noNotes);
+    assertThat(cleared.path("notes").isNull()).isTrue();
+    assertThat(cleared.path("status").asString()).isEqualTo("ACTIVE");
+  }
+
+  @Test
+  void alteracaoDeAlocacaoMarcaChanged() throws Exception {
+    String id =
+        createGoal(
+                alice,
+                goalBody(
+                    "Reserva",
+                    "EMERGENCY_FUND",
+                    "1000.00",
+                    "ALLOCATIONS",
+                    null,
+                    List.of(fixed("MANUAL", null, "500.00"))))
+            .path("id")
+            .asString();
+
+    JsonNode changed =
+        patchGoal(
+            alice,
+            id,
+            goalBody(
+                "Reserva",
+                "EMERGENCY_FUND",
+                "1000.00",
+                "ALLOCATIONS",
+                null,
+                List.of(fixed("MANUAL", null, "600.00"))));
+    assertThat(changed.path("status").asString()).isEqualTo("CHANGED");
+    assertThat(changed.path("changedAt").isNull()).isFalse();
+    assertThat(setStatus(alice, id, "ACTIVE").path("status").asString()).isEqualTo("ACTIVE");
   }
 
   private JsonNode createGoal(AuthTestClient client, Map<String, Object> body) throws Exception {
@@ -567,6 +648,11 @@ class GoalsIT extends PostgresTestBase {
   }
 
   private String createManualAccount(String alias, String balance) throws Exception {
+    return createManualAccount(alias, balance, "BRL");
+  }
+
+  private String createManualAccount(String alias, String balance, String currency)
+      throws Exception {
     return json(alice
             .post(
                 "/api/v1/accounts",
@@ -575,7 +661,7 @@ class GoalsIT extends PostgresTestBase {
                     "alias", alias,
                     "referenceBalance", balance,
                     "referenceDate", "2026-10-24T12:00:00Z",
-                    "currency", "BRL"))
+                    "currency", currency))
             .andExpect(status().isCreated())
             .andReturn()
             .getResponse()
@@ -611,7 +697,6 @@ class GoalsIT extends PostgresTestBase {
       String type,
       String target,
       String rule,
-      String initialValue,
       String targetDate,
       List<Map<String, Object>> allocations) {
     Map<String, Object> body = new LinkedHashMap<>();
@@ -619,9 +704,6 @@ class GoalsIT extends PostgresTestBase {
     body.put("type", type);
     body.put("targetAmount", target);
     body.put("progressRule", rule);
-    if (initialValue != null) {
-      body.put("initialValue", initialValue);
-    }
     if (targetDate != null) {
       body.put("targetDate", targetDate);
     }

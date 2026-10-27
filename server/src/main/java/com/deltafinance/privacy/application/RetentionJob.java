@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li>{@code login_attempt}: 30 dias;
- *   <li>{@code sync_run} e {@code webhook_event}: 90 dias;
+ *   <li>{@code sync_run}: 90 dias;
  *   <li>{@code audit_event}: 1 ano;
  *   <li>{@code idempotency_key}: expiração de 24 h registrada em {@code expires_at}.
  * </ul>
@@ -49,11 +49,9 @@ public class RetentionJob {
   public void scheduled() {
     RetentionResult result = run();
     LOG.info(
-        "Retenção executada: loginAttempts={} syncRuns={} webhookEvents={} auditEvents={}"
-            + " idempotencyKeys={}",
+        "Retenção executada: loginAttempts={} syncRuns={} auditEvents={} idempotencyKeys={}",
         result.loginAttempts(),
         result.syncRuns(),
-        result.webhookEvents(),
         result.auditEvents(),
         result.idempotencyKeys());
   }
@@ -69,21 +67,16 @@ public class RetentionJob {
         jdbcTemplate.update(
             "delete from sync_run where coalesce(finished_at, started_at) < ?",
             Timestamp.from(clock.now().minus(OPERATIONAL_HISTORY)));
-    int webhookEvents =
-        jdbcTemplate.update(
-            "delete from webhook_event where received_at < ?",
-            Timestamp.from(clock.now().minus(OPERATIONAL_HISTORY)));
     int auditEvents =
         jdbcTemplate.update(
             "delete from audit_event where created_at < ?",
             Timestamp.from(clock.now().minus(AUDIT_EVENTS)));
     int idempotencyKeys =
         jdbcTemplate.update("delete from idempotency_key where expires_at < ?", now);
-    return new RetentionResult(
-        loginAttempts, syncRuns, webhookEvents, auditEvents, idempotencyKeys);
+    return new RetentionResult(loginAttempts, syncRuns, auditEvents, idempotencyKeys);
   }
 
   /** Contagens sanitizadas de uma execução. */
   public record RetentionResult(
-      int loginAttempts, int syncRuns, int webhookEvents, int auditEvents, int idempotencyKeys) {}
+      int loginAttempts, int syncRuns, int auditEvents, int idempotencyKeys) {}
 }

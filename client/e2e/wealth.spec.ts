@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test'
 /**
  * E2E de patrimônio consolidado (stub de API).
  *
- * Prova consolidação sem dupla contagem, composição com lacunas, CRUD de itens
- * manuais e snapshots datados sem inferência de saldos passados.
+ * Prova consolidação sem dupla contagem, composição com lacunas e CRUD de itens
+ * manuais.
  */
 
 const USER = {
@@ -25,21 +25,8 @@ interface ManualItem {
   notes?: string
 }
 
-interface Snapshot {
-  id: string
-  referenceDate: string
-  grossAssets: string
-  liabilities: string
-  netWorth: string
-  completeness: string
-  notes?: string
-  createdAt: string
-  items: Array<Record<string, unknown>>
-}
-
 interface State {
   manualItems: ManualItem[]
-  snapshots: Snapshot[]
 }
 
 function overview(state: State) {
@@ -134,7 +121,6 @@ async function installStub(page: Page): Promise<State> {
         referenceDate: '2026-10-23',
       },
     ],
-    snapshots: [],
   }
 
   await page
@@ -191,43 +177,14 @@ async function installStub(page: Page): Promise<State> {
       state.manualItems = state.manualItems.filter((item) => item.id !== id)
       return route.fulfill({ status: 204 })
     }
-    if (path === '/wealth/snapshots' && method === 'GET') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: state.snapshots }),
-      })
-    }
-    if (path === '/wealth/snapshots' && method === 'POST') {
-      const current = overview(state)
-      const created: Snapshot = {
-        id: `snap-${state.snapshots.length + 1}`,
-        referenceDate: TODAY,
-        grossAssets: current.grossAssets,
-        liabilities: current.liabilities,
-        netWorth: current.netWorth,
-        completeness: current.completeness,
-        notes: 'Snapshot e2e',
-        createdAt: `${TODAY}T12:00:00Z`,
-        items: current.items,
-      }
-      state.snapshots = [created, ...state.snapshots]
-      return route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify(created),
-      })
-    }
     return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' })
   })
 
   return state
 }
 
-test('consolida patrimônio, cria item manual e registra snapshot sem inferir passado', async ({
-  page,
-}) => {
-  const state = await installStub(page)
+test('consolida patrimônio e cria item manual sem inferir passado', async ({ page }) => {
+  await installStub(page)
   await page.goto('/wealth')
 
   await expect(page.getByRole('heading', { level: 1, name: 'Patrimônio' })).toBeVisible()
@@ -254,16 +211,6 @@ test('consolida patrimônio, cria item manual e registra snapshot sem inferir pa
   await expect(manual.getByText('Apartamento')).toBeVisible()
   await expect(summary.getByText(/R\$\s*251\.600,00/)).toBeVisible()
   await expect(summary.getByText(/R\$\s*251\.300,00/)).toBeVisible()
-
-  const history = page.getByRole('region', { name: 'Histórico de snapshots' })
-  await expect(history.getByText('Nenhum snapshot registrado')).toBeVisible()
-  await history.getByRole('button', { name: 'Registrar snapshot de hoje' }).click()
-
-  await expect(history.getByText(/24\/10\/2026/)).toBeVisible()
-  await expect(history.getByText(/R\$\s*251\.300,00/)).toBeVisible()
-  await expect(history.getByText(/Histórico insuficiente para comparar períodos/i)).toBeVisible()
-  await expect(history.getByText(/Nenhum saldo passado é inferido/i)).toBeVisible()
-  expect(state.snapshots).toHaveLength(1)
 
   const addedRow = manual.getByRole('listitem').filter({ hasText: 'Apartamento' })
   await addedRow.getByRole('button', { name: 'Excluir' }).click()

@@ -160,7 +160,7 @@ class FinancialRulesIT extends PostgresTestBase {
     // 40 (conta inativa, histórico preservado) + 100 + 80 - 30 + 100 (cartão) + 20 - 10.
     assertThat(summary.path("expenses").asString()).isEqualTo("300.00");
     assertThat(summary.path("periodResult").asString()).isEqualTo("200.00");
-    assertThat(summary.path("currentBalance").asString()).isEqualTo("1175.00");
+    assertThat(summary.path("currentBalance").asString()).isEqualTo("1525.00");
     assertThat(summary.path("cardOutstandingBalance").asString()).isEqualTo("110.00");
     assertThat(summary.path("pendingCount").asInt()).isEqualTo(1);
     assertThat(summary.path("pendingExpenses").asString()).isEqualTo("30.00");

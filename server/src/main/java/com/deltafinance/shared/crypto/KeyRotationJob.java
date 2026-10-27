@@ -56,10 +56,8 @@ public class KeyRotationJob {
           new Field("transaction", "adjustment_reason"),
           new Field("transaction", "notes"),
           new Field("external_identity_history", "external_id"),
-          new Field("webhook_subscription", "secret"),
           new Field("transaction_correction", "old_value"),
           new Field("transaction_correction", "new_value"),
-          new Field("invoice", "provider_bill_id"),
           new Field("invoice", "total"),
           new Field("invoice", "payments_total"),
           new Field("invoice", "outstanding"),
@@ -67,12 +65,27 @@ public class KeyRotationJob {
           new Field("invoice", "minimum_payment"),
           new Field("invoice_item", "description"),
           new Field("invoice_item", "amount"),
-          new Field("invoice_item", "provider_item_id"),
           new Field("invoice_payment", "amount"),
-          new Field("invoice_payment", "provider_payment_id"),
           new Field("invoice_item_correction", "old_value"),
           new Field("invoice_item_correction", "new_value"),
-          new Field("invoice_item_correction", "reason"));
+          new Field("invoice_item_correction", "reason"),
+          new Field("investment_position", "asset_name"),
+          new Field("investment_position", "ticker"),
+          new Field("investment_position", "quantity"),
+          new Field("investment_position", "reference_price"),
+          new Field("investment_position", "notes"),
+          new Field("manual_asset_liability", "description"),
+          new Field("manual_asset_liability", "reference_value"),
+          new Field("manual_asset_liability", "notes"),
+          new Field("financial_goal", "name"),
+          new Field("financial_goal", "description"),
+          new Field("financial_goal", "notes"),
+          new Field("financial_goal", "target_amount"),
+          new Field("goal_allocation", "allocated_amount"),
+          new Field("goal_progress_snapshot", "current_value"),
+          new Field("goal_progress_snapshot", "remaining"),
+          // Respostas de replay têm TTL de 24 h, mas ainda podem existir durante a rotação.
+          new Field("idempotency_key", "response_body", false));
 
   private final JdbcTemplate jdbcTemplate;
   private final CryptoService cryptoService;
@@ -146,16 +159,20 @@ public class KeyRotationJob {
               new CryptoContext(row.userId(), field.table(), field.column(), row.id());
           String plaintext = cryptoService.decryptString(row.payload(), context);
           byte[] reencrypted = cryptoService.encrypt(plaintext, context);
-          jdbcTemplate.update(
+          String update =
               "update "
                   + field.table()
                   + " set "
                   + column
-                  + " = ?, updated_at = ? where id = ? and user_id = ?",
-              reencrypted,
-              Timestamp.from(clock.now()),
-              row.id(),
-              row.userId());
+                  + " = ?"
+                  + (field.hasUpdatedAt() ? ", updated_at = ?" : "")
+                  + " where id = ? and user_id = ?";
+          if (field.hasUpdatedAt()) {
+            jdbcTemplate.update(
+                update, reencrypted, Timestamp.from(clock.now()), row.id(), row.userId());
+          } else {
+            jdbcTemplate.update(update, reencrypted, row.id(), row.userId());
+          }
           rotated++;
         } catch (RuntimeException exception) {
           failed++;
@@ -171,8 +188,12 @@ public class KeyRotationJob {
     return new RotationResult(targetVersion, rotated, failed);
   }
 
-  private record Field(String table, String column) {
-    Field {
+  private record Field(String table, String column, boolean hasUpdatedAt) {
+    private Field(String table, String column) {
+      this(table, column, true);
+    }
+
+    private Field {
       if (!table.matches("[a-z0-9_]{1,64}") || !column.matches("[a-z0-9_]{1,64}")) {
         throw new IllegalArgumentException("Identificador inválido para rotação de chave");
       }

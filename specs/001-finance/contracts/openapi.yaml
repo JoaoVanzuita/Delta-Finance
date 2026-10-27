@@ -8,9 +8,8 @@ info:
 
     monetários trafegam como strings decimais para evitar ponto flutuante. O
 
-    contrato cobre 37 caminhos do MVP, 2 de investimentos da fase secundária
-
-    (US8), 4 de patrimônio (US9) e 3 de metas (US10).
+    contrato cobre 35 caminhos do MVP, 2 de investimentos da fase secundária (US8), 3
+    de patrimônio (US9) e 3 de metas (US10): 43 caminhos e 63 operações no total.
 
     '
   license:
@@ -44,11 +43,9 @@ tags:
 - name: Investments
   description: Posições manuais de investimentos (fase secundária pós-MVP).
 - name: Wealth
-  description: Patrimônio consolidado, ativos/passivos manuais e snapshots datados.
+  description: Patrimônio consolidado e ativos/passivos manuais.
 - name: Goals
   description: Metas financeiras com alocações explícitas, progresso e histórico.
-- name: Webhooks
-  description: Recepção opcional de eventos Pluggy.
 security:
 - sessionCookie: []
 paths:
@@ -279,8 +276,6 @@ paths:
       security:
       - sessionCookie: []
         csrfToken: []
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -379,7 +374,6 @@ paths:
         csrfToken: []
       parameters:
       - $ref: '#/components/parameters/PathId'
-      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '202':
           description: Sincronização enfileirada.
@@ -420,8 +414,6 @@ paths:
       security:
       - sessionCookie: []
         csrfToken: []
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -589,6 +581,8 @@ paths:
       security:
       - sessionCookie: []
         csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -613,10 +607,12 @@ paths:
       tags:
       - Transactions
       summary: Exclui um lançamento manual
-      description: Transações importadas não são apagadas; a remoção do histórico exige reconciliação explícita (`SOURCE_REMOVED`) ou exclusão da conta.
+      description: Transações importadas não são apagadas; a ausência na origem é marcada automaticamente e a linha permanece no histórico.
       security:
       - sessionCookie: []
         csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '204':
           description: Lançamento manual excluído.
@@ -625,36 +621,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: deleteTransactionsId
-  /transactions/{id}/source-removal:
-    parameters:
-    - $ref: '#/components/parameters/PathId'
-    post:
-      tags:
-      - Transactions
-      summary: Revisa uma transação marcada como removida na origem
-      security:
-      - sessionCookie: []
-        csrfToken: []
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SourceRemovalReviewRequest'
-      responses:
-        '200':
-          description: Revisão registrada.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Transaction'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-      operationId: postTransactionsIdSourceRemoval
   /categories:
     get:
       tags:
@@ -817,6 +783,8 @@ paths:
                 $ref: '#/components/schemas/InvoiceItem'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
       operationId: postInvoicesIdItems
@@ -830,6 +798,8 @@ paths:
       security:
       - sessionCookie: []
         csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -857,6 +827,8 @@ paths:
       security:
       - sessionCookie: []
         csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '204':
           description: Item removido.
@@ -1004,7 +976,7 @@ paths:
       - $ref: '#/components/parameters/Period'
       - $ref: '#/components/parameters/DateFrom'
       - $ref: '#/components/parameters/DateTo'
-      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/AccountIds'
       - $ref: '#/components/parameters/CategoryId'
       - $ref: '#/components/parameters/TransactionType'
       - $ref: '#/components/parameters/Origin'
@@ -1033,7 +1005,8 @@ paths:
       - $ref: '#/components/parameters/Period'
       - $ref: '#/components/parameters/DateFrom'
       - $ref: '#/components/parameters/DateTo'
-      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/AccountIds'
+      - $ref: '#/components/parameters/CategoryId'
       - $ref: '#/components/parameters/TransactionType'
       - $ref: '#/components/parameters/Origin'
       - $ref: '#/components/parameters/MinAmount'
@@ -1063,9 +1036,12 @@ paths:
       - $ref: '#/components/parameters/Period'
       - $ref: '#/components/parameters/DateFrom'
       - $ref: '#/components/parameters/DateTo'
-      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/AccountIds'
       - $ref: '#/components/parameters/CategoryId'
+      - $ref: '#/components/parameters/TransactionType'
       - $ref: '#/components/parameters/Origin'
+      - $ref: '#/components/parameters/MinAmount'
+      - $ref: '#/components/parameters/MaxAmount'
       responses:
         '200':
           description: Série temporal.
@@ -1091,7 +1067,7 @@ paths:
       - $ref: '#/components/parameters/Period'
       - $ref: '#/components/parameters/DateFrom'
       - $ref: '#/components/parameters/DateTo'
-      - $ref: '#/components/parameters/AccountId'
+      - $ref: '#/components/parameters/AccountIds'
       - $ref: '#/components/parameters/CategoryId'
       - $ref: '#/components/parameters/TransactionType'
       - $ref: '#/components/parameters/Origin'
@@ -1448,57 +1424,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
       operationId: deleteWealthManualItemsId
-  /wealth/snapshots:
-    x-phase: post-mvp
-    get:
-      tags:
-      - Wealth
-      summary: Lista snapshots patrimoniais datados
-      description: Retorna apenas snapshots registrados; nunca infere saldos
-        passados a partir dos dados atuais.
-      responses:
-        '200':
-          description: Histórico de snapshots.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WealthSnapshotList'
-        4XX:
-          description: Erro do cliente.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-      operationId: getWealthSnapshots
-    post:
-      tags:
-      - Wealth
-      summary: Registra snapshot patrimonial de hoje
-      description: Usa os dados atuais e a data de hoje em America/Sao_Paulo. No
-        mesmo dia, o snapshot é atualizado de forma idempotente.
-      security:
-      - sessionCookie: []
-        csrfToken: []
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WealthSnapshotRequest'
-      responses:
-        '201':
-          description: Snapshot registrado ou atualizado.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WealthSnapshot'
-        4XX:
-          description: Erro do cliente.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-      operationId: postWealthSnapshots
   /goals:
     x-phase: post-mvp
     get:
@@ -1649,39 +1574,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
       operationId: postGoalsIdStatus
-  /webhooks/pluggy/{webhookToken}:
-    post:
-      tags:
-      - Webhooks
-      summary: Recebe evento Pluggy
-      description: 'Endpoint opcional, habilitado apenas com HTTPS público. Valida o
-
-        segredo da inscrição, registra o eventId e responde 202 rapidamente.
-
-        '
-      security:
-      - webhookSecret: []
-      parameters:
-      - name: webhookToken
-        in: path
-        required: true
-        schema:
-          type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-      responses:
-        '202':
-          description: Evento aceito para processamento assíncrono.
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          description: Evento duplicado; ignorado de forma idempotente.
-      operationId: postWebhooksPluggyWebhookToken
 components:
   securitySchemes:
     sessionCookie:
@@ -1692,10 +1584,6 @@ components:
       type: apiKey
       in: header
       name: X-XSRF-TOKEN
-    webhookSecret:
-      type: apiKey
-      in: header
-      name: X-Webhook-Secret
   parameters:
     PathId:
       name: id
@@ -1708,7 +1596,11 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Recomendado para retries de mutações.
+      description: Chave de idempotência por operação, aceita apenas em transações,
+        itens de fatura e pagamentos de fatura. Repetições com o mesmo método,
+        caminho, query string e corpo recebem a resposta original por 24 h; corpo
+        divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o
+        cabeçalho é ignorado.
       schema:
         type: string
         minLength: 8
@@ -1744,6 +1636,18 @@ components:
       schema:
         type: string
         format: uuid
+    AccountIds:
+      name: accountId
+      in: query
+      description: Repetível (accountId=a&accountId=b) ou separado por vírgula.
+        Sem o parâmetro, todas as contas e cartões entram.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          format: uuid
     CategoryId:
       name: categoryId
       in: query
@@ -1979,6 +1883,12 @@ components:
           type: string
         connectionCount:
           type: integer
+        connectionLimit:
+          type: integer
+          description: Limite da modalidade Meu Pluggy; conexões ITEM_UNAVAILABLE não ocupam vaga.
+        connectionLimitCheckedAt:
+          type: string
+          format: date
     ValidationResult:
       type: object
       required:
@@ -2080,6 +1990,7 @@ components:
           - CREDIT
           - CASH
           - WALLET
+          - UNKNOWN
         subtype:
           type: string
         origin:
@@ -2095,9 +2006,19 @@ components:
           type: string
         currentBalance:
           type: string
+          description: Saldo atual. Em contas manuais, é o saldo de referência
+            ajustado pelos lançamentos efetivados e pagamentos de fatura com data
+            igual ou posterior à data de referência; em contas importadas, é o
+            saldo informado pelo provedor.
+        referenceBalance:
+          type: string
+          description: Saldo de referência informado pelo usuário, sem ajustes.
+            Para contas importadas, espelha o saldo do provedor.
         balanceReferenceAt:
           type: string
           format: date-time
+          description: Data a partir da qual os lançamentos ajustam o saldo de
+            referência de uma conta manual.
         status:
           type: string
           description: ACTIVE, INACTIVE, UNAVAILABLE ou CLOSED; contas manuais desativadas usam INACTIVE.
@@ -2109,6 +2030,20 @@ components:
           maxLength: 500
         cardProfile:
           $ref: '#/components/schemas/CardProfile'
+        connectionStatus:
+          type:
+          - string
+          - 'null'
+          description: Estado da conexão de origem, separado do estado da conta.
+          enum:
+          - INCOMPLETE
+          - ACTIVE
+          - SYNCING
+          - SYNCED
+          - CREDENTIAL_FAILURE
+          - ACTION_REQUIRED
+          - AUTHORIZATION_EXPIRED
+          - ITEM_UNAVAILABLE
     ManualAccountRequest:
       type: object
       required:
@@ -2249,6 +2184,9 @@ components:
           - POSTED
           - SOURCE_REMOVED
           - RECONCILED
+          description: Status efetivo. SOURCE_REMOVED é aplicado automaticamente
+            quando a transação desaparece de uma leitura conclusiva e não vazia;
+            se ela reaparecer, o status volta ao valor atual da origem.
         postedOn:
           type: string
           format: date
@@ -2270,6 +2208,9 @@ components:
             type: string
         reconciliationState:
           type: string
+          description: NONE, PENDING_MATCH, MATCHED ou SOURCE_REMOVED. Neste
+            último, a transação está ausente na origem e fora dos totais; a
+            restauração é automática se o identificador reaparecer.
         invoiceId:
           type: string
           format: uuid
@@ -2364,19 +2305,10 @@ components:
         notes:
           type: string
           maxLength: 2000
-    SourceRemovalReviewRequest:
-      type: object
-      required:
-      - action
-      properties:
-        action:
+        relatedTransactionId:
           type: string
-          enum:
-          - RESTORE
-          - CONFIRM_REMOVAL
-        reason:
-          type: string
-          maxLength: 500
+          format: uuid
+          description: Despesa original de um reembolso/chargeback na mesma conta.
     Category:
       type: object
       required:
@@ -2487,7 +2419,6 @@ components:
           type: string
           enum:
           - LOCAL
-          - PROVIDER
         hasAdjustments:
           type: boolean
           description: Indica ajuste manual em fatura fechada/paga; não substitui o status de pagamento.
@@ -2566,7 +2497,6 @@ components:
           enum:
           - IMPORTED
           - MANUAL
-          - PROVIDER_BILL
         description:
           type: string
         amount:
@@ -2654,7 +2584,8 @@ components:
           - EXPENSE_INCREASE
           - EXPENSE_DECREASE
           - NONE
-          description: Obrigatório; use NONE para itens espelho.
+          description: Obrigatório; ignorado em itens espelho (transactionId presente), que
+            são sempre gravados com NONE e têm a direção derivada do tipo e do total da fatura.
         description:
           type: string
           maxLength: 500
@@ -2720,7 +2651,6 @@ components:
           enum:
           - MANUAL
           - IMPORTED
-          - PROVIDER_BILL
     InvoicePaymentRequest:
       type: object
       required:
@@ -2920,7 +2850,7 @@ components:
           enum:
           - IMPORTED
           - MANUAL
-          description: Origem normalizada; distingue importado de manual no drill-down. Itens PROVIDER_BILL são normalizados para IMPORTED.
+          description: Origem normalizada; distingue importado de manual no drill-down.
         occurredOn:
           type: string
           format: date
@@ -3282,59 +3212,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WealthManualItem'
-    WealthSnapshot:
-      type: object
-      required:
-      - id
-      - referenceDate
-      - grossAssets
-      - liabilities
-      - netWorth
-      - completeness
-      - items
-      properties:
-        id:
-          type: string
-          format: uuid
-        referenceDate:
-          type: string
-          format: date
-        grossAssets:
-          type: string
-        liabilities:
-          type: string
-        netWorth:
-          type: string
-        completeness:
-          type: string
-          enum:
-          - COMPLETE
-          - PARTIAL
-          - ESTIMATED
-        notes:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/WealthItem'
-    WealthSnapshotRequest:
-      type: object
-      properties:
-        notes:
-          type: string
-          maxLength: 2000
-    WealthSnapshotList:
-      type: object
-      required:
-      - items
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/WealthSnapshot'
     Goal:
       type: object
       required:
@@ -3359,13 +3236,15 @@ components:
           type: string
         description:
           type: string
+        notes:
+          type: string
+          description: Observações livres da meta.
         type:
           type: string
           enum:
           - EMERGENCY_FUND
           - TRAVEL
           - PLANNED_PURCHASE
-          - DEBT_REDUCTION
           - NET_WORTH
         targetAmount:
           type: string
@@ -3386,10 +3265,6 @@ components:
           enum:
           - ALLOCATIONS
           - NET_WORTH
-          - DEBT_REDUCTION
-        initialValue:
-          type: string
-          description: Dívida inicial; obrigatória para DEBT_REDUCTION.
         changedAt:
           type: string
           format: date-time
@@ -3435,10 +3310,12 @@ components:
           - ACCOUNT
           - INVESTMENT
           - MANUAL_ASSET
-          - MANUAL_LIABILITY
         sourceId:
           type: string
           format: uuid
+        sourceName:
+          type: string
+          description: Nome legível da fonte (conta, investimento ou item manual).
         allocationMode:
           type: string
           enum:
@@ -3451,6 +3328,9 @@ components:
         contributionAmount:
           type: string
           description: Contribuição efetiva após arredondamento e resíduo.
+        capacityExceeded:
+          type: boolean
+          description: Indica que a alocação excede a capacidade da fonte e exige ajuste explícito.
     GoalProgressEntry:
       type: object
       required:
@@ -3485,13 +3365,15 @@ components:
         description:
           type: string
           maxLength: 500
+        notes:
+          type: string
+          maxLength: 2000
         type:
           type: string
           enum:
           - EMERGENCY_FUND
           - TRAVEL
           - PLANNED_PURCHASE
-          - DEBT_REDUCTION
           - NET_WORTH
         targetAmount:
           type: string
@@ -3503,10 +3385,6 @@ components:
           enum:
           - ALLOCATIONS
           - NET_WORTH
-          - DEBT_REDUCTION
-        initialValue:
-          type: string
-          description: Obrigatório para DEBT_REDUCTION.
         allocations:
           type: array
           items:
@@ -3529,7 +3407,6 @@ components:
           - ACCOUNT
           - INVESTMENT
           - MANUAL_ASSET
-          - MANUAL_LIABILITY
         sourceId:
           type: string
           format: uuid

@@ -2,10 +2,14 @@ package com.deltafinance.unit.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.deltafinance.security.AuthenticatedUser;
 import com.deltafinance.security.OwnershipGuard;
 import com.deltafinance.security.UserPrincipal;
+import com.deltafinance.shared.audit.AuditEventType;
+import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.UnauthenticatedException;
 import java.util.List;
@@ -21,11 +25,13 @@ class OwnershipGuardTest {
 
   private final UUID userId = UUID.randomUUID();
   private OwnershipGuard guard;
+  private AuditService auditService;
 
   @BeforeEach
   void setUp() {
     OwnGuardFixture.login(userId);
-    guard = new OwnershipGuard(new AuthenticatedUser());
+    auditService = mock(AuditService.class);
+    guard = new OwnershipGuard(new AuthenticatedUser(), auditService);
   }
 
   @AfterEach
@@ -47,6 +53,14 @@ class OwnershipGuardTest {
     guard.requireOwner(userId);
     UUID other = UUID.randomUUID();
     assertThatThrownBy(() -> guard.requireOwner(other)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> guard.scopedUserId(other)).isInstanceOf(NotFoundException.class);
+    verify(auditService, org.mockito.Mockito.times(2))
+        .record(
+            org.mockito.ArgumentMatchers.eq(userId),
+            org.mockito.ArgumentMatchers.eq(AuditEventType.AUTHORIZATION_DENIED),
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.anyMap());
 
     record Resource(UUID owner) {}
     Resource mine = new Resource(userId);

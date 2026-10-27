@@ -41,12 +41,6 @@ public class InvoicePayment extends BaseEntity {
   @Column(name = "source_transaction_id")
   private UUID sourceTransactionId;
 
-  @Column(name = "provider_payment_id_enc", columnDefinition = "bytea")
-  private byte[] providerPaymentIdEnc;
-
-  @Column(name = "provider_payment_id_hash", columnDefinition = "bytea")
-  private byte[] providerPaymentIdHash;
-
   protected InvoicePayment() {
     // Hibernate
   }

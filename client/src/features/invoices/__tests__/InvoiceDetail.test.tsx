@@ -97,7 +97,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function stubApi() {
+function stubApi(invoice: typeof INVOICE = INVOICE) {
   const mock = vi.fn((url: string, init: RequestInit) => {
     if (url.includes('/invoices/invoice-1/items') && init.method === 'POST') {
       return jsonResponse({ ...INVOICE.items[1], id: 'item-3' }, 201)
@@ -117,7 +117,7 @@ function stubApi() {
         },
       ])
     }
-    if (url.includes('/invoices/invoice-1')) return jsonResponse(INVOICE)
+    if (url.includes('/invoices/invoice-1')) return jsonResponse(invoice)
     if (url.includes('/accounts')) return jsonResponse(ACCOUNTS)
     if (url.includes('/transactions')) return jsonResponse({ items: [], hasMore: false })
     return jsonResponse({}, 404)
@@ -187,6 +187,25 @@ describe('detalhe da fatura', () => {
 
     await user.click(screen.getByRole('button', { name: 'Histórico (2)' }))
     expect(await screen.findByText(/25.00/)).toBeInTheDocument()
+  })
+
+  it('fatura paga permanece histórica e oculta ações de alteração', async () => {
+    stubApi({
+      ...INVOICE,
+      status: 'PAID',
+      outstanding: '0.00',
+      paymentsTotal: '120.00',
+    })
+    renderPage()
+
+    expect(await screen.findByText('Paga')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Fatura paga é histórica: itens, valores e pagamentos/),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Adicionar item' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Registrar pagamento' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remover' })).not.toBeInTheDocument()
   })
 
   it('registra pagamento parcial na conta escolhida', async () => {

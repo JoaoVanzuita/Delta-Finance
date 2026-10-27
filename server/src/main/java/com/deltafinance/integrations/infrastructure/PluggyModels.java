@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import tools.jackson.databind.JsonNode;
 
 /** Modelos normalizados da API Pluggy, independentes do formato bruto. */
@@ -41,7 +42,10 @@ public final class PluggyModels {
       String currency,
       JsonNode creditCardMetadata) {}
 
-  public record PluggyTransactionPage(java.util.List<PluggyTransaction> items, String next) {}
+  public record PluggyAccountPage(List<PluggyAccount> items, boolean complete) {}
+
+  public record PluggyTransactionPage(
+      List<PluggyTransaction> items, String next, boolean complete) {}
 
   static String text(JsonNode node, String field) {
     JsonNode value = node.path(field);

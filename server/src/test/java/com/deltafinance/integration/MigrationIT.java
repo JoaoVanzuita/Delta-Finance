@@ -19,7 +19,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Garante que o schema é aplicável em banco vazio, idempotente, restaurável a partir de snapshot da
  * versão anterior e que uma migração quebrada impede a aplicação de iniciar (portanto, o readiness
- * nunca fica verde).
+ * nunca fica verde). A baseline consolidada também não pode reintroduzir objetos legados.
  */
 class MigrationIT extends PostgresTestBase {
 
@@ -36,6 +36,75 @@ class MigrationIT extends PostgresTestBase {
     assertThat(tableExists("idempotency_key")).isTrue();
     assertThat(tableExists("spring_session")).isTrue();
     assertThat(tableExists("spring_session_attributes")).isTrue();
+  }
+
+  @Test
+  void baselineNaoContemObjetosLegados() {
+    cleanDatabase();
+
+    migrate();
+
+    // Garante que o teste não passe por vacuidade caso a baseline não seja aplicada.
+    assertThat(currentVersion()).isEqualTo("001");
+    assertThat(tableExists("app_user")).isTrue();
+    assertThat(tableExists("invoice_payment")).isTrue();
+
+    assertThat(tableExists("webhook_event")).isFalse();
+    assertThat(tableExists("webhook_subscription")).isFalse();
+    assertThat(tableExists("wealth_snapshot")).isFalse();
+    assertThat(tableExists("wealth_snapshot_item")).isFalse();
+    assertThat(columnExists("financial_goal", "initial_value_enc")).isFalse();
+    assertThat(columnExists("invoice", "provider_bill_id_enc")).isFalse();
+    assertThat(columnExists("invoice", "provider_bill_id_hash")).isFalse();
+    assertThat(columnExists("invoice_item", "provider_item_id_enc")).isFalse();
+    assertThat(columnExists("invoice_item", "provider_item_id_hash")).isFalse();
+    assertThat(columnExists("invoice_payment", "provider_payment_id_enc")).isFalse();
+    assertThat(columnExists("invoice_payment", "provider_payment_id_hash")).isFalse();
+    assertThat(columnExists("idempotency_key", "response_resource_type")).isFalse();
+    assertThat(columnExists("idempotency_key", "response_resource_id")).isFalse();
+    assertThat(columnExists("idempotency_key", "response_body_hash")).isFalse();
+
+    assertThat(constraintDefinition("invoice", "invoice_source_ck"))
+        .contains("LOCAL")
+        .doesNotContain("PROVIDER");
+    assertThat(constraintDefinition("invoice_item", "invoice_item_source_ck"))
+        .doesNotContain("PROVIDER_BILL");
+    assertThat(constraintDefinition("invoice_payment", "invoice_payment_source_ck"))
+        .doesNotContain("PROVIDER_BILL");
+    assertThat(constraintDefinition("financial_goal", "financial_goal_type_ck"))
+        .doesNotContain("DEBT_REDUCTION");
+    assertThat(constraintDefinition("financial_goal", "financial_goal_rule_ck"))
+        .doesNotContain("DEBT_REDUCTION");
+    assertThat(constraintDefinition("goal_allocation", "goal_allocation_source_ck"))
+        .doesNotContain("MANUAL_LIABILITY");
+    assertThat(constraintDefinition("sync_job", "sync_job_type_ck"))
+        .doesNotContain("PROCESS_WEBHOOK");
+  }
+
+  private String constraintDefinition(String table, String constraint) {
+    return jdbcTemplate.queryForObject(
+        """
+        select pg_get_constraintdef(oid)
+          from pg_constraint
+         where conrelid = ('public.' || ?)::regclass and conname = ?
+        """,
+        String.class,
+        table,
+        constraint);
+  }
+
+  private boolean columnExists(String table, String column) {
+    return Boolean.TRUE.equals(
+        jdbcTemplate.queryForObject(
+            """
+            select exists (
+              select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = ? and column_name = ?
+            )
+            """,
+            Boolean.class,
+            table,
+            column));
   }
 
   @Test

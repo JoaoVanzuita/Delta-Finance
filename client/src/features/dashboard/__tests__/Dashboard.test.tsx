@@ -230,7 +230,8 @@ describe('dashboard', () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 3, name: 'Resultado do período' })
-    await user.selectOptions(screen.getByLabelText('Conta ou cartão'), 'acc-1')
+    await user.click(screen.getByRole('checkbox', { name: 'Carteira' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Cartão' }))
     await user.selectOptions(screen.getByLabelText('Período'), 'YEAR')
     await user.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
 
@@ -240,7 +241,10 @@ describe('dashboard', () => {
       )
       expect(
         calls.some(
-          ([url]) => String(url).includes('accountId=acc-1') && String(url).includes('period=YEAR'),
+          ([url]) =>
+            String(url).includes('accountId=acc-1') &&
+            String(url).includes('accountId=card-1') &&
+            String(url).includes('period=YEAR'),
         ),
       ).toBe(true)
     })

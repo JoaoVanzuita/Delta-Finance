@@ -61,11 +61,16 @@ public class PluggyDataClient {
         node.path("error").path("code").asString(null));
   }
 
-  public List<PluggyModels.PluggyAccount> listAccounts(String apiKey, String itemId) {
+  public PluggyModels.PluggyAccountPage listAccounts(String apiKey, String itemId) {
     List<PluggyModels.PluggyAccount> accounts = new ArrayList<>();
     int page = 1;
     int totalPages = 1;
-    while (page <= totalPages && page <= MAX_PAGES) {
+    boolean truncated = false;
+    while (page <= totalPages) {
+      if (page > MAX_PAGES) {
+        truncated = true;
+        break;
+      }
       MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
       params.add("itemId", itemId);
       params.add("pageSize", String.valueOf(PAGE_SIZE));
@@ -80,11 +85,13 @@ public class PluggyDataClient {
         if (externalId == null || externalId.isBlank()) {
           continue;
         }
-        String type = node.path("type").asString("BANK");
+        String type = node.path("type").asString("UNKNOWN");
         accounts.add(
             new PluggyModels.PluggyAccount(
                 externalId,
-                "CREDIT".equalsIgnoreCase(type) ? "CREDIT" : "BANK",
+                type == null || type.isBlank()
+                    ? "UNKNOWN"
+                    : type.trim().toUpperCase(java.util.Locale.ROOT),
                 node.path("subtype").asString(null),
                 node.path("name").asString(null),
                 PluggyModels.decimal(node, "balance"),
@@ -93,11 +100,12 @@ public class PluggyDataClient {
       }
       totalPages = root.path("totalPages").asInt(1);
       if (totalPages < 1) {
+        truncated = true;
         break;
       }
       page++;
     }
-    return accounts;
+    return new PluggyModels.PluggyAccountPage(accounts, !truncated);
   }
 
   public PluggyModels.PluggyTransactionPage listTransactions(
@@ -150,7 +158,8 @@ public class PluggyDataClient {
         break;
       }
     }
-    return new PluggyModels.PluggyTransactionPage(transactions, next);
+    return new PluggyModels.PluggyTransactionPage(
+        transactions, next, next == null || next.isBlank());
   }
 
   private static String extractAfter(String next) {

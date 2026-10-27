@@ -1,5 +1,6 @@
 package com.deltafinance.invoices.application;
 
+import com.deltafinance.accounts.domain.CardProfile;
 import com.deltafinance.invoices.api.InvoiceItemRequest;
 import com.deltafinance.invoices.domain.Invoice;
 import com.deltafinance.invoices.domain.InvoiceItem;
@@ -24,6 +25,7 @@ import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionSource;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -49,6 +51,8 @@ public class InvoiceItemService {
   private final TransactionRepository transactionRepository;
   private final InvoiceBalanceService balanceService;
   private final InstallmentService installmentService;
+  private final CardCycleService cardCycleService;
+  private final InvoiceGenerationService invoiceGenerationService;
   private final CryptoService cryptoService;
   private final Clock clock;
 
@@ -59,6 +63,8 @@ public class InvoiceItemService {
       TransactionRepository transactionRepository,
       InvoiceBalanceService balanceService,
       InstallmentService installmentService,
+      CardCycleService cardCycleService,
+      InvoiceGenerationService invoiceGenerationService,
       CryptoService cryptoService,
       Clock clock) {
     this.invoiceRepository = invoiceRepository;
@@ -67,6 +73,8 @@ public class InvoiceItemService {
     this.transactionRepository = transactionRepository;
     this.balanceService = balanceService;
     this.installmentService = installmentService;
+    this.cardCycleService = cardCycleService;
+    this.invoiceGenerationService = invoiceGenerationService;
     this.cryptoService = cryptoService;
     this.clock = clock;
   }
@@ -74,28 +82,63 @@ public class InvoiceItemService {
   @Transactional
   public InvoiceItemView add(UUID userId, UUID invoiceId, InvoiceItemRequest request) {
     Invoice invoice = requireInvoice(userId, invoiceId);
+    requireEditable(invoice);
     InvoiceStatus previousStatus = invoice.getStatus();
     InvoiceItemKind kind = parseKind(request.kind());
-    ReportingEffect effect = parseEffect(request.reportingEffect());
-    validateEffect(kind, effect);
+    ReportingEffect requestedEffect = parseEffect(request.reportingEffect());
     String description = requireDescription(request.description());
     BigDecimal amount = parseAmount(request.amount());
     installmentService.validate(request.installmentNumber(), request.totalInstallments());
+    Integer installmentNumber = request.installmentNumber();
+    Integer totalInstallments = request.totalInstallments();
+    if (totalInstallments != null && totalInstallments == 1) {
+      // Uma parcela única é apenas um item comum; não grave metadados de parcelamento.
+      installmentNumber = null;
+      totalInstallments = null;
+    }
     Transaction transaction = resolveTransaction(userId, invoice, kind, request.transactionId());
-    if (transaction != null
-        && itemRepository
-            .findByUserIdAndTransactionIdAndRemovedAtIsNull(userId, transaction.getId())
-            .isPresent()) {
-      throw new ConflictException("INVOICE_ITEM_EXISTS", "Esta transação já compõe uma fatura.");
+    // Itens espelho são derivados da transação: o servidor grava NONE independentemente do
+    // efeito enviado, que continua obrigatório apenas por compatibilidade do contrato.
+    ReportingEffect effect = transaction == null ? requestedEffect : ReportingEffect.NONE;
+    if (transaction == null) {
+      validateEffect(kind, effect);
+    }
+    boolean projected =
+        transaction != null
+            && request.totalInstallments() != null
+            && request.totalInstallments() > 1
+            && (kind == InvoiceItemKind.PURCHASE || kind == InvoiceItemKind.INSTALLMENT);
+    if (transaction != null) {
+      if (projected) {
+        // Conversão de um espelho automático em plano de parcelas: substitui os itens ativos.
+        for (InvoiceItem existing :
+            itemRepository.findByUserIdAndTransactionId(userId, transaction.getId())) {
+          if (existing.isActive()) {
+            existing.remove(clock.now());
+            itemRepository.save(existing);
+          }
+        }
+        // Garante que a remoção lógica chegue ao banco antes dos novos itens do plano.
+        itemRepository.flush();
+      } else if (!itemRepository
+          .findByUserIdAndTransactionIdAndRemovedAtIsNull(userId, transaction.getId())
+          .isEmpty()) {
+        throw new ConflictException("INVOICE_ITEM_EXISTS", "Esta transação já compõe uma fatura.");
+      }
     }
 
-    UUID itemId = UUID.randomUUID();
     InvoiceItemSource source =
         transaction == null
             ? InvoiceItemSource.MANUAL
             : transaction.getSource() == TransactionSource.MANUAL
                 ? InvoiceItemSource.MANUAL
                 : InvoiceItemSource.IMPORTED;
+    if (projected) {
+      return addInstallments(
+          userId, invoice, previousStatus, transaction, description, amount, request, source);
+    }
+
+    UUID itemId = UUID.randomUUID();
     InvoiceItem item =
         new InvoiceItem(
             itemId,
@@ -108,9 +151,9 @@ public class InvoiceItemService {
             encryptItem(userId, itemId, "description", description),
             encryptItem(userId, itemId, "amount", amount.toPlainString()),
             request.occurredOn(),
-            request.installmentNumber(),
-            request.totalInstallments(),
-            installmentService.planKey(userId, description, request.totalInstallments()));
+            installmentNumber,
+            totalInstallments,
+            installmentService.planKey(userId, description, totalInstallments));
     itemRepository.save(item);
     if (transaction != null) {
       transaction.setInvoiceId(invoiceId);
@@ -125,6 +168,75 @@ public class InvoiceItemService {
     return toView(item);
   }
 
+  private InvoiceItemView addInstallments(
+      UUID userId,
+      Invoice invoice,
+      InvoiceStatus previousStatus,
+      Transaction transaction,
+      String description,
+      BigDecimal amount,
+      InvoiceItemRequest request,
+      InvoiceItemSource source) {
+    int total = request.totalInstallments();
+    // O plano sempre nasce completo: uma compra em N parcelas gera N itens.
+    int start = 1;
+    CardProfile profile =
+        cardCycleService
+            .profileFor(userId, invoice.getCardAccountId())
+            .orElseThrow(
+                () ->
+                    new ValidationException(
+                        "installments", "Configure o ciclo do cartão antes de parcelar."));
+    byte[] planKey = installmentService.planKey(userId, description, total);
+    CardCycleService.CardCycle cycle =
+        new CardCycleService.CardCycle(
+            invoice.getCycleStart(),
+            invoice.getCycleEnd(),
+            invoice.getClosingDate(),
+            invoice.getDueDate());
+    Invoice targetInvoice = invoice;
+    InvoiceItem first = null;
+
+    for (int number = start; number <= total; number++) {
+      if (number > start) {
+        cycle = cardCycleService.nextCycle(profile, cycle);
+        targetInvoice =
+            invoiceGenerationService.invoiceForCycle(userId, invoice.getCardAccountId(), cycle);
+      }
+      LocalDate occurredOn = number == start ? request.occurredOn() : cycle.cycleEnd();
+      UUID itemId = UUID.randomUUID();
+      InvoiceItem item =
+          new InvoiceItem(
+              itemId,
+              userId,
+              targetInvoice.getId(),
+              transaction.getId(),
+              InvoiceItemKind.INSTALLMENT,
+              ReportingEffect.NONE,
+              source,
+              encryptItem(userId, itemId, "description", description),
+              encryptItem(userId, itemId, "amount", amount.toPlainString()),
+              occurredOn,
+              number,
+              total,
+              planKey);
+      itemRepository.save(item);
+      if (first == null) {
+        first = item;
+      }
+    }
+
+    transaction.setInvoiceId(invoice.getId());
+    transactionRepository.save(transaction);
+    balanceService.recalculateCard(userId, invoice.getCardAccountId());
+    Invoice refreshed = requireInvoice(userId, invoice.getId());
+    if (isClosedOrPaid(previousStatus)) {
+      refreshed.markAdjustment();
+      invoiceRepository.save(refreshed);
+    }
+    return toView(first);
+  }
+
   @Transactional
   public InvoiceItemView update(UUID userId, UUID itemId, InvoiceItemRequest request) {
     InvoiceItem item =
@@ -135,6 +247,7 @@ public class InvoiceItemService {
           "Itens espelho de transação não podem ser editados manualmente.");
     }
     Invoice invoice = requireInvoice(userId, item.getInvoiceId());
+    requireEditable(invoice);
     InvoiceStatus previousStatus = invoice.getStatus();
     InvoiceItemKind kind = parseKind(request.kind());
     ReportingEffect effect = parseEffect(request.reportingEffect());
@@ -142,6 +255,12 @@ public class InvoiceItemService {
     String description = requireDescription(request.description());
     BigDecimal amount = parseAmount(request.amount());
     installmentService.validate(request.installmentNumber(), request.totalInstallments());
+    Integer installmentNumber = request.installmentNumber();
+    Integer totalInstallments = request.totalInstallments();
+    if (totalInstallments != null && totalInstallments == 1) {
+      installmentNumber = null;
+      totalInstallments = null;
+    }
 
     UUID transactionId = item.getTransactionId();
     if (request.transactionId() != null && !request.transactionId().equals(transactionId)) {
@@ -182,8 +301,8 @@ public class InvoiceItemService {
         encryptItem(userId, itemId, "description", description),
         encryptItem(userId, itemId, "amount", amount.toPlainString()),
         request.occurredOn(),
-        request.installmentNumber(),
-        request.totalInstallments());
+        installmentNumber,
+        totalInstallments);
     item.attachTransaction(transactionId);
     itemRepository.save(item);
 
@@ -226,6 +345,7 @@ public class InvoiceItemService {
           "Itens espelho de transação não podem ser removidos manualmente.");
     }
     Invoice invoice = requireInvoice(userId, item.getInvoiceId());
+    requireEditable(invoice);
     InvoiceStatus previousStatus = invoice.getStatus();
     item.remove(clock.now());
     itemRepository.save(item);
@@ -325,6 +445,16 @@ public class InvoiceItemService {
     return invoiceRepository
         .findByIdAndUserId(invoiceId, userId)
         .orElseThrow(NotFoundException::new);
+  }
+
+  /** Fatura paga é histórica: itens só mudam por ajuste explícito em fatura posterior. */
+  private static void requireEditable(Invoice invoice) {
+    if (invoice.getStatus() == InvoiceStatus.PAID) {
+      throw new ConflictException(
+          "INVOICE_PAID_IMMUTABLE",
+          "Fatura paga não aceita inclusão, edição ou remoção de itens. "
+              + "Registre o ajuste em uma fatura posterior.");
+    }
   }
 
   private static boolean isClosedOrPaid(InvoiceStatus status) {

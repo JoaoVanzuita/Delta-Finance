@@ -33,7 +33,7 @@
 - Q: Quais são os limites de tentativa de login? → A: 5 falhas por 15 minutos por combinação de usuário e IP, com bloqueio de 15 minutos; a mensagem é genérica e uma autenticação bem-sucedida zera o contador.
 - Q: Como itens de fatura sem transação afetam as despesas? → A: Itens vinculados a uma transação são espelhos e não somam novamente. Itens sem transação de juros, encargos, tarifas ou ajuste de despesa aumentam `expenses` uma única vez; créditos, estornos ou ajustes de crédito reduzem `expenses` observado o limite do FR-077 — o menor entre o valor do item, o total da fatura antes do item e as despesas do mesmo cartão no período do relatório —, e o excedente vira crédito para faturas futuras, nunca despesa negativa.
 - Q: Como o total de uma posição de investimento é calculado? → A: `quantidade × preço unitário de referência`; quando apenas o total for conhecido, o preço unitário é `total ÷ quantidade`, arredondado para 8 casas decimais.
-- Q: Como o progresso de uma meta de redução de dívida é calculado? → A: `(dívida inicial − dívida atual) ÷ dívida inicial`, limitado entre 0% e 100%; a dívida inicial é registrada na criação da meta.
+- Q: Como o progresso de uma meta de redução de dívida é calculado? → A: Essa regra foi removida em 2026-10-26 (S-03); metas usam alocações explícitas ou patrimônio líquido.
 - Q: Como valores em moeda diferente de BRL são tratados? → A: São exibidos com a moeda e sinalizados; não entram em totais consolidados nem são convertidos automaticamente até existir regra explícita de conversão.
 - Três requisitos de orientação inicial foram removidos por decisão de escopo; os demais identificadores FR permanecem estáveis.
 
@@ -385,15 +385,12 @@ datas, lacunas e ausência de dupla contagem.
 2. **Given** contas, cartões, investimentos e registros manuais, **When** o
    patrimônio é consolidado, **Then** o mesmo valor não é contado duas vezes e
    saldos de cartão são tratados como passivos.
-3. **Given** snapshots patrimoniais datados, **When** o usuário consulta a
-   evolução, **Then** vê a data de referência e a composição de cada posição,
-   com sinalização de lacunas, estimativas e dados desatualizados.
-4. **Given** histórico insuficiente, **When** o usuário consulta períodos
-   anteriores, **Then** o sistema não inventa valores nem infere saldos passados
-   a partir de dados atuais incompletos.
-5. **Given** um valor de referência manual, **When** ele é exibido, **Then** não
+3. **Given** valores de referência antigos ou ausentes, **When** o usuário
+   consulta a visão, **Then** o sistema sinaliza lacunas e estimativas sem
+   inventar valores nem inferir saldos passados.
+4. **Given** um valor de referência manual, **When** ele é exibido, **Then** não
    é apresentado como cotação de mercado.
-6. **Given** dois usuários, **When** cada um consulta seu patrimônio, **Then**
+5. **Given** dois usuários, **When** cada um consulta seu patrimônio, **Then**
    nenhum vê ativos, passivos ou snapshots do outro.
 
 ---
@@ -402,7 +399,7 @@ datas, lacunas e ausência de dupla contagem.
 
 Como membro da família, quero criar metas financeiras com valor-alvo, prazo
 opcional e regra de progresso transparente, para acompanhar objetivos como
-reserva de emergência, viagem ou redução de dívida sem movimentar dinheiro.
+reserva de emergência, viagem ou patrimônio líquido sem movimentar dinheiro.
 
 **Why this priority**: metas complementam o planejamento patrimonial em uma fase
 posterior. Não são pré-requisito para o MVP bancário.
@@ -646,9 +643,9 @@ ausência de movimentação financeira.
   reconciliar os dados existentes antes de retomar a sincronização.
 - **FR-040**: O sistema NÃO DEVE apagar histórico porque um item retornou lista
   vazia, falhou, mudou de estado, teve seu itemId alterado ou ficou
-  indisponível. A remoção definitiva do histórico DEVE exigir ação explícita do
-  usuário e seguir política documentada; a transição para `SOURCE_REMOVED`
-  segue o FR-046.
+  indisponível. A remoção definitiva do histórico continua exigindo exclusão da
+  conta ou da conexão; a transição automática para `SOURCE_REMOVED` segue o
+  FR-046.
 - **FR-041**: A recuperação de falhas DEVE retomar a sincronização sem duplicar
   registros nem perder dados já confirmados.
 - **FR-042**: Importações e sincronizações DEVEM ser idempotentes para
@@ -662,13 +659,12 @@ ausência de movimentação financeira.
   registro importado preservando categorização e correções manuais conforme
   regra de precedência explícita.
 - **FR-046**: Quando uma transação deixar de aparecer em uma sincronização
-  conclusiva, o sistema DEVE marcá-la como não encontrada na origem, preservar
-  seu histórico e auditoria e excluí-la dos totais correntes após reconciliação
-  explícita, sem inferir exclusão de resposta vazia ou falha. O usuário PODE
-  restaurar uma transação `SOURCE_REMOVED` quando ela voltar a existir na origem
-  ou quando a remoção tiver sido incorreta. A restauração DEVE validar a origem,
-  preservar a auditoria e impedir duplicata; a transação só volta aos totais se
-  estiver `POSTED` ou `RECONCILED`.
+  conclusiva e não vazia, o sistema DEVE marcá-la automaticamente como
+  `SOURCE_REMOVED`, preservar histórico e auditoria e excluí-la dos totais
+  correntes, sem inferir exclusão de resposta vazia, truncada ou falha. Se o
+  identificador voltar a aparecer em leitura posterior, o sistema DEVE limpar a
+  marca e restaurar o status atual da origem automaticamente, sem duplicar a
+  transação. Não há revisão manual `RESTORE`/`CONFIRM_REMOVAL`.
 - **FR-047**: Se o provedor enviar notificações de atualização, o sistema DEVE
   tratá-las apenas como sinal para consultar os dados completos, sem confiar no
   conteúdo da notificação como fonte integral.
@@ -975,8 +971,8 @@ ausência de movimentação financeira.
   duplicar o mesmo valor em fontes diferentes.
 - **FR-125**: O sistema DEVE permitir cadastrar ativos e passivos manuais com
   tipo, descrição, valor de referência, data da posição e observações.
-- **FR-126**: O sistema DEVE registrar snapshots patrimoniais datados para
-  mostrar evolução semanal, mensal, anual ou desde o início do acompanhamento.
+- **FR-126**: O sistema NÃO DEVE manter snapshots patrimoniais datados; a visão
+  consolidada representa apenas a posição atual e não reconstrói o passado.
 - **FR-127**: O sistema DEVE explicar que dados antigos só podem ser
   reconstruídos quando houver histórico suficiente e NÃO DEVE inferir saldos
   passados a partir de dados atuais incompletos.
@@ -987,15 +983,13 @@ ausência de movimentação financeira.
   estimativas, saldos ausentes ou desatualizados e não tratar valor de
   referência manual como cotação de mercado.
 - **FR-130**: O sistema DEVE permitir criar metas com nome, descrição opcional,
-  tipo (`EMERGENCY_FUND`, `TRAVEL`, `PLANNED_PURCHASE`, `DEBT_REDUCTION`,
-  `NET_WORTH`), valor-alvo, data-alvo opcional, estado (`ACTIVE`, `ACHIEVED`,
-  `PAUSED`, `ARCHIVED`, `OVERDUE`, `CHANGED`), valor atual calculado, data de
-  criação e observações.
+  tipo (`EMERGENCY_FUND`, `TRAVEL`, `PLANNED_PURCHASE`, `NET_WORTH`), valor-alvo,
+  data-alvo opcional, estado (`ACTIVE`, `ACHIEVED`, `PAUSED`, `ARCHIVED`,
+  `OVERDUE`, `CHANGED`), valor atual calculado, data de criação e observações.
 - **FR-131**: Metas DEVEM cobrir, no mínimo, reserva de emergência, viagem,
-  compra planejada, redução de dívida e objetivo de patrimônio líquido, sem
-  oferecer aconselhamento financeiro. Meta de redução de dívida DEVE registrar a
-  dívida inicial na criação e calcular progresso como `(dívida inicial − dívida
-  atual) ÷ dívida inicial`, limitado entre 0% e 100%.
+  compra planejada e objetivo de patrimônio líquido, sem oferecer aconselhamento
+  financeiro. A regra de redução de dívida e o campo de dívida inicial foram
+  removidos em 2026-10-26 (S-03).
 - **FR-132**: O sistema DEVE permitir definir o progresso da meta por valor
   alocado manualmente, conjunto de contas ou ativos selecionados ou patrimônio
   líquido, conforme aplicável. Cada alocação DEVE ter modo `FIXED_AMOUNT` ou
@@ -1086,18 +1080,11 @@ ausência de movimentação financeira.
   pertencente a um usuário.
 - **Registro de sincronização**: tentativa de leitura de uma integração ou item,
   com início, fim, resultado, estado, totais processados e erro sanitizado.
-- **Assinatura de webhook**: configuração por integração com segredo, token ou
-  URL, estado e última validação.
-- **Evento de webhook**: `eventId` idempotente, assinatura, item e usuário
-  associados, data de recebimento, status de processamento, tentativas e erro
-  sanitizado.
 - **Posição de investimento**: registro manual de ativo, ticker ou código,
   quantidade, preço unitário de referência, data, corretora e observações,
   pertencente a um usuário.
 - **Ativo ou passivo manual**: item patrimonial informado pelo usuário, com tipo,
   descrição, valor de referência, data da posição e observações.
-- **Snapshot patrimonial**: fotografia datada de patrimônio bruto, passivos,
-  patrimônio líquido e composição, com indicação de lacunas e estimativas.
 - **Meta financeira**: objetivo com valor-alvo, prazo opcional, estado, regra de
   progresso, valor atual calculado e histórico datado de progresso.
 
@@ -1108,7 +1095,7 @@ ausência de movimentação financeira.
 | Metadados operacionais | IDs locais, timestamps, status, tipo de conta, moeda, datas, `version` | Texto claro e pesquisável; sem conteúdo financeiro. |
 | Dados pessoais | Nome de usuário, apelido de conta, observações | Minimizados; observações cifradas; exportação apenas do titular. |
 | Dados financeiros sensíveis | Saldos, valores, descrições, faturas, itens, metas, posições e patrimônio | AES-256-GCM com chave externa, AAD e versão de chave; nunca em logs. |
-| Identificadores externos | itemId, IDs de transação, `billId`, `provider_item_id` | Cifrados para leitura e HMAC-SHA-256 para busca/dedup. |
+| Identificadores externos | itemId, IDs de transação e IDs de provedor | Cifrados para leitura e HMAC-SHA-256 para busca/dedup. |
 | Segredos | Hash de senha, Client Secret, API Key, chaves e tokens de sessão | Hash Argon2id ou AEAD; chaves fora do banco; nunca exportados ou logados. |
 
 A classificação DEVE orientar schema, logs, exportação, backup e testes. Os

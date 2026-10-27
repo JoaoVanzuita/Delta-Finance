@@ -20,7 +20,8 @@ sistema.
 
 1. Configure `DELTA_OPERATOR_RESET_TOKEN` no `.env` do host com um valor
    aleatório forte (`openssl rand -base64 32`). Sem ele, o mecanismo fica
-   desabilitado.
+   desabilitado. O valor é lido pela propriedade `delta.operator.reset.token`
+   (o nome anterior `delta.security.operator-reset-token` continua aceito).
 2. Garanta que o stack está de pé (`docker compose ps`).
 3. Abra um canal seguro com o titular.
 
@@ -47,12 +48,13 @@ O teste automatizado equivalente é `PasswordResetIT`:
 
 ```bash
 cd server
-./mvnw -Dit.test=PasswordResetIT -DfailIfNoTests=false verify
+./mvnw -Dit.test=PasswordResetIT,PasswordResetNonWebIT -DfailIfNoTests=false verify
 ```
 
 Ele cobre token inválido, usuário inexistente, revogação de sessões, troca
 efetiva, isolamento entre dois usuários e ausência da senha temporária na
-auditoria.
+auditoria. `PasswordResetNonWebIT` inicia o contexto sem servlet, como o runner
+operacional, e confirma a revogação por JDBC.
 
 ## 4. Auditoria
 

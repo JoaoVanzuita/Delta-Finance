@@ -1,9 +1,13 @@
 package com.deltafinance.security;
 
+import com.deltafinance.shared.audit.AuditService;
+import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.errors.ProblemFactory;
 import com.deltafinance.shared.time.Clock;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -18,6 +22,7 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Configuração de segurança da aplicação.
@@ -60,7 +65,12 @@ public class SecurityConfig {
       SecurityContextRepository securityContextRepository,
       ProblemHttpWriter problemWriter,
       Clock clock,
-      SessionProperties sessionProperties)
+      SessionProperties sessionProperties,
+      JdbcTemplate jdbcTemplate,
+      CryptoService cryptoService,
+      ProblemFactory problemFactory,
+      JsonMapper jsonMapper,
+      AuditService auditService)
       throws Exception {
 
     CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
@@ -70,9 +80,7 @@ public class SecurityConfig {
     http.csrf(
             csrf ->
                 csrf.csrfTokenRepository(csrfTokenRepository)
-                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-                    // Webhook usa segredo próprio e não sessão/CSRF de navegador.
-                    .ignoringRequestMatchers("/api/v1/webhooks/**"))
+                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
         // A SPA é servida na mesma origem (proxy reverso); não há CORS habilitado.
         // Requisições cross-origin não recebem cabeçalhos de permissão.
         .cors(AbstractHttpConfigurer::disable)
@@ -88,8 +96,6 @@ public class SecurityConfig {
                 auth.requestMatchers(
                         "/api/v1/auth/csrf", "/api/v1/auth/register", "/api/v1/auth/login")
                     .permitAll()
-                    .requestMatchers("/api/v1/webhooks/**")
-                    .permitAll()
                     .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                     .permitAll()
                     .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
@@ -100,7 +106,7 @@ public class SecurityConfig {
             exceptions ->
                 exceptions
                     .authenticationEntryPoint(new JsonAuthenticationEntryPoint(problemWriter))
-                    .accessDeniedHandler(new JsonAccessDeniedHandler(problemWriter)))
+                    .accessDeniedHandler(new JsonAccessDeniedHandler(problemWriter, auditService)))
         .headers(
             headers ->
                 headers
@@ -122,7 +128,10 @@ public class SecurityConfig {
         .addFilterAfter(
             new AbsoluteSessionTimeoutFilter(
                 clock, sessionProperties.getAbsoluteTimeout(), problemWriter),
-            SecurityContextHolderFilter.class);
+            SecurityContextHolderFilter.class)
+        .addFilterAfter(
+            new IdempotencyFilter(jdbcTemplate, cryptoService, clock, problemFactory, jsonMapper),
+            CsrfFilter.class);
 
     return http.build();
   }

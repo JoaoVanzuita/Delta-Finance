@@ -5,16 +5,18 @@ import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.connections.domain.ConnectionStatus;
 import com.deltafinance.connections.domain.PluggyConnection;
 import com.deltafinance.connections.domain.PluggyConnectionRepository;
+import com.deltafinance.connections.domain.SyncRun;
+import com.deltafinance.connections.domain.SyncRunRepository;
+import com.deltafinance.connections.domain.SyncRunStatus;
 import com.deltafinance.integrations.application.IntegrationService;
 import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
-import com.deltafinance.integrations.infrastructure.PluggyCredentialException;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
 import com.deltafinance.integrations.infrastructure.PluggyException;
-import com.deltafinance.integrations.infrastructure.PluggyItemInvalidException;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyProperties;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
+import com.deltafinance.reconciliation.application.InternalMatchService;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
@@ -25,7 +27,9 @@ import com.deltafinance.shared.errors.ErrorCode;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.time.Clock;
+import com.deltafinance.transactions.application.ImportStats;
 import com.deltafinance.transactions.application.TransactionImportService;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -58,6 +62,9 @@ public class ConnectionService {
   private final AuditService auditService;
   private final ItemReconciliationService itemReconciliationService;
   private final SyncJobService syncJobService;
+  private final SyncRunRepository syncRunRepository;
+  private final SyncStateService stateService;
+  private final InternalMatchService internalMatchService;
   private final JdbcTemplate jdbcTemplate;
   private final Clock clock;
 
@@ -75,6 +82,9 @@ public class ConnectionService {
       AuditService auditService,
       ItemReconciliationService itemReconciliationService,
       SyncJobService syncJobService,
+      SyncRunRepository syncRunRepository,
+      SyncStateService stateService,
+      InternalMatchService internalMatchService,
       JdbcTemplate jdbcTemplate,
       Clock clock) {
     this.connectionRepository = connectionRepository;
@@ -90,6 +100,9 @@ public class ConnectionService {
     this.auditService = auditService;
     this.itemReconciliationService = itemReconciliationService;
     this.syncJobService = syncJobService;
+    this.syncRunRepository = syncRunRepository;
+    this.stateService = stateService;
+    this.internalMatchService = internalMatchService;
     this.jdbcTemplate = jdbcTemplate;
     this.clock = clock;
   }
@@ -114,7 +127,9 @@ public class ConnectionService {
         .isPresent()) {
       throw new ConflictException(ErrorCode.ITEM_ALREADY_CONNECTED, "Este item já está conectado.");
     }
-    long current = connectionRepository.countByIntegrationId(integration.getId());
+    long current =
+        connectionRepository.countByIntegrationIdAndStatusNot(
+            integration.getId(), ConnectionStatus.ITEM_UNAVAILABLE);
     if (current >= properties.getConnectionLimit()) {
       throw new ConflictException(
           ErrorCode.CONNECTION_LIMIT_REACHED,
@@ -126,6 +141,7 @@ public class ConnectionService {
     }
 
     PluggyModels.PluggyItem item = fetchItem(integration, normalizedItemId);
+    Instant startedAt = clock.now();
     PluggyConnection connection = new PluggyConnection(userId, integration.getId());
     byte[] itemEnc =
         cryptoService.encrypt(
@@ -141,41 +157,69 @@ public class ConnectionService {
     connection.activate(
         itemEnc, itemHash, institutionEnc, item.consentExpiresAt(), item.nextAutoSyncAt());
     connectionRepository.save(connection);
+    SyncRun run =
+        new SyncRun(userId, integration.getId(), connection.getId(), startedAt, "connection-add");
+
+    SyncStateService.SyncFailure itemFailure = stateService.fromItem(item, startedAt);
+    if (itemFailure != null) {
+      stateService.apply(integration, connection, itemFailure, startedAt);
+      connectionRepository.save(connection);
+      integrationService.save(integration);
+      finishRun(run, itemFailure.runStatus(), 0, 0, 0, 0, 0, itemFailure.errorCode());
+      auditService.record(
+          userId, AuditEventType.CONNECTION_ADDED, "pluggy_connection", connection.getId());
+      return toView(connection);
+    }
 
     try {
       accountImportService.importAccounts(integration, connection.getId(), normalizedItemId);
-      transactionImportService.importInitial(integration, connection.getId());
+      ImportStats stats = transactionImportService.importInitial(integration, connection.getId());
       connection.recordSync(clock.now(), ConnectionStatus.SYNCED);
       connectionRepository.save(connection);
       integration.markActive();
       integration.recordSyncSuccess(clock.now());
       integrationService.save(integration);
-    } catch (PluggyException exception) {
-      ConnectionStatus status;
-      if (exception instanceof PluggyCredentialException
-          || exception instanceof PluggyUnauthorizedException) {
-        status = ConnectionStatus.CREDENTIAL_FAILURE;
-      } else if (exception instanceof PluggyItemInvalidException) {
-        status = ConnectionStatus.ITEM_UNAVAILABLE;
-      } else {
-        status = ConnectionStatus.ACTION_REQUIRED;
+      try {
+        internalMatchService.suggest(userId);
+      } catch (RuntimeException ignored) {
+        // A importação continua válida mesmo se a geração de sugestões falhar.
       }
-      connection.recordError("IMPORT_FAILED", status);
+      finishRun(
+          run,
+          stats.read() == 0
+              ? SyncRunStatus.EMPTY
+              : stats.failed() > 0 ? SyncRunStatus.PARTIAL : SyncRunStatus.SUCCESS,
+          stats.read(),
+          stats.created(),
+          stats.updated(),
+          stats.skipped(),
+          stats.failed(),
+          stats.failed() > 0 ? "IMPORT_MISSING_FIELDS" : null);
+    } catch (PluggyException exception) {
+      SyncStateService.SyncFailure failure = stateService.fromException(exception);
+      stateService.apply(integration, connection, failure, clock.now());
       connectionRepository.save(connection);
-      integration.recordError(
-          "IMPORT_FAILED",
-          status == ConnectionStatus.CREDENTIAL_FAILURE
-              ? com.deltafinance.integrations.domain.IntegrationStatus.CREDENTIAL_FAILURE
-              : status == ConnectionStatus.ITEM_UNAVAILABLE
-                  ? com.deltafinance.integrations.domain.IntegrationStatus.ITEM_UNAVAILABLE
-                  : com.deltafinance.integrations.domain.IntegrationStatus.ACTION_REQUIRED);
       integrationService.save(integration);
+      finishRun(run, failure.runStatus(), 0, 0, 0, 0, 0, failure.errorCode());
       throw exception;
     }
 
     auditService.record(
         userId, AuditEventType.CONNECTION_ADDED, "pluggy_connection", connection.getId());
     return toView(connection);
+  }
+
+  private void finishRun(
+      SyncRun run,
+      SyncRunStatus status,
+      int read,
+      int created,
+      int updated,
+      int skipped,
+      int failed,
+      String errorCode) {
+    run.finish(status, read, created, updated, skipped, failed, errorCode, clock.now());
+    syncRunRepository.save(run);
   }
 
   public ConnectionView updateItemId(UUID userId, UUID connectionId, String itemId) {
@@ -203,13 +247,9 @@ public class ConnectionService {
               userId,
               connectionId);
       jdbcTemplate.update(
-          "delete from webhook_event where user_id = ? and connection_id = ?",
-          userId,
-          connectionId);
+          "delete from sync_job where user_id = ? and connection_id = ?", userId, connectionId);
       jdbcTemplate.update(
           "delete from sync_run where user_id = ? and connection_id = ?", userId, connectionId);
-      jdbcTemplate.update(
-          "delete from sync_job where user_id = ? and connection_id = ?", userId, connectionId);
       jdbcTemplate.update(
           "delete from pluggy_connection where user_id = ? and id = ?", userId, connectionId);
     } else {

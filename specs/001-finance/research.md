@@ -6,6 +6,12 @@
 
 **Constituição**: [../../.specify/memory/constitution.md](../../.specify/memory/constitution.md)
 
+> **Nota de 2026-10-26:** este documento é histórico. Webhooks (S-04), Bills
+> experimentais (S-05), snapshots patrimoniais (S-02) e redução de dívida nas
+> metas (S-03) foram removidos. As seções abaixo registram a pesquisa original;
+> o escopo vigente está em [`docs/analise-simplificacao.md`](../../docs/analise-simplificacao.md),
+> seção 11.
+
 ## 1. Versões escolhidas
 
 As versões abaixo foram verificadas em 2026-10-22. Todas as imagens Docker devem
@@ -303,8 +309,8 @@ do dashboard com dados sintéticos.
   `limit` padrão de 50.
 - Valores monetários trafegam como strings decimais; o backend usa
   `BigDecimal`; o cliente usa `decimal.js` apenas para pré-visualização.
-- `Idempotency-Key` para criação de lançamentos manuais, itens de fatura,
-  pagamentos e outras mutações sujeitas a retry.
+- `Idempotency-Key` restrito às escritas financeiras críticas sujeitas a retry:
+  transações, itens de fatura e pagamentos.
 - `version` para concorrência otimista em agregados mutáveis.
 - Nenhum DTO expõe `Client Secret`, API Key, chave de criptografia ou `user_id`
   enviado pelo cliente.

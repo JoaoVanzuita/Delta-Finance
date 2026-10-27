@@ -13,11 +13,13 @@ public record AccountResponse(
     String alias,
     String currency,
     String currentBalance,
+    String referenceBalance,
     Instant balanceReferenceAt,
     String status,
     Instant lastSyncAt,
     String notes,
-    CardProfileResponse cardProfile) {
+    CardProfileResponse cardProfile,
+    String connectionStatus) {
 
   public static AccountResponse from(AccountView view) {
     return new AccountResponse(
@@ -29,10 +31,12 @@ public record AccountResponse(
         view.alias(),
         view.currency(),
         view.currentBalance(),
+        view.referenceBalance(),
         view.balanceReferenceAt(),
         view.status(),
         view.lastSyncAt(),
         view.notes(),
-        view.cardProfile() == null ? null : CardProfileResponse.from(view.cardProfile()));
+        view.cardProfile() == null ? null : CardProfileResponse.from(view.cardProfile()),
+        view.connectionStatus());
   }
 }

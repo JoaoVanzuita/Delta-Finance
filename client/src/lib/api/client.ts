@@ -16,7 +16,33 @@ import { ApiError, isProblemDetails, parseRetryAfter, type ProblemDetails } from
 const API_BASE = '/api/v1'
 const CSRF_COOKIE = 'XSRF-TOKEN'
 const CSRF_HEADER = 'X-XSRF-TOKEN'
+const IDEMPOTENCY_HEADER = 'Idempotency-Key'
 const UNAUTHENTICATED_EVENT = 'delta:unauthenticated'
+
+/**
+ * Operações com replay de idempotência no backend. As demais mutações ignoram
+ * `Idempotency-Key`, então o cliente só gera a chave para estes caminhos.
+ */
+const IDEMPOTENT_OPERATIONS: ReadonlyArray<{
+  readonly method: HttpMethod
+  readonly path: RegExp
+}> = [
+  { method: 'POST', path: /^\/transactions$/ },
+  { method: 'PATCH', path: /^\/transactions\/[^/]+$/ },
+  { method: 'DELETE', path: /^\/transactions\/[^/]+$/ },
+  { method: 'POST', path: /^\/invoices\/[^/]+\/items$/ },
+  { method: 'PATCH', path: /^\/invoice-items\/[^/]+$/ },
+  { method: 'DELETE', path: /^\/invoice-items\/[^/]+$/ },
+  { method: 'POST', path: /^\/invoices\/[^/]+\/payments$/ },
+]
+
+/** Indica se a operação aceita `Idempotency-Key` no backend. */
+export function usesIdempotency(method: HttpMethod, path: string): boolean {
+  const pathname = path.split(/[?#]/, 1)[0] ?? path
+  return IDEMPOTENT_OPERATIONS.some(
+    (operation) => operation.method === method && operation.path.test(pathname),
+  )
+}
 
 export type ApiSchemas = components['schemas']
 export type User = ApiSchemas['User']
@@ -125,7 +151,7 @@ async function toApiError(response: Response): Promise<ApiError> {
   )
 }
 
-async function send<T>(path: string, options: RequestOptions): Promise<T> {
+async function send<T>(path: string, options: RequestOptions, idempotencyKey?: string): Promise<T> {
   const method = options.method ?? 'GET'
   const unsafe = method !== 'GET'
   const headers = new Headers(options.headers)
@@ -138,6 +164,9 @@ async function send<T>(path: string, options: RequestOptions): Promise<T> {
     const token = readCookie(CSRF_COOKIE)
     if (token) {
       headers.set(CSRF_HEADER, token)
+    }
+    if (idempotencyKey) {
+      headers.set(IDEMPOTENCY_HEADER, idempotencyKey)
     }
   }
 
@@ -199,21 +228,31 @@ async function download(path: string): Promise<Blob> {
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? 'GET'
   const unsafe = method !== 'GET'
+  // Uma chave por operação crítica; o mesmo valor é reutilizado no retry de CSRF.
+  // Demais mutações não enviam o cabeçalho. A chave nunca vai para storage.
+  const idempotencyKey = usesIdempotency(method, path) ? newIdempotencyKey() : undefined
 
   if (unsafe) {
     await ensureCsrfToken()
   }
 
   try {
-    return await send<T>(path, options)
+    return await send<T>(path, options, idempotencyKey)
   } catch (error) {
-    // Token CSRF expirado/rotacionado: renova uma vez e repete a mutação.
+    // Token CSRF expirado/rotacionado: renova uma vez e repete a mutação com a mesma chave.
     if (unsafe && error instanceof ApiError && error.code === 'CSRF_INVALID') {
       await refreshCsrfToken()
-      return send<T>(path, options)
+      return send<T>(path, options, idempotencyKey)
     }
     throw error
   }
+}
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `idem-${Date.now()}-${Math.random().toString(36).slice(2, 18)}`
 }
 
 export const api = {

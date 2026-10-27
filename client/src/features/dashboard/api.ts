@@ -14,7 +14,7 @@ export interface DashboardFilters {
   readonly period?: 'WEEK' | 'MONTH' | 'YEAR'
   readonly from?: string
   readonly to?: string
-  readonly accountId?: string
+  readonly accountIds?: readonly string[]
   readonly categoryId?: string
   readonly type?: string
   readonly origin?: string
@@ -27,7 +27,7 @@ function queryString(filters: DashboardFilters, extra: Record<string, string> = 
   if (filters.period) params.set('period', filters.period)
   if (filters.from) params.set('from', filters.from)
   if (filters.to) params.set('to', filters.to)
-  if (filters.accountId) params.set('accountId', filters.accountId)
+  for (const accountId of filters.accountIds ?? []) params.append('accountId', accountId)
   if (filters.categoryId) params.set('categoryId', filters.categoryId)
   if (filters.type) params.set('type', filters.type)
   if (filters.origin) params.set('origin', filters.origin)

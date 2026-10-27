@@ -6,7 +6,6 @@ import com.deltafinance.shared.time.Clock;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -14,9 +13,9 @@ import org.springframework.stereotype.Service;
 /**
  * Limitação de tentativas de autenticação.
  *
- * <p>5 falhas por 15 minutos por combinação de usuário + IP, bloqueio de 15 minutos e contador
- * zerado em autenticação bem-sucedida. IP e usuário são persistidos apenas como HMAC; a mensagem
- * devolvida é sempre genérica.
+ * <p>5 falhas por 15 minutos por combinação de usuário + IP, bloqueio de 15 minutos persistido a
+ * partir da falha que atingiu o limite e contador zerado em autenticação bem-sucedida. IP e usuário
+ * são persistidos apenas como HMAC; a mensagem devolvida é sempre genérica.
  */
 @Service
 public class LoginAttemptService {
@@ -27,9 +26,16 @@ public class LoginAttemptService {
     }
   }
 
+  private static final String LAST_BLOCK =
+      """
+      SELECT max(blocked_until)
+      FROM login_attempt
+      WHERE username_hash = ? AND ip_hash = ? AND success = false
+      """;
+
   private static final String COUNT_FAILURES =
       """
-      SELECT count(*), max(attempted_at)
+      SELECT count(*)
       FROM login_attempt
       WHERE username_hash = ? AND ip_hash = ? AND success = false AND attempted_at > ?
       """;
@@ -39,6 +45,20 @@ public class LoginAttemptService {
       INSERT INTO login_attempt
         (id, username_hash, ip_hash, attempted_at, success, failure_reason)
       VALUES (?, ?, ?, ?, ?, ?)
+      """;
+
+  private static final String MARK_BLOCKED =
+      """
+      UPDATE login_attempt
+      SET blocked_until = ?
+      WHERE username_hash = ? AND ip_hash = ? AND success = false AND blocked_until IS NULL
+      """;
+
+  private static final String CLEAR_EXPIRED_BLOCK =
+      """
+      DELETE FROM login_attempt
+      WHERE username_hash = ? AND ip_hash = ? AND success = false
+        AND blocked_until IS NOT NULL AND blocked_until <= ?
       """;
 
   private static final String DELETE_FAILURES =
@@ -60,53 +80,78 @@ public class LoginAttemptService {
     this.clock = clock;
   }
 
-  /** Verifica o bloqueio antes de validar a senha. */
+  /** Verifica o bloqueio persistido antes de validar a senha. */
   public Decision check(String usernameNormalized, String ipAddress) {
     Instant now = clock.now();
-    Timestamp windowStart = Timestamp.from(now.minus(properties.getWindow()));
     byte[] usernameHash = hmacService.usernameHash(usernameNormalized);
     byte[] ipHash = hmacService.ipHash(ipAddress);
 
-    Map<String, Object> row =
-        jdbcTemplate.queryForMap(COUNT_FAILURES, usernameHash, ipHash, windowStart);
-    long failures = ((Number) row.get("count")).longValue();
+    Timestamp blockedUntil =
+        jdbcTemplate.queryForObject(LAST_BLOCK, Timestamp.class, usernameHash, ipHash);
+    if (blockedUntil != null) {
+      Instant until = blockedUntil.toInstant();
+      if (until.isAfter(now)) {
+        return new Decision(true, Duration.between(now, until));
+      }
+      jdbcTemplate.update(CLEAR_EXPIRED_BLOCK, usernameHash, ipHash, Timestamp.from(now));
+    }
+
+    long failures = countFailures(usernameHash, ipHash, now);
     if (failures < properties.getMaxFailures()) {
       return Decision.allowed();
     }
 
-    Object lastAttemptValue = row.get("max");
-    Instant lastAttempt =
-        lastAttemptValue == null ? now : ((Timestamp) lastAttemptValue).toInstant();
-    Instant blockedUntil = lastAttempt.plus(properties.getBlockDuration());
-    Duration retryAfter = Duration.between(now, blockedUntil);
-    if (retryAfter.isNegative() || retryAfter.isZero()) {
-      return Decision.allowed();
-    }
-    return new Decision(true, retryAfter);
+    // Salvaguarda para falhas concorrentes ou registros antigos sem blocked_until.
+    Instant until = now.plus(properties.getBlockDuration());
+    markBlocked(usernameHash, ipHash, until);
+    return new Decision(true, properties.getBlockDuration());
   }
 
   public void recordFailure(String usernameNormalized, String ipAddress) {
-    insert(usernameNormalized, ipAddress, false, "BAD_CREDENTIALS");
+    Instant now = clock.now();
+    byte[] usernameHash = hmacService.usernameHash(usernameNormalized);
+    byte[] ipHash = hmacService.ipHash(ipAddress);
+    insert(usernameHash, ipHash, now, false, "BAD_CREDENTIALS");
+    if (countFailures(usernameHash, ipHash, now) >= properties.getMaxFailures()) {
+      markBlocked(usernameHash, ipHash, now.plus(properties.getBlockDuration()));
+    }
   }
 
   /** Autenticação bem-sucedida zera o contador da combinação usuário+IP. */
   public void recordSuccess(String usernameNormalized, String ipAddress) {
-    jdbcTemplate.update(
-        DELETE_FAILURES,
-        hmacService.usernameHash(usernameNormalized),
-        hmacService.ipHash(ipAddress));
-    insert(usernameNormalized, ipAddress, true, null);
+    byte[] usernameHash = hmacService.usernameHash(usernameNormalized);
+    byte[] ipHash = hmacService.ipHash(ipAddress);
+    jdbcTemplate.update(DELETE_FAILURES, usernameHash, ipHash);
+    insert(usernameHash, ipHash, clock.now(), true, null);
+  }
+
+  private long countFailures(byte[] usernameHash, byte[] ipHash, Instant now) {
+    Long failures =
+        jdbcTemplate.queryForObject(
+            COUNT_FAILURES,
+            Long.class,
+            usernameHash,
+            ipHash,
+            Timestamp.from(now.minus(properties.getWindow())));
+    return failures == null ? 0 : failures;
+  }
+
+  private void markBlocked(byte[] usernameHash, byte[] ipHash, Instant until) {
+    jdbcTemplate.update(MARK_BLOCKED, Timestamp.from(until), usernameHash, ipHash);
   }
 
   private void insert(
-      String usernameNormalized, String ipAddress, boolean success, String failureReason) {
-    Timestamp attemptedAt = Timestamp.from(clock.now());
+      byte[] usernameHash,
+      byte[] ipHash,
+      Instant attemptedAt,
+      boolean success,
+      String failureReason) {
     jdbcTemplate.update(
         INSERT,
         UUID.randomUUID(),
-        hmacService.usernameHash(usernameNormalized),
-        hmacService.ipHash(ipAddress),
-        attemptedAt,
+        usernameHash,
+        ipHash,
+        Timestamp.from(attemptedAt),
         success,
         failureReason);
   }

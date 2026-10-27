@@ -158,21 +158,58 @@ public class ReportingService {
         aggregate.expenseReductions = aggregate.expenseReductions.add(entry.amount().abs());
       }
     }
-    return buckets.stream()
+    List<BucketNet> nets = new ArrayList<>();
+    for (Bucket bucket : buckets) {
+      BucketAggregate aggregate = aggregates.getOrDefault(bucket.start(), new BucketAggregate());
+      nets.add(
+          new BucketNet(
+              bucket,
+              aggregate.income,
+              aggregate.grossExpenses.subtract(aggregate.expenseReductions)));
+    }
+    // Redução sem despesa no mesmo dia é aplicada ao próximo dia com despesa; o que sobra no fim
+    // volta para os últimos dias. Nenhum ponto fica negativo e a soma da série continua igual ao
+    // total de despesas.
+    BigDecimal carry = BigDecimal.ZERO;
+    for (BucketNet net : nets) {
+      BigDecimal expenses = net.expenses.subtract(carry);
+      if (expenses.signum() < 0) {
+        carry = expenses.negate();
+        net.expenses = BigDecimal.ZERO;
+      } else {
+        carry = BigDecimal.ZERO;
+        net.expenses = expenses;
+      }
+    }
+    for (int index = nets.size() - 1; index >= 0 && carry.signum() > 0; index--) {
+      BucketNet net = nets.get(index);
+      BigDecimal applied = carry.min(net.expenses);
+      net.expenses = net.expenses.subtract(applied);
+      carry = carry.subtract(applied);
+    }
+    return nets.stream()
         .map(
-            bucket -> {
-              BucketAggregate aggregate =
-                  aggregates.getOrDefault(bucket.start(), new BucketAggregate());
-              BigDecimal expenses = aggregate.grossExpenses.subtract(aggregate.expenseReductions);
-              return new DashboardBucketView(
-                  bucket.label(),
-                  bucket.start(),
-                  bucket.end(),
-                  MoneyAggregator.format(aggregate.income),
-                  MoneyAggregator.format(expenses),
-                  MoneyAggregator.format(aggregate.income.subtract(expenses)));
-            })
+            net ->
+                new DashboardBucketView(
+                    net.bucket.label(),
+                    net.bucket.start(),
+                    net.bucket.end(),
+                    MoneyAggregator.format(net.income),
+                    MoneyAggregator.format(net.expenses),
+                    MoneyAggregator.format(net.income.subtract(net.expenses))))
         .toList();
+  }
+
+  private static final class BucketNet {
+    private final Bucket bucket;
+    private final BigDecimal income;
+    private BigDecimal expenses;
+
+    private BucketNet(Bucket bucket, BigDecimal income, BigDecimal expenses) {
+      this.bucket = bucket;
+      this.income = income;
+      this.expenses = expenses;
+    }
   }
 
   /** Entradas que compõem os totais, na mesma projeção usada pelo drill-down. */
@@ -202,6 +239,13 @@ public class ReportingService {
     List<ReportEntry> entries = new ArrayList<>();
     List<InvoiceReportItem> decreases = new ArrayList<>();
     Map<UUID, BigDecimal> remainingReductions = new HashMap<>();
+    Set<UUID> creditCardAccounts = new HashSet<>();
+    for (AccountView account : resolved.accounts()) {
+      if ("CREDIT".equals(account.type())) {
+        creditCardAccounts.add(account.id());
+      }
+    }
+    Set<UUID> installmentTransactionIds = invoiceReportingService.installmentTransactionIds(userId);
 
     UUID effectiveCategoryId =
         ReportingService.UNCATEGORIZED_ID.equals(resolved.categoryId())
@@ -213,12 +257,16 @@ public class ReportingService {
             userId,
             resolved.from(),
             resolved.toExclusive(),
-            resolved.accountId(),
+            singleAccountId(resolved),
             effectiveCategoryId,
             resolved.type(),
             resolved.origin(),
             EFFECTIVE_STATUSES)) {
       if (!isTransactionIncluded(transaction, resolved)) {
+        continue;
+      }
+      if (installmentTransactionIds.contains(transaction.id())) {
+        // Compra parcelada: cada parcela é contabilizada no seu próprio ciclo.
         continue;
       }
       BigDecimal amount = MoneyAggregator.parse(transaction.amount());
@@ -228,29 +276,35 @@ public class ReportingService {
       Direction direction;
       BigDecimal reportAmount;
       if ("REFUND".equals(transaction.type()) || "CHARGEBACK".equals(transaction.type())) {
+        UUID relatedId = transaction.relatedTransactionId();
+        if (relatedId == null) {
+          // ADR-0001: reembolso sem vínculo não reduz despesa nem vira receita.
+          continue;
+        }
         direction = Direction.EXPENSE_REDUCTION;
         reportAmount = amount.abs();
-        UUID relatedId = transaction.relatedTransactionId();
-        if (relatedId != null) {
-          BigDecimal remaining = remainingReductions.get(relatedId);
-          if (remaining == null && !remainingReductions.containsKey(relatedId)) {
-            remaining = remainingReduction(userId, relatedId, resolved.from());
-            if (remaining != null) {
-              remainingReductions.put(relatedId, remaining);
-            }
-          }
+        BigDecimal remaining = remainingReductions.get(relatedId);
+        if (remaining == null && !remainingReductions.containsKey(relatedId)) {
+          remaining = remainingReduction(userId, relatedId, resolved.from());
           if (remaining != null) {
-            if (remaining.signum() <= 0) {
-              // Excedente ao valor efetivo do original não reduz despesas novamente (FR-057).
-              continue;
-            }
-            BigDecimal applied = reportAmount.min(remaining).setScale(Money.SCALE);
-            remainingReductions.put(relatedId, remaining.subtract(applied));
-            reportAmount = applied;
+            remainingReductions.put(relatedId, remaining);
           }
         }
+        if (remaining != null) {
+          if (remaining.signum() <= 0) {
+            // Excedente ao valor efetivo do original não reduz despesas novamente (FR-057).
+            continue;
+          }
+          BigDecimal applied = reportAmount.min(remaining).setScale(Money.SCALE);
+          remainingReductions.put(relatedId, remaining.subtract(applied));
+          reportAmount = applied;
+        }
       } else if (amount.signum() > 0) {
-        direction = Direction.INCOME;
+        // Entrada em cartão é crédito/estorno: reduz despesa e nunca vira receita.
+        direction =
+            creditCardAccounts.contains(transaction.accountId())
+                ? Direction.EXPENSE_REDUCTION
+                : Direction.INCOME;
         reportAmount = amount;
       } else {
         direction = Direction.EXPENSE;
@@ -273,12 +327,26 @@ public class ReportingService {
               direction));
     }
 
-    boolean invoiceItemsAllowed = invoiceItemsAllowed(resolved);
+    entries.addAll(
+        installmentEntries(userId, resolved, effectiveCategoryId, installmentTransactionIds));
+
+    boolean includesExpenseIncrease =
+        resolved.type() == null || resolved.type() == TransactionType.DEBIT;
+    boolean includesExpenseDecrease =
+        resolved.type() == null
+            || resolved.type() == TransactionType.REFUND
+            || resolved.type() == TransactionType.CHARGEBACK;
     List<InvoiceReportItem> invoiceItems =
         invoiceReportingService.unlinkedItems(
-            userId, resolved.from(), resolved.toExclusive(), resolved.accountId());
+            userId, resolved.from(), resolved.toExclusive(), singleAccountId(resolved));
     for (InvoiceReportItem item : invoiceItems) {
-      if (!invoiceItemsAllowed) {
+      if (resolved.categoryId() != null
+          && !ReportingService.UNCATEGORIZED_ID.equals(resolved.categoryId())) {
+        // Itens de fatura não carregam categoria própria; só aparecem sem filtro ou em
+        // "Sem categoria".
+        continue;
+      }
+      if (!accountIncluded(resolved, item.cardAccountId())) {
         continue;
       }
       String origin = normalizedInvoiceOrigin(item.source());
@@ -292,14 +360,21 @@ public class ReportingService {
         continue;
       }
       if ("EXPENSE_INCREASE".equals(item.reportingEffect())) {
+        if (!includesExpenseIncrease) {
+          continue;
+        }
         entries.add(invoiceEntry(item, origin, item.amount().negate(), Direction.EXPENSE));
       } else if ("EXPENSE_DECREASE".equals(item.reportingEffect())) {
-        decreases.add(item);
+        if (includesExpenseDecrease) {
+          decreases.add(item);
+        }
       }
     }
 
     Map<UUID, BigDecimal> grossExpensesByAccount =
-        decreases.isEmpty() ? Map.of() : grossCardExpenses(userId, resolved, invoiceItems);
+        decreases.isEmpty()
+            ? Map.of()
+            : grossCardExpenses(userId, resolved, invoiceItems, installmentTransactionIds);
     for (InvoiceReportItem item : decreases) {
       BigDecimal cardExpenses =
           grossExpensesByAccount.getOrDefault(item.cardAccountId(), BigDecimal.ZERO);
@@ -328,21 +403,26 @@ public class ReportingService {
    * faixa de valor. É o limite de FR-077 para itens de redução de despesa.
    */
   private Map<UUID, BigDecimal> grossCardExpenses(
-      UUID userId, Resolved resolved, List<InvoiceReportItem> invoiceItems) {
+      UUID userId,
+      Resolved resolved,
+      List<InvoiceReportItem> invoiceItems,
+      Set<UUID> installmentTransactionIds) {
     Map<UUID, BigDecimal> gross = new HashMap<>();
     for (TransactionView transaction :
         transactionQueryService.listForReporting(
             userId,
             resolved.from(),
             resolved.toExclusive(),
-            resolved.accountId(),
+            singleAccountId(resolved),
             null,
             null,
             null,
             EFFECTIVE_STATUSES)) {
-      if (!"BRL".equalsIgnoreCase(transaction.currency())
+      if (!accountIncluded(resolved, transaction.accountId())
+          || !"BRL".equalsIgnoreCase(transaction.currency())
           || "TRANSFER".equals(transaction.type())
           || "MATCHED".equals(transaction.reconciliationState())
+          || installmentTransactionIds.contains(transaction.id())
           || !isCreditAccount(resolved, transaction.accountId())) {
         continue;
       }
@@ -357,7 +437,25 @@ public class ReportingService {
         gross.merge(item.cardAccountId(), item.amount(), BigDecimal::add);
       }
     }
+    if (!installmentTransactionIds.isEmpty()) {
+      for (InvoiceReportItem item :
+          invoiceReportingService.installmentItems(
+              userId, resolved.from(), resolved.toExclusive(), singleAccountId(resolved))) {
+        if (isCreditAccount(resolved, item.cardAccountId())) {
+          gross.merge(item.cardAccountId(), item.amount(), BigDecimal::add);
+        }
+      }
+    }
     return gross;
+  }
+
+  private static boolean accountIncluded(Resolved resolved, UUID accountId) {
+    return resolved.accountIds().isEmpty() || resolved.accountIds().contains(accountId);
+  }
+
+  /** O repositório ainda filtra por uma conta; para múltiplas, o recorte é feito em memória. */
+  private static UUID singleAccountId(Resolved resolved) {
+    return resolved.accountIds().size() == 1 ? resolved.accountIds().iterator().next() : null;
   }
 
   private boolean isCreditAccount(Resolved resolved, UUID accountId) {
@@ -367,6 +465,97 @@ public class ReportingService {
       }
     }
     return false;
+  }
+
+  private List<ReportEntry> installmentEntries(
+      UUID userId,
+      Resolved resolved,
+      UUID effectiveCategoryId,
+      Set<UUID> installmentTransactionIds) {
+    if (installmentTransactionIds.isEmpty()) {
+      return List.of();
+    }
+    List<InvoiceReportItem> items =
+        invoiceReportingService.installmentItems(
+            userId, resolved.from(), resolved.toExclusive(), singleAccountId(resolved));
+    if (items.isEmpty()) {
+      return List.of();
+    }
+    Map<UUID, TransactionView> parents = new HashMap<>();
+    List<ReportEntry> result = new ArrayList<>();
+    for (InvoiceReportItem item : items) {
+      if (!accountIncluded(resolved, item.cardAccountId())) {
+        continue;
+      }
+      if (!accountCurrencyIsBrl(resolved, item.cardAccountId())) {
+        continue;
+      }
+      if (!moneyRange(item.amount(), resolved.minAmount(), resolved.maxAmount())) {
+        continue;
+      }
+      TransactionView parent = parents.get(item.transactionId());
+      if (parent == null) {
+        try {
+          parent = transactionQueryService.get(userId, item.transactionId());
+        } catch (NotFoundException exception) {
+          continue;
+        }
+        parents.put(item.transactionId(), parent);
+      }
+      if (resolved.categoryId() != null
+          && !java.util.Objects.equals(parent.categoryId(), effectiveCategoryId)) {
+        continue;
+      }
+      if (resolved.type() != null && !resolved.type().name().equals(parent.type())) {
+        continue;
+      }
+      String origin = normalizedInvoiceOrigin(item.source());
+      if (resolved.origin() != null && !resolved.origin().name().equals(origin)) {
+        continue;
+      }
+
+      Direction direction;
+      BigDecimal amount;
+      if ("PURCHASE".equals(item.kind()) || "INSTALLMENT".equals(item.kind())) {
+        direction = Direction.EXPENSE;
+        amount = item.amount().negate();
+      } else if ("CREDIT".equals(item.kind()) || "REFUND".equals(item.kind())) {
+        direction = Direction.EXPENSE_REDUCTION;
+        amount = item.amount();
+      } else if ("EXPENSE_INCREASE".equals(item.reportingEffect())) {
+        direction = Direction.EXPENSE;
+        amount = item.amount().negate();
+      } else if ("EXPENSE_DECREASE".equals(item.reportingEffect())) {
+        direction = Direction.EXPENSE_REDUCTION;
+        amount = item.amount();
+      } else {
+        continue;
+      }
+      result.add(
+          new ReportEntry(
+              item.itemId(),
+              "INVOICE_ITEM",
+              item.itemId(),
+              origin,
+              item.occurredOn(),
+              amount,
+              item.description() == null ? "" : item.description(),
+              parent.categoryId(),
+              item.cardAccountId(),
+              item.invoiceId(),
+              parent.id(),
+              parent.type(),
+              direction));
+    }
+    return result;
+  }
+
+  private static boolean moneyRange(BigDecimal value, BigDecimal min, BigDecimal max) {
+    BigDecimal magnitude = value.abs();
+    if (min != null && magnitude.compareTo(min.abs()) < 0) {
+      return false;
+    }
+    return max == null || magnitude.compareTo(max.abs()) <= 0;
   }
 
   private ReportEntry invoiceEntry(
@@ -388,6 +577,9 @@ public class ReportingService {
   }
 
   private boolean isTransactionIncluded(TransactionView transaction, Resolved resolved) {
+    if (!accountIncluded(resolved, transaction.accountId())) {
+      return false;
+    }
     if (!"BRL".equalsIgnoreCase(transaction.currency())) {
       return false;
     }
@@ -403,18 +595,6 @@ public class ReportingService {
     }
     return MoneyAggregator.withinRange(
         MoneyAggregator.parse(transaction.amount()), resolved.minAmount(), resolved.maxAmount());
-  }
-
-  private boolean invoiceItemsAllowed(Resolved resolved) {
-    if (resolved.categoryId() != null
-        && !ReportingService.UNCATEGORIZED_ID.equals(resolved.categoryId())) {
-      return false;
-    }
-    if (resolved.type() == null || resolved.type() == TransactionType.DEBIT) {
-      return true;
-    }
-    return resolved.type() == TransactionType.REFUND
-        || resolved.type() == TransactionType.CHARGEBACK;
   }
 
   private static String normalizedInvoiceOrigin(String source) {
@@ -445,6 +625,10 @@ public class ReportingService {
         aggregate.amount = aggregate.amount.subtract(entry.amount().abs());
       }
       aggregate.count++;
+    }
+    // Nenhuma categoria pode exibir despesa negativa: a redução é limitada ao que entrou nela.
+    for (CategoryAggregate aggregate : aggregates.values()) {
+      aggregate.amount = aggregate.amount.max(BigDecimal.ZERO);
     }
     return aggregates;
   }
@@ -480,7 +664,7 @@ public class ReportingService {
             userId,
             resolved.from(),
             resolved.toExclusive(),
-            resolved.accountId(),
+            singleAccountId(resolved),
             effectiveCategoryId,
             resolved.type(),
             resolved.origin(),
@@ -506,7 +690,7 @@ public class ReportingService {
     BigDecimal total = BigDecimal.ZERO;
     Instant reference = null;
     for (AccountView account : resolved.accounts()) {
-      if (resolved.accountId() != null && !resolved.accountId().equals(account.id())) {
+      if (!accountIncluded(resolved, account.id())) {
         continue;
       }
       if (!BALANCE_TYPES.contains(account.type()) || !"ACTIVE".equals(account.status())) {
@@ -531,7 +715,7 @@ public class ReportingService {
       if (!"CREDIT".equals(account.type())) {
         continue;
       }
-      if (resolved.accountId() != null && !resolved.accountId().equals(account.id())) {
+      if (!accountIncluded(resolved, account.id())) {
         continue;
       }
       cardIds.add(account.id());
@@ -542,7 +726,7 @@ public class ReportingService {
   private Instant lastSuccessfulSync(UUID userId, Resolved resolved) {
     Set<UUID> connectionIds = new HashSet<>();
     for (AccountView account : resolved.accounts()) {
-      if (resolved.accountId() != null && !resolved.accountId().equals(account.id())) {
+      if (!accountIncluded(resolved, account.id())) {
         continue;
       }
       UUID connectionId = resolved.connectionIdsByAccount().get(account.id());
@@ -577,9 +761,16 @@ public class ReportingService {
     }
 
     List<AccountView> accounts = accountQueryService.list(userId);
-    if (query.accountId() != null
-        && accounts.stream().noneMatch(account -> account.id().equals(query.accountId()))) {
-      throw new NotFoundException();
+    Set<UUID> accountIds =
+        query.accountIds() == null
+            ? Set.of()
+            : query.accountIds().stream()
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+    for (UUID accountId : accountIds) {
+      if (accounts.stream().noneMatch(account -> account.id().equals(accountId))) {
+        throw new NotFoundException();
+      }
     }
 
     Map<UUID, String> categoryNames = new HashMap<>();
@@ -606,7 +797,7 @@ public class ReportingService {
         to,
         to.plusDays(1),
         period,
-        query.accountId(),
+        accountIds,
         query.categoryId(),
         type,
         origin,
@@ -706,7 +897,7 @@ public class ReportingService {
       LocalDate to,
       LocalDate toExclusive,
       ReportPeriod period,
-      UUID accountId,
+      Set<UUID> accountIds,
       UUID categoryId,
       TransactionType type,
       TransactionSource origin,

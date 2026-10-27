@@ -59,8 +59,9 @@ compose.yaml            stack self-hosted completa
 - **Patrimônio (pós-MVP)**: ativos, passivos e snapshots datados, sem dupla
   contagem e sem inferir saldos passados quando falta histórico.
 - **Metas (pós-MVP)**: progresso por alocações explícitas, patrimônio líquido ou
-  redução de dívida, com histórico diário. Metas não movimentam dinheiro, não
-  criam ordens e não executam ações bancárias.
+  redução de dívida, com histórico datado (um snapshot por meta/dia, gravado sob
+  demanda). Metas não movimentam dinheiro, não criam ordens e não executam ações
+  bancárias.
 
 ## Pré-requisitos
 
@@ -152,7 +153,8 @@ npm run test:e2e
 Os testes de integração do backend usam Testcontainers e são ignorados
 automaticamente quando o Docker não está disponível. A base está em
 `server/src/test/java/com/deltafinance/support/PostgresTestBase.java` e suporta
-`-Dflyway.target=V002`, além de snapshot/restore para testar migrações.
+snapshot/restore para testar migrações. A baseline atual é
+`V001__baseline.sql`; novas migrações começam em `V002`.
 
 ## Segurança
 
@@ -170,6 +172,31 @@ automaticamente quando o Docker não está disponível. A base está em
 
 ## Documentação
 
+- [`docs/funcionalidades.md`](docs/funcionalidades.md): funcionalidades
+  implementadas, regras de negócio e limitações atuais.
+- [`docs/analise-simplificacao.md`](docs/analise-simplificacao.md): reanálise do
+  sistema, invariantes, restrições e mapa de simplificação com cenários,
+  candidatos de remoção, impacto e esforço.
+- [`docs/telas-e-componentes.md`](docs/telas-e-componentes.md): rotas, telas,
+  componentes da SPA e relação com as funcionalidades.
+- [`docs/relatorio-divergencias-specs-codigo.md`](docs/relatorio-divergencias-specs-codigo.md):
+  divergências entre `specs/` e o código, com impacto e recomendações.
+- [`docs/plano-implementacao-correcoes.md`](docs/plano-implementacao-correcoes.md):
+  planejamento, checklists e critérios de aceite para as correções necessárias.
+- [`docs/fase-0-baseline-e-inventario.md`](docs/fase-0-baseline-e-inventario.md):
+  baseline, matriz de cobertura e evidências da Fase 0.
+- [`docs/fase-1-seguranca-sessao.md`](docs/fase-1-seguranca-sessao.md):
+  correções de sessão, login, cadastro, idempotência, reset e auditoria.
+- [`docs/fase-2-importacao-correcoes.md`](docs/fase-2-importacao-correcoes.md):
+  fingerprint, dados ausentes, reembolsos e correção de transferências.
+- [`docs/fase-3-faturas-relatorios.md`](docs/fase-3-faturas-relatorios.md):
+  espelho de fatura, fatura paga, parcelas e consistência dos relatórios.
+- [`docs/fase-4-sincronizacao-conexoes.md`](docs/fase-4-sincronizacao-conexoes.md):
+  recuperação/cancelamento de sync, limite de conexões e leitura truncada.
+- [`docs/fase-5-metas.md`](docs/fase-5-metas.md):
+  cálculo de dívida, capacidade das fontes, observações e rastreabilidade.
+- [`docs/adr/README.md`](docs/adr/README.md): decisões arquiteturais e semânticas
+  que bloqueiam ou orientam as correções.
 - [`docs/operations.md`](docs/operations.md): operação, health checks, logs,
   sincronização, investimentos, patrimônio, metas, migrações e backups.
 - [`docs/accessibility.md`](docs/accessibility.md): rotas cobertas e critérios de

@@ -5,6 +5,8 @@ import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.errors.ConflictException;
+import com.deltafinance.shared.errors.ErrorCode;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.time.Clock;
@@ -21,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +47,9 @@ public class TransactionCorrectionService {
   private final TransactionQueryService queryService;
   private final CryptoService cryptoService;
   private final AuditService auditService;
+  private final JdbcTemplate jdbcTemplate;
+  private final ApplicationEventPublisher eventPublisher;
+  private final PaidInvoiceGuard paidInvoiceGuard;
   private final Clock clock;
 
   public TransactionCorrectionService(
@@ -52,6 +59,9 @@ public class TransactionCorrectionService {
       TransactionQueryService queryService,
       CryptoService cryptoService,
       AuditService auditService,
+      JdbcTemplate jdbcTemplate,
+      ApplicationEventPublisher eventPublisher,
+      PaidInvoiceGuard paidInvoiceGuard,
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.correctionRepository = correctionRepository;
@@ -59,6 +69,9 @@ public class TransactionCorrectionService {
     this.queryService = queryService;
     this.cryptoService = cryptoService;
     this.auditService = auditService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.eventPublisher = eventPublisher;
+    this.paidInvoiceGuard = paidInvoiceGuard;
     this.clock = clock;
   }
 
@@ -69,6 +82,15 @@ public class TransactionCorrectionService {
         transactionRepository
             .findByIdAndUserId(transactionId, userId)
             .orElseThrow(NotFoundException::new);
+    boolean changesInvoiceMirror =
+        request.description() != null || request.postedOn() != null || request.amount() != null;
+    if (changesInvoiceMirror && paidInvoiceGuard.isInPaidInvoice(userId, transactionId)) {
+      throw new ConflictException(
+          "TRANSACTION_PAID_INVOICE",
+          "A compra está em uma fatura paga; registre um ajuste explícito na fatura antes de "
+              + "alterar valor, data ou descrição.");
+    }
+    boolean lockedTransferLeg = isLockedTransferLeg(userId, transaction);
     List<CorrectionDraft> drafts = new ArrayList<>();
 
     if (request.description() != null) {
@@ -92,6 +114,9 @@ public class TransactionCorrectionService {
     }
 
     if (request.postedOn() != null && !request.postedOn().equals(transaction.getPostedOn())) {
+      if (lockedTransferLeg) {
+        throw transferLegLocked();
+      }
       String previous = transaction.getPostedOn().toString();
       transaction.setPostedOn(request.postedOn());
       transaction.markEdited("postedOn");
@@ -106,6 +131,9 @@ public class TransactionCorrectionService {
       BigDecimal next = parseAmount(request.amount());
       BigDecimal signed = applySign(transaction.getType(), previousAmount, next);
       if (signed.compareTo(previousAmount) != 0) {
+        if (lockedTransferLeg) {
+          throw transferLegLocked();
+        }
         transaction.setAmountEffectiveEnc(
             encrypt(userId, transactionId, "amount_effective", signed.toPlainString()));
         transaction.markEdited("amount");
@@ -121,6 +149,33 @@ public class TransactionCorrectionService {
       transaction.setCategoryId(request.categoryId());
       transaction.markEdited("category");
       drafts.add(new CorrectionDraft("category", previous, request.categoryId().toString()));
+    }
+
+    if (request.relatedTransactionId() != null) {
+      if (transaction.getType() != TransactionType.REFUND
+          && transaction.getType() != TransactionType.CHARGEBACK) {
+        throw new ValidationException(
+            "relatedTransactionId", "Somente reembolsos e chargebacks podem ser vinculados.");
+      }
+      Transaction original =
+          transactionRepository
+              .findByIdAndUserId(request.relatedTransactionId(), userId)
+              .orElseThrow(NotFoundException::new);
+      if (original.getId().equals(transaction.getId())
+          || !original.getAccountId().equals(transaction.getAccountId())
+          || original.getType() != TransactionType.DEBIT) {
+        throw new ValidationException(
+            "relatedTransactionId", "A original deve ser uma despesa da mesma conta.");
+      }
+      if (!original.getId().equals(transaction.getRelatedTransactionId())) {
+        String previous =
+            transaction.getRelatedTransactionId() == null
+                ? null
+                : transaction.getRelatedTransactionId().toString();
+        transaction.linkRelatedTransaction(original.getId());
+        drafts.add(
+            new CorrectionDraft("relatedTransactionId", previous, original.getId().toString()));
+      }
     }
 
     if (request.notes() != null) {
@@ -170,7 +225,31 @@ public class TransactionCorrectionService {
         "transaction",
         transactionId,
         Map.of("fields", String.join(",", drafts.stream().map(CorrectionDraft::field).toList())));
+    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, transactionId));
     return queryService.get(userId, transactionId);
+  }
+
+  private boolean isLockedTransferLeg(UUID userId, Transaction transaction) {
+    if (transaction.getType() == TransactionType.TRANSFER
+        && transaction.getRelatedTransactionId() != null) {
+      return true;
+    }
+    Long confirmed =
+        jdbcTemplate.queryForObject(
+            "select count(*) from internal_match where user_id = ? and status = 'CONFIRMED'"
+                + " and (debit_transaction_id = ? or credit_transaction_id = ?)",
+            Long.class,
+            userId,
+            transaction.getId(),
+            transaction.getId());
+    return confirmed != null && confirmed > 0;
+  }
+
+  private static ConflictException transferLegLocked() {
+    return new ConflictException(
+        ErrorCode.CONFLICT,
+        "Valor e data de uma perna de transferência não podem ser alterados. "
+            + "Exclua e recrie o par se precisar mudar o valor ou a data.");
   }
 
   private static BigDecimal applySign(

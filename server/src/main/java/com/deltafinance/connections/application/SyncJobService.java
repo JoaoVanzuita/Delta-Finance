@@ -7,20 +7,32 @@ import com.deltafinance.connections.domain.SyncJob;
 import com.deltafinance.connections.domain.SyncJobRepository;
 import com.deltafinance.connections.domain.SyncJobStatus;
 import com.deltafinance.connections.domain.SyncJobType;
+import com.deltafinance.connections.domain.SyncRun;
+import com.deltafinance.connections.domain.SyncRunRepository;
+import com.deltafinance.connections.domain.SyncRunStatus;
 import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.domain.PluggyIntegrationRepository;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.ErrorCode;
 import com.deltafinance.shared.errors.NotFoundException;
+import com.deltafinance.shared.sync.SyncCancellationRegistry;
+import com.deltafinance.shared.sync.SyncCancelledException;
 import com.deltafinance.shared.time.Clock;
+import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -44,32 +56,80 @@ public class SyncJobService {
   private final PluggyIntegrationRepository integrationRepository;
   private final PluggyConnectionRepository connectionRepository;
   private final PluggySyncService syncService;
-  private final WebhookEventProcessor webhookEventProcessor;
   private final SyncProperties properties;
   private final SyncMetrics metrics;
   private final Clock clock;
   private final JdbcTemplate jdbcTemplate;
+  private final SyncRunRepository syncRunRepository;
+  private final SyncCancellationRegistry cancellationRegistry;
   private final ConcurrentHashMap<UUID, ReentrantLock> integrationLocks = new ConcurrentHashMap<>();
+  private final ScheduledExecutorService watchdog =
+      Executors.newSingleThreadScheduledExecutor(
+          runnable -> {
+            Thread thread = new Thread(runnable, "sync-job-timeout");
+            thread.setDaemon(true);
+            return thread;
+          });
 
   public SyncJobService(
       SyncJobRepository jobRepository,
       PluggyIntegrationRepository integrationRepository,
       PluggyConnectionRepository connectionRepository,
       PluggySyncService syncService,
-      WebhookEventProcessor webhookEventProcessor,
       SyncProperties properties,
       SyncMetrics metrics,
       JdbcTemplate jdbcTemplate,
+      SyncRunRepository syncRunRepository,
+      SyncCancellationRegistry cancellationRegistry,
       Clock clock) {
     this.jobRepository = jobRepository;
     this.integrationRepository = integrationRepository;
     this.connectionRepository = connectionRepository;
     this.syncService = syncService;
-    this.webhookEventProcessor = webhookEventProcessor;
     this.properties = properties;
     this.metrics = metrics;
     this.jdbcTemplate = jdbcTemplate;
+    this.syncRunRepository = syncRunRepository;
+    this.cancellationRegistry = cancellationRegistry;
     this.clock = clock;
+  }
+
+  @PreDestroy
+  void shutdownWatchdog() {
+    watchdog.shutdownNow();
+  }
+
+  /**
+   * Recupera jobs {@code RUNNING} deixados por um encerramento abrupto (ADR-0004).
+   *
+   * <p>Como a implantação de referência usa uma única instância, todo job em execução no start é
+   * órfão. A tentativa vira uma linha em {@code sync_run}, o job volta para retry/falha e os
+   * estados {@code SYNCING} são liberados.
+   */
+  @EventListener(ApplicationReadyEvent.class)
+  public int recoverOrphanedJobs() {
+    int recovered = 0;
+    for (SyncJob job : jobRepository.runningJobs()) {
+      recoverOrphan(job);
+      recovered++;
+    }
+    if (recovered > 0) {
+      LOG.warn("Recuperados {} job(s) de sincronização órfão(s)", recovered);
+    }
+    return recovered;
+  }
+
+  private void recoverOrphan(SyncJob job) {
+    Instant startedAt = job.getLockedAt() == null ? clock.now() : job.getLockedAt();
+    recordInterruptedRun(job, startedAt, SyncRunStatus.FAILED, "INTERRUPTED");
+    if (job.canRetry()) {
+      job.scheduleRetry("INTERRUPTED", clock.now());
+    } else {
+      job.markFailed("INTERRUPTED");
+    }
+    jobRepository.save(job);
+    releaseSyncState(job);
+    metrics.recordJob(job.getStatus());
   }
 
   /** Enfileira a consulta de dados já disponíveis de uma conexão do usuário. */
@@ -154,8 +214,10 @@ public class SyncJobService {
       if (!userId.equals(job.getUserId()) || !job.isActive()) {
         continue;
       }
+      cancellationRegistry.cancel(job.getId(), SyncCancellationRegistry.Reason.CANCELLED);
       job.markFailed("DISCONNECTED");
       jobRepository.save(job);
+      releaseSyncState(job);
       cancelled++;
     }
     return cancelled;
@@ -180,8 +242,18 @@ public class SyncJobService {
       LOG.debug("Job {} devolvido à fila: integração já em processamento", job.getId());
       return Optional.of(job.getId());
     }
+    SyncCancellationRegistry.Token token = cancellationRegistry.begin(job.getId());
+    cancellationRegistry.bind(token);
+    ScheduledFuture<?> timeout =
+        watchdog.schedule(
+            () -> onTimeout(job.getId(), token),
+            Math.max(1, properties.getJobTimeout().toMillis()),
+            TimeUnit.MILLISECONDS);
     try {
-      process(job, correlationId);
+      process(job, correlationId, token);
+    } catch (SyncCancelledException cancelled) {
+      // O cancelamento/timeout já marcou o job; um worker atrasado não deve sobrescrevê-lo.
+      LOG.debug("Job {} interrompido por {}", job.getId(), cancelled.reason());
     } catch (RuntimeException exception) {
       // Fail-safe: um erro inesperado não pode deixar o job preso em RUNNING.
       LOG.error(
@@ -189,15 +261,41 @@ public class SyncJobService {
           job.getId(),
           exception.getClass().getSimpleName());
       LOG.debug("Detalhes da falha inesperada do job", exception);
-      job.markFailed("INTERNAL_ERROR");
-      jobRepository.save(job);
+      if (!token.isCancelled()) {
+        job.markFailed("INTERNAL_ERROR");
+        jobRepository.save(job);
+      }
     } finally {
+      timeout.cancel(false);
+      cancellationRegistry.finish(token);
+      cancellationRegistry.unbind();
       lock.unlock();
       if (!lock.hasQueuedThreads()) {
         integrationLocks.remove(lockKey, lock);
       }
     }
     return Optional.of(job.getId());
+  }
+
+  private void onTimeout(UUID jobId, SyncCancellationRegistry.Token token) {
+    if (token.isCancelled()) {
+      return;
+    }
+    cancellationRegistry.cancel(jobId, SyncCancellationRegistry.Reason.TIMEOUT);
+    SyncJob job = jobRepository.findById(jobId).orElse(null);
+    if (job == null || job.getStatus() != SyncJobStatus.RUNNING) {
+      return;
+    }
+    if (job.canRetry()) {
+      job.scheduleRetry("JOB_TIMEOUT", clock.now());
+    } else {
+      job.markFailed("JOB_TIMEOUT");
+    }
+    // Libera o estado antes de publicar o novo status do job, para leitores consistentes.
+    releaseSyncState(job);
+    jobRepository.save(job);
+    metrics.recordJob(job.getStatus());
+    LOG.warn("Job {} excedeu o timeout de sincronização e foi liberado", jobId);
   }
 
   /** Processa até {@code maxJobs} jobs vencidos. */
@@ -261,27 +359,21 @@ public class SyncJobService {
         });
   }
 
-  private void process(SyncJob job, String correlationId) {
+  private void process(SyncJob job, String correlationId, SyncCancellationRegistry.Token token) {
     boolean success =
         switch (job.getJobType()) {
           case SYNC_CONNECTION, SYNC_INTEGRATION, RECONCILE -> runSync(job, correlationId);
-          case PROCESS_WEBHOOK -> processWebhook(job, correlationId);
           case RECALCULATE_INVOICE -> true;
         };
+    if (token.isCancelled()) {
+      // O job já foi marcado por cancelamento/timeout; não sobrescreva o estado mais novo.
+      return;
+    }
     if (!success && job.getStatus() == SyncJobStatus.RUNNING) {
       job.markFailed("SYNC_FAILED");
     }
     jobRepository.save(job);
     metrics.recordJob(job.getStatus());
-  }
-
-  private boolean processWebhook(SyncJob job, String correlationId) {
-    boolean processed = webhookEventProcessor.processPending(job, correlationId);
-    if (!processed && job.canRetry()) {
-      job.scheduleRetry(
-          "WEBHOOK_SYNC_FAILED", clock.now().plus(properties.retryDelay(job.getAttempts())));
-    }
-    return processed;
   }
 
   private boolean runSync(SyncJob job, String correlationId) {
@@ -308,6 +400,7 @@ public class SyncJobService {
         job.getJobType() == SyncJobType.RECONCILE
             ? clock.today().minusMonths(properties.getReconciliationWindowMonths())
             : null;
+    cancellationRegistry.checkpoint();
     SyncResult result = syncService.sync(integration.get(), connection.get(), from, correlationId);
     if (result.succeeded()) {
       job.markSucceeded();
@@ -327,5 +420,49 @@ public class SyncJobService {
       job.markFailed(code);
     }
     return false;
+  }
+
+  private void recordInterruptedRun(
+      SyncJob job, Instant startedAt, SyncRunStatus status, String errorCode) {
+    if (job.getUserId() == null
+        || job.getIntegrationId() == null
+        || job.getJobType() == SyncJobType.RECALCULATE_INVOICE) {
+      return;
+    }
+    SyncRun run =
+        new SyncRun(
+            job.getUserId(),
+            job.getIntegrationId(),
+            job.getConnectionId(),
+            startedAt,
+            "recovery-" + job.getId());
+    run.finish(status, 0, 0, 0, 0, 0, errorCode, clock.now());
+    syncRunRepository.save(run);
+    metrics.recordRun(run);
+  }
+
+  /** Libera {@code SYNCING} na conexão/integração sem apagar o último estado conhecido. */
+  private void releaseSyncState(SyncJob job) {
+    if (job.getUserId() == null) {
+      return;
+    }
+    if (job.getConnectionId() != null) {
+      connectionRepository
+          .findByIdAndUserId(job.getConnectionId(), job.getUserId())
+          .ifPresent(
+              connection -> {
+                connection.releaseSync();
+                connectionRepository.save(connection);
+              });
+    }
+    if (job.getIntegrationId() != null) {
+      integrationRepository
+          .findByIdAndUserId(job.getIntegrationId(), job.getUserId())
+          .ifPresent(
+              integration -> {
+                integration.releaseSync();
+                integrationRepository.save(integration);
+              });
+    }
   }
 }

@@ -2,17 +2,17 @@ import { Check } from 'lucide-react'
 import { Link } from 'react-router'
 
 /**
- * Página inicial provisória da fase de fundação.
+ * Página inicial com visão geral do produto e atalhos para os módulos já disponíveis.
  *
- * Some quando a autenticação (T044/T045) e o dashboard (T097) entrarem. Não
- * exibe dados, formulários ou links de funcionalidades ainda não implementadas.
+ * Não exibe dados financeiros nem formulários; o acesso às telas de negócio continua protegido
+ * pela sessão.
  */
 export function HomePage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
       <header className="space-y-3">
         <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
-          Fundação do projeto
+          Controle financeiro pessoal
         </p>
         <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           Delta Finance
@@ -42,33 +42,32 @@ export function HomePage() {
         className="rounded-card border border-line bg-surface p-5 sm:p-6"
       >
         <h2 id="status-heading" className="text-lg font-semibold text-ink">
-          Aplicação em construção
+          Módulos disponíveis
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          A base de identidade, sessão, criptografia e auditoria está pronta, e o cadastro, o login,
-          a importação bancária, os lançamentos manuais, as faturas e o dashboard já funcionam.
-          Novas fases continuam sendo adicionadas sem expor telas vazias.
+          O MVP bancário e os módulos secundários já estão disponíveis. A base de identidade,
+          sessão, criptografia e auditoria protege todos os fluxos abaixo.
         </p>
         <ul className="mt-4 space-y-2 text-sm text-ink">
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
-            Sessão segura com expiração e proteção CSRF
+            Contas manuais e importadas, cartões, faturas e transações
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
-            Senhas com Argon2id e política local de senhas comuns
+            Importação via Meu Pluggy, sincronização e revisão de removidos na origem
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
-            Campos sensíveis cifrados com chave externa ao banco
+            Categorias, correções, reconciliação e dashboard com drill-down
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
-            Isolamento entre usuários verificado no servidor
+            Investimentos manuais, patrimônio e metas com histórico datado
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
-            Dashboard com resultado do período e saldo atual em rótulos distintos
+            Exportação e exclusão da própria conta na área de privacidade
           </li>
         </ul>
         <Link

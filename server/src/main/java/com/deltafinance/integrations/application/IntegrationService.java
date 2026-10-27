@@ -4,6 +4,7 @@ import com.deltafinance.integrations.domain.IntegrationStatus;
 import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.domain.PluggyIntegrationRepository;
 import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
+import com.deltafinance.integrations.infrastructure.PluggyProperties;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
@@ -33,6 +34,7 @@ public class IntegrationService {
   private final CryptoService cryptoService;
   private final AuditService auditService;
   private final ApplicationEventPublisher eventPublisher;
+  private final PluggyProperties properties;
 
   public IntegrationService(
       PluggyIntegrationRepository integrationRepository,
@@ -40,13 +42,15 @@ public class IntegrationService {
       PluggyAuthClient authClient,
       CryptoService cryptoService,
       AuditService auditService,
-      ApplicationEventPublisher eventPublisher) {
+      ApplicationEventPublisher eventPublisher,
+      PluggyProperties properties) {
     this.integrationRepository = integrationRepository;
     this.connectionCounter = connectionCounter;
     this.authClient = authClient;
     this.cryptoService = cryptoService;
     this.auditService = auditService;
     this.eventPublisher = eventPublisher;
+    this.properties = properties;
   }
 
   public IntegrationView get(UUID userId) {
@@ -171,7 +175,9 @@ public class IntegrationService {
         integration.getLastSyncAttemptAt(),
         integration.getLastSuccessfulSyncAt(),
         integration.getLastErrorCode(),
-        connections);
+        connections,
+        properties.getConnectionLimit(),
+        properties.getConnectionLimitCheckedAt());
   }
 
   static String mask(String value) {

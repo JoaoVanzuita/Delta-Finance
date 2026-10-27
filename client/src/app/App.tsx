@@ -6,9 +6,8 @@ import { router } from './router'
 /**
  * Composição raiz da SPA: providers globais + roteador.
  *
- * O layout de navegação (AppShell) e os tokens visuais entram em T034; nesta fase
- * a aplicação apenas garante que o roteador, o cache de servidor e o bundle
- * funcionam.
+ * O roteador contém as telas de negócio; a aplicação mantém o cache de servidor, o tratamento de
+ * sessão e o bundle em um único ponto de composição.
  */
 export function App() {
   return (

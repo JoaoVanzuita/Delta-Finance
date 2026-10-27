@@ -37,6 +37,9 @@ public class SyncProperties {
 
   private int batchSize = 10;
 
+  /** Tempo máximo de uma tentativa em memória (ADR-0004). */
+  private Duration jobTimeout = Duration.ofMinutes(10);
+
   public int getInitialWindowMonths() {
     return initialWindowMonths;
   }
@@ -131,6 +134,17 @@ public class SyncProperties {
 
   public void setBatchSize(int batchSize) {
     this.batchSize = Math.max(1, batchSize);
+  }
+
+  public Duration getJobTimeout() {
+    return jobTimeout;
+  }
+
+  public void setJobTimeout(Duration jobTimeout) {
+    this.jobTimeout =
+        jobTimeout == null || jobTimeout.isNegative() || jobTimeout.isZero()
+            ? Duration.ofMinutes(10)
+            : jobTimeout;
   }
 
   /** Backoff exponencial limitado para retries temporários. */

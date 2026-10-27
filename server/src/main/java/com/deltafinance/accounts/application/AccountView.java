@@ -13,8 +13,10 @@ public record AccountView(
     String alias,
     String currency,
     String currentBalance,
+    String referenceBalance,
     Instant balanceReferenceAt,
     String status,
     Instant lastSyncAt,
     String notes,
-    CardProfileView cardProfile) {}
+    CardProfileView cardProfile,
+    String connectionStatus) {}

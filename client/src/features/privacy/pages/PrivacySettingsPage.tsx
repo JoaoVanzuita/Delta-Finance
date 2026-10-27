@@ -159,8 +159,9 @@ export function PrivacySettingsPage() {
         </h2>
         <p className="mt-1 text-sm leading-relaxed text-ink-muted">
           ZIP com JSON Lines e CSV contendo perfil, contas, cartões, categorias, transações,
-          faturas, itens, pagamentos, reconciliações, integrações e auditoria. Segredos,
-          credenciais, API Keys, tokens, chaves e hashes não são incluídos.
+          faturas, itens, pagamentos, reconciliações, investimentos, patrimônio, metas, histórico de
+          metas, integrações e auditoria. Segredos, credenciais, API Keys, tokens, chaves e hashes
+          não são incluídos.
         </p>
         <button
           type="button"

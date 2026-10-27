@@ -41,7 +41,6 @@ import org.springframework.stereotype.Service;
  *   <li>o excesso é permitido, mas o percentual é limitado a 100;
  *   <li>percentuais abaixo de 100% deixam saldo não alocado visível e não redistribuído;
  *   <li>a soma das alocações de uma mesma fonte entre metas não pode exceder o saldo da fonte;
- *   <li>metas de redução de dívida usam a dívida inicial como denominador;
  *   <li>metas de patrimônio líquido usam a visão patrimonial atual.
  * </ul>
  */
@@ -77,7 +76,8 @@ public class GoalProgressService {
     this.clock = clock;
   }
 
-  public record AllocationContribution(GoalAllocation allocation, BigDecimal contribution) {}
+  public record AllocationContribution(
+      GoalAllocation allocation, BigDecimal contribution, boolean capacityExceeded) {}
 
   public record Evaluation(
       BigDecimal currentValue,
@@ -89,37 +89,23 @@ public class GoalProgressService {
 
   public Evaluation evaluate(UUID userId, FinancialGoal goal, List<GoalAllocation> allocations) {
     BigDecimal target = targetAmount(goal);
-    List<AllocationContribution> contributions = contributions(target, allocations);
+    List<AllocationContribution> contributions =
+        contributionsForProgress(userId, goal, target, allocations);
     BigDecimal current;
-    BigDecimal denominator;
     BigDecimal unallocated;
 
-    switch (goal.getProgressRule()) {
-      case NET_WORTH -> {
-        current = nonNegative(parse(wealthService.overview(userId).netWorth()));
-        denominator = target;
-        unallocated = nonNegative(target.subtract(current));
-        contributions = List.of();
-      }
-      case DEBT_REDUCTION -> {
-        BigDecimal initial = initialValue(goal);
-        current = sum(contributions);
-        denominator = initial;
-        unallocated = nonNegative(initial.subtract(current));
-      }
-      default -> {
-        current = sum(contributions);
-        denominator = target;
-        unallocated = nonNegative(target.subtract(current));
-      }
+    if (goal.getProgressRule() == GoalProgressRule.NET_WORTH) {
+      current = nonNegative(parse(wealthService.overview(userId).netWorth()));
+      unallocated = nonNegative(target.subtract(current));
+      contributions = List.of();
+    } else {
+      current = sum(contributions);
+      unallocated = nonNegative(target.subtract(current));
     }
 
-    BigDecimal percentage = percentage(current, denominator);
-    BigDecimal remaining = nonNegative(denominator.subtract(current));
-    BigDecimal excess =
-        goal.getProgressRule() == GoalProgressRule.DEBT_REDUCTION
-            ? nonNegative(current.subtract(denominator))
-            : nonNegative(current.subtract(target));
+    BigDecimal percentage = percentage(current, target);
+    BigDecimal remaining = nonNegative(target.subtract(current));
+    BigDecimal excess = nonNegative(current.subtract(target));
     return new Evaluation(
         scale(current), percentage, remaining, unallocated, excess, contributions);
   }
@@ -161,9 +147,83 @@ public class GoalProgressService {
         }
         accumulatedPercentage = accumulatedPercentage.add(contribution);
       }
-      result.add(new AllocationContribution(allocation, scale(contribution)));
+      result.add(new AllocationContribution(allocation, scale(contribution), false));
     }
     return result;
+  }
+
+  /**
+   * Contribuições efetivas para o progresso.
+   *
+   * <p>Cada saldo é consumido na ordem das alocações e reservado primeiro para metas mais antigas,
+   * de modo que o mesmo saldo não seja contado integralmente em várias metas.
+   */
+  public List<AllocationContribution> contributionsForProgress(
+      UUID userId, FinancialGoal goal, BigDecimal target, List<GoalAllocation> allocations) {
+    List<AllocationContribution> planned = contributions(target, allocations);
+    Map<SourceKey, BigDecimal> remaining = new LinkedHashMap<>();
+    List<AllocationContribution> result = new ArrayList<>();
+    for (AllocationContribution contribution : planned) {
+      GoalAllocation allocation = contribution.allocation();
+      BigDecimal value = contribution.contribution();
+      boolean capacityExceeded = false;
+      if (allocation.getSourceType() != AllocationSourceType.MANUAL
+          && allocation.getSourceId() != null) {
+        SourceKey key = new SourceKey(allocation.getSourceType(), allocation.getSourceId());
+        BigDecimal available =
+            remaining.computeIfAbsent(
+                key,
+                ignored ->
+                    nonNegative(
+                        sourceBalanceOrDefault(userId, key)
+                            .subtract(reservedForEarlierGoals(userId, goal, key))));
+        capacityExceeded = value.compareTo(available) > 0;
+        if (allocation.getAllocationMode() != AllocationMode.FIXED_AMOUNT) {
+          // Percentual se ajusta ao saldo disponível; valor fixo exige ajuste explícito.
+          value = value.min(available).max(ZERO);
+        }
+        remaining.put(key, available.subtract(value));
+      }
+      result.add(new AllocationContribution(allocation, scale(value), capacityExceeded));
+    }
+    return result;
+  }
+
+  private BigDecimal reservedForEarlierGoals(UUID userId, FinancialGoal current, SourceKey key) {
+    BigDecimal reserved = ZERO;
+    for (FinancialGoal other : goalRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
+      if (other.getId().equals(current.getId())
+          || other.getProgressRule() == GoalProgressRule.NET_WORTH
+          || other.getCreatedAt() == null
+          || current.getCreatedAt() == null
+          || other.getCreatedAt().isAfter(current.getCreatedAt())
+          || (other.getCreatedAt().equals(current.getCreatedAt())
+              && other.getId().compareTo(current.getId()) >= 0)) {
+        continue;
+      }
+      List<GoalAllocation> otherAllocations =
+          allocationRepository.findByUserIdAndGoalIdOrderByOrdinalAscIdAsc(userId, other.getId());
+      if (otherAllocations.isEmpty()) {
+        continue;
+      }
+      BigDecimal target = targetAmount(other);
+      for (AllocationContribution contribution : contributions(target, otherAllocations)) {
+        GoalAllocation allocation = contribution.allocation();
+        if (allocation.getSourceType() == key.sourceType()
+            && Objects.equals(allocation.getSourceId(), key.sourceId())) {
+          reserved = reserved.add(contribution.contribution());
+        }
+      }
+    }
+    return reserved;
+  }
+
+  private BigDecimal sourceBalanceOrDefault(UUID userId, SourceKey key) {
+    try {
+      return sourceBalance(userId, key);
+    } catch (RuntimeException exception) {
+      return ZERO;
+    }
   }
 
   public GoalStatus effectiveStatus(FinancialGoal goal, BigDecimal percentage) {
@@ -224,15 +284,6 @@ public class GoalProgressService {
         goal.getUserId(), goal.getId(), TABLE, "target_amount", goal.getTargetAmountEnc());
   }
 
-  public BigDecimal initialValue(FinancialGoal goal) {
-    if (goal.getInitialValueEnc() == null) {
-      throw new ValidationException(
-          "initialValue", "Informe a dívida inicial para metas de redução de dívida.");
-    }
-    return decryptAmount(
-        goal.getUserId(), goal.getId(), TABLE, "initial_value", goal.getInitialValueEnc());
-  }
-
   private BigDecimal reservedFromOtherGoals(UUID userId, UUID excludingGoalId, SourceKey key) {
     BigDecimal total = ZERO;
     for (FinancialGoal other : goalRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
@@ -257,11 +308,44 @@ public class GoalProgressService {
     return total;
   }
 
+  /** Nome legível da fonte de uma alocação, para rastreabilidade na interface. */
+  public String sourceName(UUID userId, GoalAllocation allocation) {
+    try {
+      return switch (allocation.getSourceType()) {
+        case MANUAL -> "Valor manual";
+        case ACCOUNT -> {
+          AccountView account = accountQueryService.get(userId, allocation.getSourceId());
+          yield account.alias() != null && !account.alias().isBlank()
+              ? account.alias()
+              : account.institutionName() != null && !account.institutionName().isBlank()
+                  ? account.institutionName()
+                  : account.id().toString();
+        }
+        case INVESTMENT -> {
+          InvestmentPositionView position =
+              investmentPositionService.get(userId, allocation.getSourceId());
+          yield position.ticker() == null || position.ticker().isBlank()
+              ? position.assetName()
+              : position.assetName() + " (" + position.ticker() + ")";
+        }
+        case MANUAL_ASSET ->
+            wealthService.getManual(userId, allocation.getSourceId()).description();
+      };
+    } catch (RuntimeException exception) {
+      // Nome é informativo; a fonte ausente continua sinalizada pela API.
+      return null;
+    }
+  }
+
   private BigDecimal sourceBalance(UUID userId, SourceKey key) {
     try {
       return switch (key.sourceType()) {
         case ACCOUNT -> {
           AccountView account = accountQueryService.get(userId, key.sourceId());
+          if (account.currency() != null && !"BRL".equalsIgnoreCase(account.currency())) {
+            throw new ValidationException(
+                "allocations", "Contas em moeda diferente de BRL não podem compor metas.");
+          }
           if (account.currentBalance() == null || account.currentBalance().isBlank()) {
             throw new ValidationException("allocations", "Saldo da fonte não informado.");
           }
@@ -274,11 +358,9 @@ public class GoalProgressService {
           }
           yield parse(position.total());
         }
-        case MANUAL_ASSET, MANUAL_LIABILITY -> {
+        case MANUAL_ASSET -> {
           ManualItemView item = wealthService.getManual(userId, key.sourceId());
-          boolean asset = "ASSET".equals(item.kind());
-          if ((key.sourceType() == AllocationSourceType.MANUAL_ASSET && !asset)
-              || (key.sourceType() == AllocationSourceType.MANUAL_LIABILITY && asset)) {
+          if (!"ASSET".equals(item.kind())) {
             throw new ValidationException(
                 "allocations", "Tipo da fonte não corresponde à alocação.");
           }
@@ -319,7 +401,11 @@ public class GoalProgressService {
     if (denominator.signum() <= 0) {
       return ZERO;
     }
-    return current.multiply(HUNDRED).divide(denominator, 2, RoundingMode.HALF_EVEN).min(HUNDRED);
+    return current
+        .multiply(HUNDRED)
+        .divide(denominator, 2, RoundingMode.HALF_EVEN)
+        .max(ZERO)
+        .min(HUNDRED);
   }
 
   private static BigDecimal sum(List<AllocationContribution> contributions) {

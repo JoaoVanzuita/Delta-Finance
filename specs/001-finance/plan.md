@@ -77,8 +77,8 @@ navegadores modernos em desktop e mobile; implantação self-hosted com Caddy
   pessoal), atualização de origem a cada 24 h, autorização anual, sem descoberta
   de itens e sem atualização manual de itens proxy.
 - Bills de cartão não são presumidas no fluxo Meu Pluggy; faturas são locais.
-- Webhooks Pluggy são opcionais e exigem HTTPS público; sincronização
-  programada permanece obrigatória.
+- Webhooks Pluggy foram removidos em 2026-10-25; a sincronização programada é o
+  único caminho de atualização.
 - Sem tempo real, sem movimentação de dinheiro, sem recomendação de
   investimento.
 - Sessão: 30 min de inatividade, 12 h absolutas; cookies `HttpOnly`, `Secure`,
@@ -265,8 +265,8 @@ Principais resultados:
   importação opcional quando disponível.
 - Parcelas não têm um identificador único de grupo; o agrupamento exige
   heurística e revisão do usuário.
-- Webhooks exigem HTTPS público, respondem 2xx em 10 s e têm até 3 tentativas;
-  a sincronização programada continua sendo a reconciliação.
+- Webhooks foram removidos em 2026-10-25 (S-04); a sincronização programada
+  continua sendo a reconciliação.
 - Rate limits são por endpoint/IP/minuto; `429` deve respeitar
   `RateLimit-Reset`/`Retry-After`.
 
@@ -278,11 +278,10 @@ Detalhes, fontes e alternativas: [research.md](./research.md).
 
 - **Modelo de dados**: [data-model.md](./data-model.md) define entidades,
   cifragem, FKs compostas, índices, estados, retenção e migrações.
-- **Contrato**: [contracts/openapi.yaml](./contracts/openapi.yaml) define 39
-  caminhos no total — 37 do MVP e 2 da fase secundária de investimentos (US8) —,
-  schemas, erros RFC 9457, paginação por cursor, idempotência e segurança por
-  sessão/CSRF. Endpoints de patrimônio e metas são adicionados nas tarefas
-  T155/T163.
+- **Contrato**: [contracts/openapi.yaml](./contracts/openapi.yaml) define 43
+  caminhos e 63 operações no total — 35 do MVP, 2 de investimentos da fase
+  secundária (US8), 3 de patrimônio (US9) e 3 de metas (US10) —, schemas, erros
+  RFC 9457, paginação por cursor, idempotência e segurança por sessão/CSRF.
 - **Quickstart**: [quickstart.md](./quickstart.md) define o roteiro de
   validação, incluindo dois usuários, duas integrações reais, faturas,
   dashboard, exportação, exclusão, backup e restauração.
@@ -356,7 +355,7 @@ segredos nunca retornam à interface.
 **Saída**: contas/cartões/transações importados, segunda sincronização sem
 duplicação, falha de um usuário não bloqueia os demais.
 
-### Etapa 6 — Estados, recuperação e webhooks opcionais
+### Etapa 6 — Estados e recuperação de sincronização
 
 - Implementar estados de integração/conexão, última tentativa, último sucesso,
   `consentExpiresAt`, `nextAutoSyncAt` e códigos de erro sanitizados.
@@ -366,11 +365,8 @@ duplicação, falha de um usuário não bloqueia os demais.
   `PROVIDER_AUTH_FAILED`; item inexistente é `ITEM_UNAVAILABLE`, exige ação do
   usuário e não é retentado automaticamente.
 - Implementar atualização de itemId e reconciliação sem perda histórica.
-- Implementar revisão explícita de transações `SOURCE_REMOVED`, com restaurar ou
-  confirmar remoção e histórico preservado.
-- Implementar webhooks atrás de feature flag, com segredo por integração,
-  `eventId` idempotente, resposta 202, processamento assíncrono e reconciliação
-  programada.
+- Implementar remoção automática de transações ausentes em leitura conclusiva,
+  com restauração automática se o identificador reaparecer.
 - Implementar `sync_run` e painel de status.
 
 **Saída**: US3; recuperação de autorização expirada, mudança de itemId e falhas
@@ -397,10 +393,11 @@ internos com semântica explícita.
 ### Etapa 8 — Faturas de cartão
 
 - Implementar `invoice`, `invoice_item` e `invoice_payment`.
-- Implementar configuração de fechamento/vencimento, associação por `billId` ou
-  ciclo, parcelas, pagamentos parciais, juros, encargos e itens manuais.
-- Implementar importação opcional de Bills quando o provedor retornar; sem
-  presumir disponibilidade.
+- Implementar configuração de fechamento/vencimento, associação por ciclo,
+  parcelas, pagamentos parciais, juros, encargos e itens manuais.
+- Manter Bills do provedor fora do MVP: a fatura local por ciclo é a fonte de
+  verdade. O serviço experimental de importação e seus testes foram removidos em
+  2026-10-25; a UI e o contrato oferecem apenas as origens mantidas.
 - Implementar recálculo de total/saldo devedor, estados, fechamento e
   reconciliação de transações atrasadas.
 - Garantir que mudança de ciclo não reescreva faturas fechadas/pagas e que
@@ -471,12 +468,12 @@ demonstrados.
 
 ### Etapa 13 — Fase posterior: patrimônio e metas
 
-- Implementar `manual_asset_liability`, `wealth_snapshot`,
-  `wealth_snapshot_item`, `financial_goal`, `goal_allocation` e
-  `goal_progress_snapshot`.
+- Implementar `manual_asset_liability`, `financial_goal`, `goal_allocation` e
+  `goal_progress_snapshot`. As tabelas `wealth_snapshot`/`wealth_snapshot_item`
+  foram removidas pela baseline `V001__baseline.sql`.
 - Implementar UI somente após o MVP bancário estabilizado.
-- Garantir snapshots datados, sem dupla contagem, com regras de progresso
-  visíveis e sem inferir saldos passados quando o histórico for insuficiente.
+- Garantir visão atual sem dupla contagem, com regras de progresso visíveis e sem
+  inferir saldos passados.
 - Não movimentar dinheiro, não criar ordens nem oferecer aconselhamento.
 
 ## Frontend Plan
@@ -544,7 +541,6 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
   reconciliação.
 - `ManualAccountService`: criação, edição e desativação de contas manuais.
 - `CorrectionService`: precedência de campos editados e auditoria.
-- `SourceRemovalReviewService`: restauração ou confirmação de remoção na origem.
 - `RetentionJob`: expurgo diário conforme prazos documentados.
 - `InvoiceService`: ciclos, parcelas, pagamentos, encargos, totais e status.
 - `ReconciliationService`: sugestões de transferência/pagamento de fatura.
@@ -584,8 +580,8 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
 - Posições de investimento têm total `quantidade × preço unitário`; quando só o
   total é informado, o preço unitário é `total ÷ quantidade`, arredondado para 8
   casas decimais.
-- Metas de redução de dívida usam `(dívida inicial − dívida atual) ÷ dívida
-  inicial`, limitado entre 0% e 100%; a dívida inicial é registrada na criação.
+- Metas usam alocações explícitas ou patrimônio líquido; a regra de redução de
+  dívida foi removida em 2026-10-26 (S-03).
 - A sugestão de movimento interno usa: mesmo usuário, contas diferentes, sinais
   opostos, tolerância de `max(R$ 0,01, 0,5% do maior valor absoluto entre os dois
   movimentos)`, janela de ±3 dias para `TRANSFER` e ±7 dias para `CARD_PAYMENT`,
@@ -608,7 +604,8 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
 - Claim de jobs com `FOR UPDATE SKIP LOCKED`; lock por integração para evitar
   duas sincronizações concorrentes.
 - `version` para locking otimista em agregados mutáveis.
-- Idempotência de mutações com `Idempotency-Key`.
+- Idempotência com `Idempotency-Key` restrita a transações, itens de fatura e
+  pagamentos; as demais mutações ignoram o cabeçalho.
 - Gravação de resultados de sync em transação separada e curta.
 - Falhas externas não revertem dados já confirmados.
 
@@ -678,16 +675,14 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
   (`IMPORTED`/`MANUAL`) em cada entrada; a soma deve bater com o total.
 - O histórico auditável de correções de item de fatura é exposto por
   `GET /invoice-items/{id}/corrections`.
-- A revisão de transações `SOURCE_REMOVED` usa
-  `POST /transactions/{id}/source-removal` com ação `RESTORE` ou
-  `CONFIRM_REMOVAL`.
+- Transações `SOURCE_REMOVED` saem dos totais automaticamente e voltam se o
+  identificador reaparecer na origem; não há endpoint de revisão manual.
 - Nenhum DTO retorna Client Secret, API Key, chave de criptografia ou dados de
   outro usuário.
 - A documentação springdoc é gerada a partir do código, mas o contrato versionado
   é a fonte de verdade para o cliente e para os testes de contrato. O contrato
-  cobre 39 caminhos no total: 37 do MVP e 2 de investimentos da fase secundária
-  (US8); extensões pós-MVP de patrimônio e metas são versionadas nas tarefas T155
-  e T163.
+  cobre 43 caminhos e 63 operações no total: 35 do MVP, 2 de investimentos (US8),
+  3 de patrimônio (US9) e 3 de metas (US10).
 - O cliente pode gerar tipos a partir do OpenAPI; a geração é parte do build e
   falha se o contrato for inválido.
 
@@ -717,13 +712,13 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
 - `.env.example` com placeholders: `DELTA_DB_NAME`, `DELTA_DB_USER`,
   `DELTA_DB_PASSWORD`, `DELTA_PUBLIC_BASE_URL`, `DELTA_DOMAIN`,
   `DELTA_COOKIE_SECURE`, `DELTA_PLUGGY_BASE_URL`,
-  `DELTA_PLUGGY_WEBHOOKS_ENABLED`, `DELTA_PLUGGY_CONNECTION_LIMIT`,
+  `DELTA_PLUGGY_CONNECTION_LIMIT`,
   `DELTA_PLUGGY_CONNECTION_LIMIT_CHECKED_AT`, `DELTA_CRYPTO_KEY_FILE`,
   `DELTA_CRYPTO_ACTIVE_VERSION`, `DELTA_INDEX_KEY_VERSION`.
 - Key ring em Docker secret/arquivo read-only, nunca em env versionado.
 - Logs JSON, sem bodies, segredos ou valores financeiros.
-- Job diário de retenção: `login_attempt` 30 dias, `sync_run`/`webhook_event`
-  90 dias, `audit_event` 1 ano e `idempotency_key` 24 h.
+- Job diário de retenção: `login_attempt` 30 dias, `sync_run` 90 dias,
+  `audit_event` 1 ano e `idempotency_key` 24 h.
 - Migrações Flyway no start; falha de migração impede readiness.
 
 ### Backup e restauração
@@ -814,13 +809,13 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Bills indisponíveis no Meu Pluggy | Faturas incompletas se dependessem do provedor | Fatura local por ciclo + `creditCardMetadata`; Bills opcionais. |
+| Bills indisponíveis no Meu Pluggy | Faturas incompletas se dependessem do provedor | Fatura local por ciclo + `creditCardMetadata`; importação de Bills removida (S-05). |
 | Parcelas sem ID de grupo | Duplicação ou agrupamento errado | Heurística + revisão do usuário; nunca duplicar automaticamente. |
 | Transação removida/recriada com novo ID | Perda ou duplicação | `external_identity_history` + fingerprint; marcar, não apagar. |
 | `itemId` muda após renovação | Histórico órfão | IDs locais estáveis e workflow de reconciliação. |
 | Autorização anual expira | Leituras vazias | `consentExpiresAt`, `LOGIN_ERROR`, estado de ação, dados preservados. |
 | Rate limit por IP | Sync falhando | Janela de 7 dias, reconciliação mensal, concorrência limitada, backoff. |
-| Webhook indisponível em LAN | Atraso de parcelas | Sincronização programada obrigatória; webhook opcional. |
+| Webhook indisponível em LAN | Atraso de parcelas | Sincronização programada é o único caminho de atualização; webhooks foram removidos (S-04). |
 | Agregação de valores cifrados lenta | Dashboard acima da meta | Filtro por metadados, varredura limitada, testes k6, possível cache de leitura no futuro. |
 | Perda da chave | Dados irrecuperáveis | Backup separado do key ring, runbook e aviso explícito. |
 | Escopo de faturas aumentar o MVP | Atraso | Módulo isolado; implementação após o núcleo bancário, antes do gate final. |
@@ -855,8 +850,7 @@ Sandbox, mocks e dados sintéticos não contam para esse gate.
   `allocation_mode`, histórico e ausência de movimentação de dinheiro.
 - **Multi-moeda**: fora do MVP; registros em moeda diferente de BRL são
   sinalizados e não entram em totais consolidados sem regra definida.
-- **Webhooks**: podem ser promovidos a caminho principal após validação em
-  produção, mantendo a reconciliação programada.
+- **Webhooks**: removidos no S-04; não há caminho de atualização por evento.
 - **Cache de relatórios**: se o volume crescer, avaliar projeções de leitura
   cifradas ou materialized views sem expor valores em texto claro.
 
@@ -880,7 +874,7 @@ Sandbox, mocks e dados sintéticos não contam para esse gate.
 - [ ] Dashboard com resultado do período, saldo atual sem cartões e somente de
       contas `ACTIVE`, última sincronização relevante e drill-down via
       `/reports/entries`, incluindo itens de fatura sem transação.
-- [ ] `CONFIRM_REMOVAL` e `RESTORE` de `SOURCE_REMOVED` sem duplicação.
+- [ ] Remoção automática de `SOURCE_REMOVED`, com restauração e sem duplicação.
 - [ ] Cadastro e primeiro login de 5 usuários em menos de 2 minutos e
       lançamento manual em menos de 90 segundos.
 - [ ] Exportação, desconexão e exclusão de conta, com dados ativos removidos em

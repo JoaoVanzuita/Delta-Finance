@@ -40,7 +40,6 @@ erDiagram
   APP_USER ||--o{ AUDIT_EVENT : generates
   APP_USER ||--o{ IDEMPOTENCY_KEY : uses
   PLUGGY_INTEGRATION ||--o{ PLUGGY_CONNECTION : contains
-  PLUGGY_INTEGRATION ||--o{ WEBHOOK_SUBSCRIPTION : registers
   PLUGGY_INTEGRATION ||--o{ SYNC_RUN : executes
   PLUGGY_CONNECTION ||--o{ FINANCIAL_ACCOUNT : exposes
   PLUGGY_CONNECTION ||--o{ SYNC_RUN : executes
@@ -91,6 +90,7 @@ Regras:
 | `attempted_at` | timestamptz | plain | janela de bloqueio. |
 | `success` | boolean | plain | resultado. |
 | `failure_reason` | text | plain | sanitizado (`BAD_CREDENTIALS`, `RATE_LIMITED`). |
+| `blocked_until` | timestamptz | plain | fim do bloqueio persistido; nulo quando a tentativa não gerou bloqueio. |
 
 Índices: `(username_hash, attempted_at)`, `(ip_hash, attempted_at)`.
 Retenção: 30 dias.
@@ -107,7 +107,7 @@ Expiração: 30 minutos de inatividade, 12 horas absolutas.
 |---|---|---|---|
 | `id` | uuid | plain | PK. |
 | `user_id` | uuid | plain | nullable em falha de login/registro. |
-| `event_type` | text | plain | `LOGIN_SUCCESS`, `LOGIN_FAILURE`, `PASSWORD_CHANGED`, `INTEGRATION_UPDATED`, `SYNC_FAILED`, `EXPORT_REQUESTED`, `ACCOUNT_DELETED`, etc. |
+| `event_type` | text | plain | `LOGIN_SUCCESS`, `LOGIN_FAILURE`, `LOGIN_BLOCKED`, `AUTHORIZATION_DENIED`, `CSRF_REJECTED`, `PASSWORD_CHANGED`, `INTEGRATION_UPDATED`, `SYNC_FAILED`, `EXPORT_REQUESTED`, `ACCOUNT_DELETED`, etc. |
 | `target_type`, `target_id` | text, uuid | plain | recurso afetado. |
 | `metadata` | jsonb | plain | apenas IDs, códigos e contadores; nunca valores, descrições ou segredos. |
 | `created_at` | timestamptz | plain | auditoria. |
@@ -115,6 +115,9 @@ Expiração: 30 minutos de inatividade, 12 horas absolutas.
 Índice: `(user_id, created_at)`. Retenção: 1 ano.
 
 ### 3.5 `idempotency_key`
+
+Aplica-se apenas a transações, itens de fatura e pagamentos de fatura (S-07). As
+demais mutações não gravam nesta tabela.
 
 | Campo | Tipo | Classificação | Regra |
 |---|---|---|---|
@@ -124,10 +127,7 @@ Expiração: 30 minutos de inatividade, 12 horas absolutas.
 | `method`, `path` | text | plain | operação. |
 | `request_hash` | bytea | hmac | detecta reutilização com corpo diferente. |
 | `response_status` | int | plain | replay. |
-| `response_resource_type` | text | plain | tipo do recurso criado/alterado. |
-| `response_resource_id` | uuid | plain | recurso para replay. |
 | `response_body_enc` | bytea | enc | corpo sanitizado para replay, quando necessário. |
-| `response_body_hash` | bytea | hmac | detecta resposta divergente. |
 | `created_at`, `expires_at` | timestamptz | plain | TTL de 24 h. |
 
 Único: `(user_id, key)`. Limpeza por job.
@@ -183,7 +183,7 @@ Expiração: 30 minutos de inatividade, 12 horas absolutas.
 | `user_id` | uuid | plain | proprietário; pode ser nulo em job de manutenção. |
 | `integration_id` | uuid | plain | nullable. |
 | `connection_id` | uuid | plain | nullable. |
-| `job_type` | text | plain | `SYNC_INTEGRATION`, `SYNC_CONNECTION`, `PROCESS_WEBHOOK`, `RECALCULATE_INVOICE`, `RECONCILE`. |
+| `job_type` | text | plain | `SYNC_INTEGRATION`, `SYNC_CONNECTION`, `RECALCULATE_INVOICE`, `RECONCILE`. |
 | `status` | text | plain | `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `RETRY`. |
 | `run_after` | timestamptz | plain | agendamento com jitter. |
 | `attempts` | int | plain | tentativas. |
@@ -194,6 +194,12 @@ Expiração: 30 minutos de inatividade, 12 horas absolutas.
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
 
 Índice: `(status, run_after)`, `(user_id, created_at)`.
+
+Recuperação (ADR-0004): no start, todo job `RUNNING` é considerado órfão (instância
+única). A tentativa interrompida vira uma linha em `sync_run` com
+`error_code=INTERRUPTED`, o job volta para `RETRY` (se ainda houver tentativas) ou
+`FAILED`, e `SYNCING` é liberado na conexão/integração. Timeout em memória usa
+`DELTA_SYNC_JOB_TIMEOUT` e grava `JOB_TIMEOUT`.
 
 ### 4.4 `sync_run`
 
@@ -207,46 +213,17 @@ Expiração: 30 minutos de inatividade, 12 horas absolutas.
 | `status` | text | plain | `SUCCESS`, `PARTIAL`, `EMPTY`, `AUTH_ERROR`, `RATE_LIMITED`, `TIMEOUT`, `FAILED`. |
 | `read_count`, `created_count`, `updated_count`, `skipped_count`, `failed_count` | int | plain | contadores. |
 | `duration_ms` | bigint | plain | desempenho. |
-| `error_code` | text | plain | sanitizado. |
+| `error_code` | text | plain | sanitizado; `IMPORT_MISSING_FIELDS` quando a leitura trouxe transações sem valor/data. |
 | `correlation_id` | text | plain | rastreabilidade. |
 
 Índices: `(user_id, started_at)`, `(integration_id, started_at)`.
 Retenção: 90 dias.
 
-### 4.5 `webhook_subscription`
+### 4.5 Webhooks
 
-| Campo | Tipo | Classificação | Regra |
-|---|---|---|---|
-| `id` | uuid | plain | PK. |
-| `user_id` | uuid | plain | proprietário. |
-| `integration_id` | uuid | plain | FK. |
-| `provider_subscription_id_hash` | bytea | hmac | ID da inscrição no provedor. |
-| `secret_enc` | bytea | enc | segredo do header de validação. |
-| `event_types` | text[] | plain | eventos inscritos. |
-| `status` | text | plain | `ACTIVE`, `DISABLED`, `ERROR`. |
-| `created_at`, `updated_at` | timestamptz | plain | auditoria. |
-
-Único: `(integration_id, provider_subscription_id_hash)`.
-
-### 4.6 `webhook_event`
-
-| Campo | Tipo | Classificação | Regra |
-|---|---|---|---|
-| `id` | uuid | plain | PK. |
-| `user_id` | uuid | plain | proprietário resolvido pelo itemId. |
-| `integration_id` | uuid | plain | FK. |
-| `connection_id` | uuid | plain | nullable. |
-| `provider_event_id` | text | plain | `eventId` do provedor. |
-| `event_type` | text | plain | `item/updated`, `transactions/created`, etc. |
-| `item_id_hash` | bytea | hmac | resolução do item. |
-| `payload_hash` | bytea | hmac | integridade; não guardar payload completo. |
-| `received_at`, `processed_at` | timestamptz | plain | operação. |
-| `status` | text | plain | `RECEIVED`, `PROCESSED`, `FAILED`, `IGNORED`. |
-| `attempts` | int | plain | retentativas. |
-| `error_code` | text | plain | sanitizado. |
-
-Único: `(integration_id, provider_event_id)`. Índice: `(status, received_at)`.
-Retenção: 90 dias.
+Webhooks foram removidos em 2026-10-25 (S-04). Não há tabelas, endpoints,
+segredos ou jobs de webhook no schema ativo desde a baseline
+`V001__baseline.sql`; a atualização ocorre pela sincronização programada.
 
 ## 5. Contas, cartões e transações
 
@@ -258,7 +235,7 @@ Retenção: 90 dias.
 | `user_id` | uuid | plain | proprietário. |
 | `connection_id` | uuid | plain | nullable; nulo para conta manual; FK `(user_id, connection_id)`. |
 | `origin` | text | plain | `IMPORTED`, `MANUAL`. |
-| `type` | text | plain | `BANK`, `CREDIT`, `CASH`, `WALLET`. |
+| `type` | text | plain | `BANK`, `CREDIT`, `CASH`, `WALLET`, `UNKNOWN`; tipos não reconhecidos pelo provedor ficam `UNKNOWN`. |
 | `subtype` | text | plain | `CHECKING_ACCOUNT`, `CREDIT_CARD`, etc. |
 | `external_account_id_enc` | bytea | enc | nullable em conta manual. |
 | `external_account_id_hash` | bytea | hmac | nullable em conta manual. |
@@ -277,15 +254,20 @@ Restrições:
 - Único `(user_id, id)`.
 - Único `(connection_id, external_account_id_hash)` quando `origin=IMPORTED`.
 - O saldo atual consolidado do dashboard soma apenas contas `BANK`, `CASH` e
-  `WALLET` com status `ACTIVE`. Contas `INACTIVE`, `CLOSED` ou `UNAVAILABLE` não
-  compõem o saldo atual, mas permanecem no histórico e nos relatórios do período
-  em que tiveram movimento. Passivos de cartão são derivados de
-  `invoice.outstanding_enc` e exibidos separadamente.
+  `WALLET` com status `ACTIVE`. Contas `UNKNOWN`, `INACTIVE`, `CLOSED` ou
+  `UNAVAILABLE` não compõem o saldo atual, mas permanecem no histórico e nos
+  relatórios do período em que tiveram movimento. Passivos de cartão são
+  derivados de `invoice.outstanding_enc` e exibidos separadamente.
 - `connection_id` obrigatório quando `origin=IMPORTED`.
 - Conta manual `INACTIVE` NÃO DEVE receber novos lançamentos nem transferências;
   o histórico e os relatórios existentes permanecem disponíveis.
 - O `type` da conta manual é imutável após a criação.
 - `connection_id` nulo quando `origin=MANUAL`.
+- Contas importadas que não aparecem em uma leitura completa de contas do item
+  ficam `UNAVAILABLE`; transações e histórico são preservados e a conta sai dos
+  saldos correntes. Se a conta reaparecer, o upsert a reativa.
+- O estado da conexão é exposto por `connectionStatus` em cada conta/cartão,
+  separado de `status` da conta.
 
 ### 5.2 `card_profile`
 
@@ -314,7 +296,7 @@ Restrições:
 | `category_id` | uuid | plain | nullable; FK `(user_id, category_id)`. |
 | `source` | text | plain | `IMPORTED`, `MANUAL`. |
 | `type` | text | plain | `DEBIT`, `CREDIT`, `TRANSFER`, `REFUND`, `CHARGEBACK`, `ADJUSTMENT`. |
-| `status` | text | plain | `PENDING`, `POSTED`, `SOURCE_REMOVED`, `RECONCILED`. |
+| `status` | text | plain | `PENDING`, `POSTED`, `SOURCE_REMOVED`, `RECONCILED`; `SOURCE_REMOVED` é automático em leitura conclusiva e não vazia. |
 | `posted_on` | date | plain | data efetiva. |
 | `source_posted_on` | date | plain | data original da origem. |
 | `currency` | char(3) | plain | BRL inicialmente. |
@@ -329,7 +311,7 @@ Restrições:
 | `related_transaction_id` | uuid | plain | nullable; FK `(user_id, related_transaction_id)`; obrigatório para reembolso/chargeback vinculado. |
 | `adjustment_reason_enc` | bytea | enc | nullable; motivo explícito para `ADJUSTMENT`. |
 | `edited_fields` | text[] | plain | nomes dos campos corrigidos; não valores. |
-| `reconciliation_state` | text | plain | `NONE`, `PENDING_MATCH`, `MATCHED`, `SOURCE_REMOVED`. |
+| `reconciliation_state` | text | plain | `NONE`, `PENDING_MATCH`, `MATCHED`, `SOURCE_REMOVED`; acompanha o `status` automático. |
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
 | `version` | bigint | plain | locking otimista. |
 
@@ -414,21 +396,18 @@ categoria ou são reatribuídas.
 | `status` | text | plain | `OPEN`, `CLOSED`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`. |
 | `has_adjustments` | boolean | plain | indica ajuste manual em fatura fechada/paga. |
 | `adjustment_count` | int | plain | quantidade de ajustes manuais. |
-| `provider_bill_id_enc` | bytea | enc | nullable. |
-| `provider_bill_id_hash` | bytea | hmac | nullable. |
 | `total_enc` | bytea | enc | total calculado. |
 | `payments_total_enc` | bytea | enc | pagamentos. |
 | `outstanding_enc` | bytea | enc | saldo devedor. |
 | `applied_credit_enc` | bytea | enc | crédito acumulado de faturas anteriores aplicado a esta fatura; não inclui itens de crédito/estorno desta fatura e não compõe `income` nem `expenses`. |
 | `minimum_payment_enc` | bytea | enc | quando disponível. |
-| `source` | text | plain | `LOCAL`, `PROVIDER`. |
+| `source` | text | plain | `LOCAL`. |
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
 | `version` | bigint | plain | locking otimista. |
 
 Restrições:
 
 - Único `(card_account_id, cycle_start)`.
-- Único `(card_account_id, provider_bill_id_hash)` quando o ID existir.
 - `total` é o total dos itens da fatura antes de `applied_credit` e
   `payments_total`; cada item entra uma única vez, inclusive itens espelho de
   transação.
@@ -442,6 +421,13 @@ Restrições:
   ciclo; ajustes exigem ação explícita.
 - Ajustes manuais são sinalizados por `has_adjustments`/`adjustment_count` e não
   substituem o status de pagamento.
+- Ordem de status: `PAID` quando `outstanding=0`; `OVERDUE` quando a fatura tem
+  saldo e o vencimento já passou (mesmo com pagamento parcial);
+  `PARTIALLY_PAID` quando há pagamento e o vencimento ainda não passou;
+  `CLOSED` após o fechamento; caso contrário `OPEN`.
+- Fatura `PAID` rejeita inclusão, edição e remoção de itens. Correção de valor,
+  data ou descrição de transação com espelho ativo em fatura paga também é
+  rejeitada.
 
 ### 6.2 `invoice_item`
 
@@ -453,25 +439,28 @@ Restrições:
 | `transaction_id` | uuid | plain | nullable; FK `(user_id, transaction_id)`. |
 | `kind` | text | plain | `PURCHASE`, `INSTALLMENT`, `INTEREST`, `FEE`, `TAX`, `CREDIT`, `REFUND`, `MANUAL_ADJUSTMENT`. |
 | `reporting_effect` | text | plain | `EXPENSE_INCREASE`, `EXPENSE_DECREASE`, `NONE`; obrigatório no request, derivado para tipos padronizados e `NONE` em itens espelho. |
-| `source` | text | plain | `IMPORTED`, `MANUAL`, `PROVIDER_BILL`. |
+| `source` | text | plain | `IMPORTED`, `MANUAL`. |
 | `description_enc` | bytea | enc | descrição. |
 | `amount_enc` | bytea | enc | magnitude positiva; a direção vem de `reporting_effect`. |
 | `occurred_on` | date | plain | data. |
 | `installment_number`, `total_installments` | int | plain | nullable. |
 | `installment_plan_key` | bytea | hmac | agrupamento heurístico. |
-| `provider_item_id_enc` | bytea | enc | nullable. |
-| `provider_item_id_hash` | bytea | hmac | nullable. |
-| `removed_at` | timestamptz | plain | exclusão lógica. |
+| `removed_at` | timestamptz | plain | exclusão lógica; também marca suspensão automática. |
+| `mirror_suspended` | boolean | plain | `true` quando a remoção lógica veio da perda de efetividade da transação; permite reativar. |
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
 | `version` | bigint | plain | locking otimista. |
 
 Índices: `(invoice_id, removed_at)`, `(user_id, transaction_id)`.
-Uma transação de cartão pode originar no máximo um item de fatura ativo:
-índice único parcial `(user_id, transaction_id)` quando `transaction_id` não é
-nulo e `removed_at` é nulo.
+Uma transação de cartão pode originar no máximo um item ativo por número de
+parcela: índice único parcial
+`(user_id, transaction_id, coalesce(installment_number, 0))` quando
+`transaction_id` não é nulo e `removed_at` é nulo.
 Item de fatura originado de transação importada só DEVE ser criado ou
-contabilizado no total quando a transação estiver `POSTED`; enquanto `PENDING`,
-o item pode ser listado como pendente, mas fica fora do total.
+contabilizado no total quando a transação estiver `POSTED`/`RECONCILED` e sem
+remoção na origem pendente. Enquanto `PENDING` ou com remoção pendente, o item é
+suspenso (`removed_at` preenchido e `mirror_suspended=true`), sai dos totais e é
+reativado quando a transação volta a ser efetiva. Fatura `PAID` não é reescrita:
+o item permanece histórico.
 Item com `transaction_id` é espelho da transação: compõe o total da fatura uma
 única vez e NÃO DEVE ser somado novamente a `expenses`, `income`,
 `periodResult`, categorias ou drill-down.
@@ -502,10 +491,8 @@ nunca um item órfão.
 | `amount_enc` | bytea | enc | valor pago. |
 | `paid_on` | date | plain | data. |
 | `status` | text | plain | `PENDING`, `CONFIRMED`, `REVERSED`. |
-| `source` | text | plain | `MANUAL`, `IMPORTED`, `PROVIDER_BILL`. |
+| `source` | text | plain | `MANUAL`, `IMPORTED`. |
 | `source_transaction_id` | uuid | plain | nullable; FK `(user_id, source_transaction_id)`. |
-| `provider_payment_id_enc` | bytea | enc | nullable. |
-| `provider_payment_id_hash` | bytea | hmac | nullable. |
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
 | `version` | bigint | plain | locking otimista. |
 
@@ -558,8 +545,6 @@ Regras:
 - Transações `POSTED`/`RECONCILED` geram uma entrada `TRANSACTION`.
 - Itens de fatura com `transaction_id` NÃO geram entrada própria.
 - Itens de fatura sem transação geram uma entrada `INVOICE_ITEM`.
-- Itens de fatura com `source=PROVIDER_BILL` são normalizados para
-  `origin=IMPORTED`; `origin=MANUAL` fica restrito a itens manuais.
 - A soma das entradas filtradas DEVE ser idêntica ao total do indicador.
 
 ## 7. Entidades de fases posteriores
@@ -578,38 +563,39 @@ arredondado para 8 casas decimais.
 `reference_value_enc`, `reference_date`, `notes_enc`, `created_at`,
 `updated_at`, `version`.
 
-### 7.3 `wealth_snapshot`
+### 7.3 Snapshots patrimoniais
 
-`id`, `user_id`, `reference_date`, `gross_assets_enc`, `liabilities_enc`,
-`net_worth_enc`, `completeness` (`COMPLETE`, `PARTIAL`, `ESTIMATED`),
-`notes_enc`, `created_at`, `version`. Único `(user_id, reference_date)`.
+Os snapshots patrimoniais foram removidos em 2026-10-26 (S-02). Não há tabelas
+`wealth_snapshot`/`wealth_snapshot_item` no schema ativo; a visão patrimonial é
+calculada a partir dos dados atuais e dos itens manuais.
 
-### 7.4 `wealth_snapshot_item`
+### 7.4 `financial_goal`
 
-`id`, `user_id`, `snapshot_id`, `source_type` (`ACCOUNT`, `CARD`, `INVESTMENT`,
-`MANUAL_ASSET`, `MANUAL_LIABILITY`), `source_id`, `description_enc`,
-`value_enc`, `included`, `exclusion_reason`, `created_at`.
+`id`, `user_id`, `name_enc`, `description_enc`, `notes_enc`, `type`,
+`target_amount_enc`, `target_date`, `status`, `progress_rule`, `changed_at`,
+`created_at`, `updated_at`, `version`. `type` usa `EMERGENCY_FUND`, `TRAVEL`,
+`PLANNED_PURCHASE`, `NET_WORTH`. `status` usa `ACTIVE`, `ACHIEVED`, `PAUSED`,
+`ARCHIVED`, `OVERDUE`, `CHANGED`. `progress_rule` usa `ALLOCATIONS` e
+`NET_WORTH`.
 
-### 7.5 `financial_goal`
+`notes_enc` guarda observações livres (até 2000 caracteres) e não participa do
+cálculo de progresso nem da detecção de alteração material.
 
-`id`, `user_id`, `name_enc`, `description_enc`, `type`, `target_amount_enc`,
-`target_date`, `status`, `progress_rule`, `initial_value_enc`, `changed_at`,
-`created_at`, `updated_at`, `version`. `type` usa
-`EMERGENCY_FUND`, `TRAVEL`, `PLANNED_PURCHASE`, `DEBT_REDUCTION`, `NET_WORTH`.
-`status` usa `ACTIVE`, `ACHIEVED`, `PAUSED`, `ARCHIVED`, `OVERDUE`, `CHANGED`.
-`initial_value_enc` é obrigatório para `progress_rule=DEBT_REDUCTION` e registra
-a dívida inicial; o progresso é `(initial_value − current_debt) ÷ initial_value`,
-limitado entre 0% e 100%.
-
-### 7.6 `goal_allocation`
+### 7.5 `goal_allocation`
 
 `id`, `user_id`, `goal_id`, `source_type`, `source_id`, `allocation_mode`
 (`FIXED_AMOUNT`, `PERCENTAGE`), `allocated_amount_enc`, `allocation_ratio`,
-`effective_from`, `effective_to`, `created_at`, `version`. Exatamente um entre
+`effective_from`, `effective_to`, `created_at`, `version`. `source_type` usa
+`MANUAL`, `ACCOUNT`, `INVESTMENT` e `MANUAL_ASSET`. Exatamente um entre
 `allocated_amount_enc` e `allocation_ratio` é preenchido; percentuais somam no
 máximo 1 e o arredondamento residual é explícito.
 
-### 7.7 `goal_progress_snapshot`
+O saldo de cada fonte é consumido na ordem das alocações e reservado primeiro
+para metas mais antigas. Percentuais se limitam ao disponível; valores fixos não
+são truncados e a API sinaliza `capacityExceeded=true`. Contas fora de BRL não
+podem ser fonte. O nome legível da fonte é derivado em tempo de leitura.
+
+### 7.6 `goal_progress_snapshot`
 
 `id`, `user_id`, `goal_id`, `reference_date`, `current_value_enc`,
 `percentage`, `remaining_enc`, `rule_version`, `created_at`. Único
@@ -643,13 +629,13 @@ INCOMPLETE -> ACTIVE -> SYNCING -> SYNCED
 IMPORTED/PENDING -> IMPORTED/POSTED -> RECONCILED
                          |                  ^
                          v                  |
-                  SOURCE_REMOVED -----------+ (restauração validada)
+                  SOURCE_REMOVED -----------+ (restauração automática)
 MANUAL -> MANUAL/RECONCILED (quando aplicável)
 ```
 
 - `SOURCE_REMOVED` permanece no histórico e sai dos totais correntes.
-- `SOURCE_REMOVED` pode voltar a `POSTED` após restauração validada, sem duplicar
-  a transação.
+- `SOURCE_REMOVED` volta ao status atual da origem (`PENDING`/`POSTED`) quando o
+  identificador reaparece, sem duplicar a transação.
 - `PENDING` não compõe agregados; `POSTED`/`RECONCILED` compõem uma única vez.
 - Correções do usuário não mudam a origem.
 
@@ -657,11 +643,12 @@ MANUAL -> MANUAL/RECONCILED (quando aplicável)
 
 ```text
 OPEN -> CLOSED -> PARTIALLY_PAID -> PAID
-           |
-           v
-        OVERDUE (quando vencida)
+           \            /
+            v          v
+              OVERDUE (saldo e vencimento passado)
 ```
 
+- `OVERDUE` prevalece sobre `PARTIALLY_PAID` quando o vencimento já passou.
 - Ajustes manuais são sinalizados por `has_adjustments`/`adjustment_count` e
   não substituem o status de pagamento.
 - Mudança de ciclo não reabre fatura paga.
@@ -688,7 +675,6 @@ REJECTED
 - `invoice (card_account_id, cycle_start)`.
 - `invoice_item (invoice_id, removed_at)`.
 - `sync_job (status, run_after)`.
-- `webhook_event (status, received_at)`.
 - `audit_event (user_id, created_at)`.
 
 Paginação:
@@ -705,7 +691,6 @@ Paginação:
 |---|---|
 | Transações, faturas, contas, categorias | até exclusão da conta; histórico preservado. |
 | `sync_run` | 90 dias. |
-| `webhook_event` | 90 dias. |
 | `audit_event` | 1 ano. |
 | `login_attempt` | 30 dias. |
 | `idempotency_key` | 24 horas. |

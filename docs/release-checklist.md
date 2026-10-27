@@ -67,7 +67,8 @@ p95 ≤ 1 s; sincronização ≤ 60 s. Anexar resumo (sem dados financeiros).
 - [ ] `docker compose config --quiet` sem erro.
 - [ ] `docker compose build` reproduzível.
 - [ ] `.env.example` atualizado; nenhum segredo real versionado.
-- [ ] Migrações Flyway novas com versão seguinte; nenhuma migração editada.
+- [ ] Migrações Flyway novas a partir de `V002`; nenhuma migração aplicada foi
+      editada (a baseline é `V001__baseline.sql`).
 - [ ] `application-prod.yml` sem stubs, debug ou dados de teste.
 - [ ] `client/.env.production` apenas com limites versionados.
 - [ ] Tag/commit assinado e changelog com riscos e limitações.

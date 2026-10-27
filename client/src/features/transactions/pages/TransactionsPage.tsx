@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/api/problem'
 import { formatMoney } from '@/features/accounts/format'
 import { financeApi, type Transaction } from '@/features/integration/api'
 import { CorrectionDialog } from '@/features/transactions/components/CorrectionDialog'
-import { SourceRemovedReview } from '@/features/transactions/components/SourceRemovedReview'
+import { DeleteManualTransaction } from '@/features/transactions/components/DeleteManualTransaction'
 
 const statusLabels: Record<string, string> = {
   PENDING: 'Pendente',
@@ -29,21 +29,29 @@ const typeLabels: Record<string, string> = {
 export function TransactionsPage() {
   const [searchParams] = useSearchParams()
   const [accountId, setAccountId] = useState(searchParams.get('accountId') ?? '')
+  const [categoryId, setCategoryId] = useState('')
   const [status, setStatus] = useState('')
   const [type, setType] = useState('')
   const [origin, setOrigin] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [minAmount, setMinAmount] = useState('')
+  const [maxAmount, setMaxAmount] = useState('')
   const [correcting, setCorrecting] = useState<Transaction | null>(null)
 
   const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
+  const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: financeApi.categories })
+  const amountError = amountRangeError(minAmount, maxAmount)
   const filters = {
     accountId: accountId || undefined,
+    categoryId: categoryId || undefined,
     status: status || undefined,
     type: type || undefined,
     origin: origin || undefined,
     from: from || undefined,
     to: to || undefined,
+    minAmount: normalizeAmount(minAmount),
+    maxAmount: normalizeAmount(maxAmount),
   }
 
   const transactionsQuery = useInfiniteQuery({
@@ -52,6 +60,7 @@ export function TransactionsPage() {
       financeApi.transactions({ ...filters, cursor: pageParam, limit: 50 }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
+    enabled: !amountError,
   })
 
   const transactions = transactionsQuery.data?.pages.flatMap((page) => page.items) ?? []
@@ -101,6 +110,22 @@ export function TransactionsPage() {
               {(accountsQuery.data?.items ?? []).map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.alias ?? account.institutionName ?? account.id}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm">
+            <span className="font-medium text-ink">Categoria</span>
+            <select
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
+            >
+              <option value="">Todas</option>
+              {(categoriesQuery.data?.items ?? []).map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
                 </option>
               ))}
             </select>
@@ -170,7 +195,34 @@ export function TransactionsPage() {
               className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
             />
           </label>
+
+          <label className="block text-sm">
+            <span className="font-medium text-ink">Valor mínimo (R$)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={minAmount}
+              onChange={(event) => setMinAmount(event.target.value)}
+              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
+            />
+          </label>
+
+          <label className="block text-sm">
+            <span className="font-medium text-ink">Valor máximo (R$)</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={maxAmount}
+              onChange={(event) => setMaxAmount(event.target.value)}
+              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
+            />
+          </label>
         </div>
+        {amountError ? (
+          <p role="alert" className="mt-3 text-sm text-expense">
+            {amountError}
+          </p>
+        ) : null}
       </section>
 
       {transactionsQuery.isLoading ? (
@@ -244,7 +296,7 @@ export function TransactionsPage() {
                   >
                     Corrigir
                   </button>
-                  <SourceRemovedReview transaction={transaction} />
+                  <DeleteManualTransaction transaction={transaction} />
                 </div>
                 <p
                   className={[
@@ -299,6 +351,26 @@ function amountClass(amount: string): string {
   if (value < 0) return 'text-expense'
   if (value > 0) return 'text-income'
   return 'text-ink'
+}
+
+function normalizeAmount(value: string): string | undefined {
+  const trimmed = value.trim()
+  return trimmed ? trimmed.replace(',', '.') : undefined
+}
+
+function amountRangeError(minAmount: string, maxAmount: string): string | null {
+  const min = minAmount.trim() ? Number(minAmount.replace(',', '.')) : null
+  const max = maxAmount.trim() ? Number(maxAmount.replace(',', '.')) : null
+  if (min !== null && (!Number.isFinite(min) || min < 0)) {
+    return 'Informe um valor mínimo válido.'
+  }
+  if (max !== null && (!Number.isFinite(max) || max < 0)) {
+    return 'Informe um valor máximo válido.'
+  }
+  if (min !== null && max !== null && min > max) {
+    return 'O valor mínimo não pode ser maior que o valor máximo.'
+  }
+  return null
 }
 
 function formatDate(value: string): string {

@@ -98,6 +98,12 @@ public class Transaction extends BaseEntity {
   @Column(name = "reconciliation_state", nullable = false, length = 24)
   private ReconciliationState reconciliationState;
 
+  @Column(name = "installment_number")
+  private Integer installmentNumber;
+
+  @Column(name = "total_installments")
+  private Integer totalInstallments;
+
   protected Transaction() {
     // Hibernate
   }
@@ -303,6 +309,28 @@ public class Transaction extends BaseEntity {
     return reconciliationState;
   }
 
+  public Integer getInstallmentNumber() {
+    return installmentNumber;
+  }
+
+  public Integer getTotalInstallments() {
+    return totalInstallments;
+  }
+
+  /** Metadados de parcelamento informados pela origem, quando existirem. */
+  public void applyInstallments(Integer installmentNumber, Integer totalInstallments) {
+    if (installmentNumber == null || totalInstallments == null) {
+      this.installmentNumber = null;
+      this.totalInstallments = null;
+      return;
+    }
+    if (installmentNumber < 1 || totalInstallments < 1 || installmentNumber > totalInstallments) {
+      throw new IllegalArgumentException("Parcelamento inválido");
+    }
+    this.installmentNumber = installmentNumber;
+    this.totalInstallments = totalInstallments;
+  }
+
   public void setCategoryId(UUID categoryId) {
     this.categoryId = categoryId;
   }
@@ -381,13 +409,18 @@ public class Transaction extends BaseEntity {
     this.status = Objects.requireNonNull(status, "status");
   }
 
-  /** Marca a transação como ausente na origem sem apagar a linha. */
+  /**
+   * Marca a transação como ausente na origem e a retira dos totais correntes.
+   *
+   * <p>A linha e o histórico permanecem; se a origem voltar a trazer o mesmo identificador, o
+   * importador limpa a marca e restaura o status efetivo.
+   */
   public void markSourceRemoved() {
     this.status = TransactionStatus.SOURCE_REMOVED;
     this.reconciliationState = ReconciliationState.SOURCE_REMOVED;
   }
 
-  /** Restaura uma transação validada na origem, mantendo a mesma linha e o histórico. */
+  /** Restaura uma transação que reapareceu na origem, mantendo a mesma linha e o histórico. */
   public void restoreFromSource(TransactionStatus restoredStatus) {
     this.status = Objects.requireNonNull(restoredStatus, "restoredStatus");
     this.reconciliationState = ReconciliationState.NONE;

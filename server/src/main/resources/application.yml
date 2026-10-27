@@ -106,7 +106,6 @@ delta:
     base-url: ${DELTA_PLUGGY_BASE_URL:https://api.pluggy.ai}
     connection-limit: ${DELTA_PLUGGY_CONNECTION_LIMIT:5}
     connection-limit-checked-at: ${DELTA_PLUGGY_CONNECTION_LIMIT_CHECKED_AT:2026-10-22}
-    webhooks-enabled: ${DELTA_PLUGGY_WEBHOOKS_ENABLED:false}
     request-timeout: 30s
   sync:
     initial-window-months: ${DELTA_SYNC_INITIAL_WINDOW_MONTHS:12}
@@ -123,13 +122,18 @@ delta:
     batch-size: ${DELTA_SYNC_BATCH_SIZE:10}
   privacy:
     retention:
-      # Expurgo diário: login_attempt 30 d, sync_run/webhook_event 90 d,
-      # audit_event 1 ano e idempotency_key 24 h.
+      # Expurgo diário: login_attempt 30 d, sync_run 90 d, audit_event 1 ano e
+      # idempotency_key 24 h.
       enabled: ${DELTA_PRIVACY_RETENTION_ENABLED:true}
       cron: ${DELTA_PRIVACY_RETENTION_CRON:0 30 3 * * *}
+  operator:
+    reset:
+      # Usado pelo runner operacional e pelo serviço de recuperação assistida.
+      token: ${DELTA_OPERATOR_RESET_TOKEN:}
   security:
     sessions:
       absolute-timeout: 12h
+    # Mantido por compatibilidade com instalações que usavam o nome anterior.
     # Token exclusivo do operador para recuperação assistida de senha (T197).
     # Vazio desabilita o mecanismo. Nunca é exposto por HTTP.
     operator-reset-token: ${DELTA_OPERATOR_RESET_TOKEN:}
@@ -137,6 +141,10 @@ delta:
       max-failures: 5
       window: 15m
       block-duration: 15m
+    registration:
+      # Controle em memória; uma reinicialização zera a janela.
+      max-attempts: ${DELTA_REGISTRATION_MAX_ATTEMPTS:5}
+      window: ${DELTA_REGISTRATION_WINDOW:1h}
 
 logging:
   level:

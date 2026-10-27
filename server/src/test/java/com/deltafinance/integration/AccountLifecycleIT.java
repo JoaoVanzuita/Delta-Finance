@@ -189,6 +189,8 @@ class AccountLifecycleIT extends PostgresTestBase {
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("confirmation"));
 
+    createSecondaryModuleData();
+
     alice
         .post("/api/v1/me/delete", Map.of("password", PASSWORD, "confirmation", "EXCLUIR"))
         .andExpect(status().isAccepted());
@@ -202,6 +204,11 @@ class AccountLifecycleIT extends PostgresTestBase {
     assertThat(count("pluggy_connection")).isZero();
     assertThat(count("sync_job")).isZero();
     assertThat(count("sync_run")).isZero();
+    assertThat(count("investment_position")).isZero();
+    assertThat(count("manual_asset_liability")).isZero();
+    assertThat(count("financial_goal")).isZero();
+    assertThat(count("goal_allocation")).isZero();
+    assertThat(count("goal_progress_snapshot")).isZero();
 
     Map<String, Object> deletedUser =
         jdbcTemplate.queryForMap("select status, deleted_at from app_user where id = ?", aliceId);
@@ -223,6 +230,49 @@ class AccountLifecycleIT extends PostgresTestBase {
     recreated
         .post("/api/v1/auth/register", Map.of("username", ALICE, "password", PASSWORD))
         .andExpect(status().isConflict());
+  }
+
+  private void createSecondaryModuleData() throws Exception {
+    alice
+        .post(
+            "/api/v1/investments/positions",
+            Map.of(
+                "broker", "XP",
+                "assetName", "Tesouro Alice",
+                "quantity", "1",
+                "totalValue", "500.00",
+                "referenceDate", "2026-10-01"))
+        .andExpect(status().isCreated());
+    alice
+        .post(
+            "/api/v1/wealth/manual-items",
+            Map.of(
+                "kind", "ASSET",
+                "type", "IMOVEL",
+                "description", "Apartamento Alice",
+                "referenceValue", "100000.00",
+                "referenceDate", "2026-10-01"))
+        .andExpect(status().isCreated());
+
+    Map<String, Object> allocation =
+        Map.of(
+            "sourceType", "MANUAL",
+            "allocationMode", "FIXED_AMOUNT",
+            "allocatedAmount", "100.00");
+    Map<String, Object> goal =
+        Map.of(
+            "name", "Meta Alice",
+            "type", "TRAVEL",
+            "targetAmount", "1000.00",
+            "progressRule", "ALLOCATIONS",
+            "allocations", java.util.List.of(allocation));
+    alice.post("/api/v1/goals", goal).andExpect(status().isCreated());
+
+    assertThat(count("investment_position")).isEqualTo(1);
+    assertThat(count("manual_asset_liability")).isEqualTo(1);
+    assertThat(count("financial_goal")).isEqualTo(1);
+    assertThat(count("goal_allocation")).isEqualTo(1);
+    assertThat(count("goal_progress_snapshot")).isGreaterThanOrEqualTo(1);
   }
 
   private void createManualAccount(AuthTestClient client, String alias) throws Exception {

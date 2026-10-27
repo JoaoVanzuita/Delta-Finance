@@ -1,5 +1,8 @@
 import { useId, useState, type FormEvent } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
+
+import { financeApi } from '@/features/integration/api'
 import type { Goal, GoalAllocationInput, GoalInput } from '@/features/integration/api'
 
 type GoalType = Goal['type']
@@ -40,15 +43,24 @@ function isNonNegative(value: string): boolean {
 /** Formulário de meta com alocações explícitas; não oferece qualquer ação financeira. */
 export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: GoalFormProps) {
   const baseId = useId()
+  const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
+  const investmentsQuery = useQuery({
+    queryKey: ['investments', 'goal-sources'],
+    queryFn: () => financeApi.positions(undefined, 100),
+  })
+  const wealthQuery = useQuery({
+    queryKey: ['wealth', 'manual', 'goal-sources'],
+    queryFn: financeApi.wealthManualItems,
+  })
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
+  const [notes, setNotes] = useState(initial?.notes ?? '')
   const [type, setType] = useState<GoalType>(initial?.type ?? 'EMERGENCY_FUND')
   const [targetAmount, setTargetAmount] = useState(initial?.targetAmount ?? '')
   const [targetDate, setTargetDate] = useState(initial?.targetDate ?? '')
   const [progressRule, setProgressRule] = useState<ProgressRule>(
     initial?.progressRule ?? 'ALLOCATIONS',
   )
-  const [initialValue, setInitialValue] = useState(initial?.initialValue ?? '')
   const [allocations, setAllocations] = useState<AllocationDraft[]>(() =>
     (initial?.allocations ?? []).map((allocation, index) => ({
       key: index,
@@ -63,6 +75,9 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
   )
   const [nextKey, setNextKey] = useState((initial?.allocations?.length ?? 0) + 1)
   const [error, setError] = useState<string | null>(null)
+  const hasNonBrlAccounts = (accountsQuery.data?.items ?? []).some(
+    (account) => account.currency !== 'BRL',
+  )
 
   function updateAllocation(key: number, patch: Partial<AllocationDraft>) {
     setAllocations((current) =>
@@ -70,6 +85,29 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
         allocation.key === key ? { ...allocation, ...patch } : allocation,
       ),
     )
+  }
+
+  function sourceOptions(sourceType: SourceType): { id: string; label: string }[] {
+    if (sourceType === 'ACCOUNT') {
+      return (accountsQuery.data?.items ?? [])
+        .filter((account) => account.currency === 'BRL')
+        .map((account) => ({
+          id: account.id,
+          label: account.alias ?? account.institutionName ?? account.id,
+        }))
+    }
+    if (sourceType === 'INVESTMENT') {
+      return (investmentsQuery.data?.items ?? []).map((position) => ({
+        id: position.id,
+        label: position.ticker ? `${position.ticker} · ${position.assetName}` : position.assetName,
+      }))
+    }
+    if (sourceType === 'MANUAL_ASSET') {
+      return (wealthQuery.data?.items ?? [])
+        .filter((item) => item.kind === 'ASSET')
+        .map((item) => ({ id: item.id, label: item.description }))
+    }
+    return []
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -84,13 +122,6 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
     if (!isPositive(target)) {
       setError('Informe um valor-alvo maior que zero.')
       return
-    }
-    if (progressRule === 'DEBT_REDUCTION') {
-      const initial = normalizeDecimal(initialValue)
-      if (!isPositive(initial)) {
-        setError('Informe a dívida inicial para metas de redução de dívida.')
-        return
-      }
     }
 
     const allocationInputs: GoalAllocationInput[] = []
@@ -126,10 +157,8 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
       targetAmount: target,
       progressRule,
       ...(description.trim() ? { description: description.trim() } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(targetDate ? { targetDate } : {}),
-      ...(progressRule === 'DEBT_REDUCTION'
-        ? { initialValue: normalizeDecimal(initialValue) }
-        : {}),
       ...(allocationInputs.length > 0 ? { allocations: allocationInputs } : {}),
     })
   }
@@ -160,7 +189,6 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
             <option value="EMERGENCY_FUND">Reserva de emergência</option>
             <option value="TRAVEL">Viagem</option>
             <option value="PLANNED_PURCHASE">Compra planejada</option>
-            <option value="DEBT_REDUCTION">Redução de dívida</option>
             <option value="NET_WORTH">Patrimônio líquido</option>
           </select>
         </label>
@@ -197,24 +225,9 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
             className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
           >
             <option value="ALLOCATIONS">Alocações explícitas</option>
-            <option value="DEBT_REDUCTION">Redução de dívida</option>
             <option value="NET_WORTH">Patrimônio líquido</option>
           </select>
         </label>
-
-        {progressRule === 'DEBT_REDUCTION' ? (
-          <label className="block text-sm" htmlFor={`${baseId}-initial`}>
-            <span className="font-medium text-ink">Dívida inicial</span>
-            <input
-              id={`${baseId}-initial`}
-              type="text"
-              inputMode="decimal"
-              value={initialValue}
-              onChange={(event) => setInitialValue(event.target.value)}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-          </label>
-        ) : null}
       </div>
 
       <label className="block text-sm" htmlFor={`${baseId}-description`}>
@@ -229,6 +242,18 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
         />
       </label>
 
+      <label className="block text-sm" htmlFor={`${baseId}-notes`}>
+        <span className="font-medium text-ink">Observações</span>
+        <textarea
+          id={`${baseId}-notes`}
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          maxLength={2000}
+          rows={2}
+          className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
+        />
+      </label>
+
       {progressRule !== 'NET_WORTH' ? (
         <fieldset className="space-y-3">
           <legend className="text-sm font-medium text-ink">Alocações explícitas</legend>
@@ -236,6 +261,12 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
             Percentuais usam o valor-alvo, com arredondamento para baixo e resíduo na última
             alocação. Percentuais abaixo de 100% deixam saldo não alocado visível.
           </p>
+          {hasNonBrlAccounts ? (
+            <p className="text-xs leading-relaxed text-ink-muted">
+              Contas em moeda diferente de BRL não são oferecidas como fonte e ficam fora do cálculo
+              do progresso.
+            </p>
+          ) : null}
           {allocations.length === 0 ? (
             <p className="text-sm text-ink-muted">Nenhuma alocação adicionada.</p>
           ) : (
@@ -262,22 +293,27 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
                       <option value="ACCOUNT">Conta</option>
                       <option value="INVESTMENT">Investimento</option>
                       <option value="MANUAL_ASSET">Ativo manual</option>
-                      <option value="MANUAL_LIABILITY">Passivo manual</option>
                     </select>
                   </label>
 
                   {allocation.sourceType !== 'MANUAL' ? (
                     <label className="block text-sm" htmlFor={`${baseId}-sourceid-${index}`}>
-                      <span className="font-medium text-ink">Identificador da fonte</span>
-                      <input
+                      <span className="font-medium text-ink">Fonte</span>
+                      <select
                         id={`${baseId}-sourceid-${index}`}
-                        type="text"
                         value={allocation.sourceId}
                         onChange={(event) =>
                           updateAllocation(allocation.key, { sourceId: event.target.value })
                         }
                         className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-                      />
+                      >
+                        <option value="">Selecione…</option>
+                        {sourceOptions(allocation.sourceType).map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   ) : null}
 

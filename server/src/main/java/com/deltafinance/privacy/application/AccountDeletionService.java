@@ -88,14 +88,19 @@ public class AccountDeletionService {
 
   private int deleteActiveData(UUID userId, String usernameNormalized) {
     int deleted = 0;
+    // Módulos secundários não são alcançados pelo tombstone de app_user; apague os filhos antes
+    // dos pais, sempre com escopo no titular.
+    deleted += jdbcTemplate.update("delete from goal_progress_snapshot where user_id = ?", userId);
+    deleted += jdbcTemplate.update("delete from goal_allocation where user_id = ?", userId);
+    deleted += jdbcTemplate.update("delete from financial_goal where user_id = ?", userId);
+    deleted += jdbcTemplate.update("delete from investment_position where user_id = ?", userId);
+    deleted += jdbcTemplate.update("delete from manual_asset_liability where user_id = ?", userId);
     // A remoção das contas dispara o cascade de transações, faturas, itens, pagamentos,
     // correções, cartões, histórico de identidade externa e movimentos internos.
     deleted += jdbcTemplate.update("delete from financial_account where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from category where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from sync_job where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from sync_run where user_id = ?", userId);
-    deleted += jdbcTemplate.update("delete from webhook_event where user_id = ?", userId);
-    deleted += jdbcTemplate.update("delete from webhook_subscription where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from pluggy_connection where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from pluggy_integration where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from idempotency_key where user_id = ?", userId);

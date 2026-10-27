@@ -5,8 +5,17 @@ import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api/problem'
 
 import { financeApi } from '@/features/integration/api'
+import { connectionStatusLabels } from '@/features/integration/syncLabels'
 
 import { formatDateTime, formatMoney } from '@/features/accounts/format'
+
+const typeLabels: Record<string, string> = {
+  BANK: 'Conta bancária',
+  CREDIT: 'Cartão de crédito',
+  CASH: 'Dinheiro',
+  WALLET: 'Carteira digital',
+  UNKNOWN: 'Tipo não informado',
+}
 
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -69,17 +78,33 @@ export function AccountDetailPage() {
       <section className="rounded-card border border-line bg-surface p-5">
         <dl className="grid gap-3 text-sm sm:grid-cols-[200px_1fr]">
           <dt className="text-ink-muted">Tipo</dt>
-          <dd className="text-ink">{account.type}</dd>
+          <dd className="text-ink">{typeLabels[account.type] ?? account.type}</dd>
           <dt className="text-ink-muted">Saldo atual</dt>
           <dd className="numeric text-ink">
             {formatMoney(account.currentBalance, account.currency)}
           </dd>
+          {account.origin === 'MANUAL' ? (
+            <>
+              <dt className="text-ink-muted">Saldo de referência</dt>
+              <dd className="numeric text-ink">
+                {formatMoney(account.referenceBalance, account.currency)}
+              </dd>
+            </>
+          ) : null}
           <dt className="text-ink-muted">Moeda</dt>
           <dd className="text-ink">{account.currency}</dd>
           <dt className="text-ink-muted">Origem</dt>
           <dd className="text-ink">{account.origin === 'IMPORTED' ? 'Importada' : 'Manual'}</dd>
           <dt className="text-ink-muted">Estado</dt>
           <dd className="text-ink">{account.status}</dd>
+          {account.connectionStatus ? (
+            <>
+              <dt className="text-ink-muted">Conexão</dt>
+              <dd className="text-ink">
+                {connectionStatusLabels[account.connectionStatus] ?? account.connectionStatus}
+              </dd>
+            </>
+          ) : null}
           <dt className="text-ink-muted">Última sincronização</dt>
           <dd className="text-ink">{formatDateTime(account.lastSyncAt)}</dd>
           <dt className="text-ink-muted">Subtipo</dt>

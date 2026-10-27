@@ -12,10 +12,6 @@ import { SecretField } from '../components/SecretField'
 import { SyncStatusPanel } from '../components/SyncStatusPanel'
 import { connectionStatusLabels } from '../syncLabels'
 
-const CONNECTION_LIMIT = Number(import.meta.env.VITE_PLUGGY_CONNECTION_LIMIT ?? 5)
-const CONNECTION_LIMIT_CHECKED_AT =
-  import.meta.env.VITE_PLUGGY_CONNECTION_LIMIT_CHECKED_AT ?? '2026-10-22'
-
 export function IntegrationSetupPage() {
   const queryClient = useQueryClient()
   const [clientId, setClientId] = useState('')
@@ -77,6 +73,9 @@ export function IntegrationSetupPage() {
   const connections = connectionsQuery.data?.items ?? []
   const configured = Boolean(integration?.clientIdMasked)
   const busy = save.isPending || validate.isPending
+  const connectionLimit = integration?.connectionLimit
+  const connectionCount = integration?.connectionCount ?? connections.length
+  const connectionLimitReached = connectionLimit !== undefined && connectionCount >= connectionLimit
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8">
@@ -216,14 +215,16 @@ export function IntegrationSetupPage() {
           </p>
         </div>
 
-        <ConnectionLimitNotice
-          count={connections.length}
-          limit={CONNECTION_LIMIT}
-          checkedAt={CONNECTION_LIMIT_CHECKED_AT}
-        />
+        {connectionLimit !== undefined && integration?.connectionLimitCheckedAt ? (
+          <ConnectionLimitNotice
+            count={connectionCount}
+            limit={connectionLimit}
+            checkedAt={integration.connectionLimitCheckedAt}
+          />
+        ) : null}
 
         {configured ? (
-          <ConnectionForm disabled={connections.length >= CONNECTION_LIMIT} />
+          <ConnectionForm disabled={connectionLimitReached} />
         ) : (
           <p className="text-sm text-ink-muted">
             Salve credenciais válidas para adicionar conexões.

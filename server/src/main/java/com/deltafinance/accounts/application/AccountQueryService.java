@@ -20,14 +20,20 @@ public class AccountQueryService {
 
   private final FinancialAccountRepository accountRepository;
   private final CardProfileRepository cardProfileRepository;
+  private final ConnectionStatusPort connectionStatusPort;
+  private final AccountBalanceService balanceService;
   private final CryptoService cryptoService;
 
   public AccountQueryService(
       FinancialAccountRepository accountRepository,
       CardProfileRepository cardProfileRepository,
+      ConnectionStatusPort connectionStatusPort,
+      AccountBalanceService balanceService,
       CryptoService cryptoService) {
     this.accountRepository = accountRepository;
     this.cardProfileRepository = cardProfileRepository;
+    this.connectionStatusPort = connectionStatusPort;
+    this.balanceService = balanceService;
     this.cryptoService = cryptoService;
   }
 
@@ -71,6 +77,7 @@ public class AccountQueryService {
                 .map(this::toCardView)
                 .orElse(null)
             : null;
+    String referenceBalance = decrypt(account, account.getBalanceEnc(), "balance");
 
     return new AccountView(
         account.getId(),
@@ -80,12 +87,21 @@ public class AccountQueryService {
         decrypt(account, account.getInstitutionNameEnc(), "institution_name"),
         decrypt(account, account.getAliasEnc(), "alias"),
         account.getCurrency(),
-        decrypt(account, account.getBalanceEnc(), "balance"),
+        balanceService.effectiveBalance(account, referenceBalance),
+        referenceBalance,
         account.getBalanceReferenceAt(),
         account.getStatus().name(),
         account.getLastSyncAt(),
         decrypt(account, account.getNotesEnc(), "notes"),
-        cardView);
+        cardView,
+        connectionStatus(account));
+  }
+
+  private String connectionStatus(FinancialAccount account) {
+    if (account.getConnectionId() == null) {
+      return null;
+    }
+    return connectionStatusPort.statusOf(account.getUserId(), account.getConnectionId());
   }
 
   private CardProfileView toCardView(CardProfile profile) {
