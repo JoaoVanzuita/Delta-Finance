@@ -36,10 +36,29 @@ const BANK = {
 
 interface State {
   invoice: Record<string, unknown>
+  openInvoice: Record<string, unknown>
 }
 
 async function installStub(page: Page): Promise<State> {
   const state: State = {
+    openInvoice: {
+      id: 'invoice-open',
+      cardAccountId: 'card-1',
+      cycleStart: '2026-10-06',
+      cycleEnd: '2026-11-05',
+      closingDate: '2026-11-05',
+      dueDate: '2026-11-15',
+      status: 'OPEN',
+      total: '0.00',
+      paymentsTotal: '0.00',
+      outstanding: '0.00',
+      appliedCredit: '0.00',
+      source: 'LOCAL',
+      hasAdjustments: false,
+      adjustmentCount: 0,
+      items: [],
+      payments: [],
+    },
     invoice: {
       id: 'invoice-1',
       cardAccountId: 'card-1',
@@ -144,7 +163,14 @@ async function installStub(page: Page): Promise<State> {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ items: [state.invoice], hasMore: false }),
+        body: JSON.stringify({ items: [state.openInvoice, state.invoice], hasMore: false }),
+      })
+    }
+    if (path === '/invoices/invoice-open' && method === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(state.openInvoice),
       })
     }
     if (path === '/invoices/invoice-1' && method === 'GET') {
@@ -158,7 +184,23 @@ async function installStub(page: Page): Promise<State> {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ items: [], hasMore: false }),
+        body: JSON.stringify({
+          items: [
+            {
+              id: 'tx-pendente',
+              accountId: 'card-1',
+              source: 'IMPORTED',
+              type: 'DEBIT',
+              status: 'PENDING',
+              postedOn: '2026-10-20',
+              amount: '-50.00',
+              currency: 'BRL',
+              description: 'Compra pendente',
+              invoiceId: null,
+            },
+          ],
+          hasMore: false,
+        }),
       })
     }
     if (path === '/invoices/invoice-1/items' && method === 'POST') {
@@ -220,11 +262,27 @@ async function installStub(page: Page): Promise<State> {
   return state
 }
 
+test('mostra compras pendentes na fatura aberta', async ({ page }) => {
+  await installStub(page)
+
+  await page.goto('/invoices/invoice-open')
+  await expect(page.getByRole('heading', { name: /Fatura/ })).toBeVisible()
+  await expect(page.getByText('Compras pendentes neste ciclo')).toBeVisible()
+  await expect(page.getByText('Compra pendente')).toBeVisible()
+  await expect(page.getByText(/ainda não compõem o total/)).toBeVisible()
+})
+
 test('configura ciclo, adiciona item manual e registra pagamento', async ({ page }) => {
   await installStub(page)
 
   await page.goto('/cards/card-1/invoices')
   await expect(page.getByRole('heading', { name: /Faturas/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Fatura atual' })).toBeVisible()
+  await expect(page.getByText('Compra pendente')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Abrir fatura atual' })).toHaveAttribute(
+    'href',
+    '/invoices/invoice-open',
+  )
   await page.getByRole('button', { name: 'Salvar ciclo' }).click()
   await expect(page.getByText(/Faturas já fechadas ou pagas não são reescritas/)).toBeVisible()
 

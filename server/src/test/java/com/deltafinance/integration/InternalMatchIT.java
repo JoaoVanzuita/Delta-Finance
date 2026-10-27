@@ -195,6 +195,148 @@ class InternalMatchIT extends PostgresTestBase {
   }
 
   @Test
+  void normalizaSinalDeCartaoDoPluggyEDetectaPagamentoDeFatura() throws Exception {
+    alice
+        .put(
+            "/api/v1/cards/" + creditAccountId + "/profile",
+            Map.of("closingDay", 5, "dueDay", 15, "creditLimit", "5000.00"))
+        .andExpect(status().isOk());
+    // Convenção do Pluggy em cartões: compra é positiva e pagamento é negativo.
+    PLUGGY.addTransaction(
+        "acc-alice",
+        new TransactionFixture(
+            "tx-bank-card-payment",
+            "acc-alice",
+            "Pagamento fatura cartão",
+            "-300.00",
+            "2026-10-22",
+            "POSTED",
+            null));
+    PLUGGY.addTransaction(
+        "card-alice",
+        new TransactionFixture(
+            "tx-card-payment",
+            "card-alice",
+            "Pagamento recebido",
+            "-300.00",
+            "2026-10-22",
+            "POSTED",
+            null));
+    PLUGGY.addTransaction(
+        "card-alice",
+        new TransactionFixture(
+            "tx-card-purchase",
+            "card-alice",
+            "Compra loja",
+            "100.00",
+            "2026-10-23",
+            "POSTED",
+            "Compras"));
+    sync();
+
+    JsonNode transactions = transactions(alice);
+    JsonNode purchase = findTransactionByDescription(transactions, "Compra loja");
+    assertThat(purchase.path("amount").asString()).isEqualTo("-100.00");
+    assertThat(purchase.path("type").asString()).isEqualTo("DEBIT");
+    JsonNode payment = findTransactionByDescription(transactions, "Pagamento recebido");
+    assertThat(payment.path("amount").asString()).isEqualTo("300.00");
+    assertThat(payment.path("type").asString()).isEqualTo("REFUND");
+
+    JsonNode summary = summary("from=2026-10-01&to=2026-10-31");
+    assertThat(summary.path("expenses").asString()).isEqualTo("400.00");
+    assertThat(summary.path("pendingInternalMatches").asInt()).isEqualTo(1);
+
+    JsonNode match = internalMatches("PENDING").path("items").get(0);
+    assertThat(match.path("kind").asString()).isEqualTo("CARD_PAYMENT");
+    alice
+        .post("/api/v1/internal-matches/" + match.path("id").asString() + "/confirm", null)
+        .andExpect(status().isOk());
+
+    JsonNode after = summary("from=2026-10-01&to=2026-10-31");
+    assertThat(after.path("expenses").asString()).isEqualTo("100.00");
+    assertThat(after.path("pendingInternalMatches").asInt()).isZero();
+
+    JsonNode invoices =
+        json(
+            alice
+                .get("/api/v1/cards/" + creditAccountId + "/invoices")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    JsonNode invoice = null;
+    for (JsonNode candidate : invoices.path("items")) {
+      if ("2026-09-06".equals(candidate.path("cycleStart").asString())) {
+        invoice = candidate;
+      }
+    }
+    assertThat(invoice).isNotNull();
+    JsonNode detail =
+        json(
+            alice
+                .get("/api/v1/invoices/" + invoice.path("id").asString())
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(detail.path("payments")).hasSize(1);
+    assertThat(detail.path("payments").get(0).path("paymentAccountId").asString())
+        .isEqualTo(bankAccountId);
+  }
+
+  @Test
+  void reabreCorrespondenciaQuandoDadosImportadosMudamDeSinal() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-alice",
+        new TransactionFixture(
+            "tx-bank",
+            "acc-alice",
+            "Pagamento fatura cartão",
+            "-150.00",
+            "2026-10-22",
+            "POSTED",
+            null));
+    PLUGGY.addTransaction(
+        "card-alice",
+        new TransactionFixture(
+            "tx-card",
+            "card-alice",
+            "Pagamento recebido",
+            "-150.00",
+            "2026-10-22",
+            "POSTED",
+            null));
+    sync();
+
+    JsonNode match = internalMatches("PENDING").path("items").get(0);
+    assertThat(match.path("kind").asString()).isEqualTo("CARD_PAYMENT");
+    alice
+        .post("/api/v1/internal-matches/" + match.path("id").asString() + "/confirm", null)
+        .andExpect(status().isOk());
+    assertThat(internalMatches("CONFIRMED").path("items")).hasSize(1);
+
+    // A origem passa a reportar o mesmo lançamento como compra: a correspondência confirmada
+    // deixa de fazer sentido e deve ser reaberta em vez de continuar excluindo as pernas.
+    PLUGGY.setTransactions(
+        "card-alice",
+        java.util.List.of(
+            new TransactionFixture(
+                "tx-card",
+                "card-alice",
+                "Pagamento recebido",
+                "150.00",
+                "2026-10-22",
+                "POSTED",
+                null)));
+    sync();
+
+    assertThat(internalMatches("CONFIRMED").path("items")).isEmpty();
+    JsonNode card = findTransactionByDescription(transactions(alice), "Pagamento recebido");
+    assertThat(card.path("amount").asString()).isEqualTo("-150.00");
+    assertThat(card.path("reconciliationState").asString()).isEqualTo("NONE");
+  }
+
+  @Test
   void aplicaToleranciaJanelaEIgnoraMesmaConta() throws Exception {
     String wallet = createAccount("CASH", "Carteira");
 
@@ -268,6 +410,62 @@ class InternalMatchIT extends PostgresTestBase {
                 .getResponse()
                 .getContentAsString());
     assertThat(bobMatches.path("items")).isEmpty();
+  }
+
+  @Test
+  void correspondenciaConfirmadaSobreviveARemocaoETemporariaNaOrigem() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-alice",
+        new TransactionFixture(
+            "tx-out", "acc-alice", "Saída para carteira", "-80.00", "2026-10-22", "POSTED", null));
+    PLUGGY.addTransaction(
+        "acc-alice",
+        new TransactionFixture(
+            "tx-keep", "acc-alice", "Padaria", "-10.00", "2026-10-22", "POSTED", null));
+    String wallet = createAccount("CASH", "Carteira");
+    createManualTransaction("CREDIT", wallet, "80.00", "Entrada da conta", "2026-10-22");
+    sync();
+
+    JsonNode match = internalMatches("PENDING").path("items").get(0);
+    alice
+        .post("/api/v1/internal-matches/" + match.path("id").asString() + "/confirm", null)
+        .andExpect(status().isOk());
+    JsonNode out = findTransactionByDescription(transactions(alice), "Saída para carteira");
+    assertThat(out.path("reconciliationState").asString()).isEqualTo("MATCHED");
+
+    // A perna desaparece temporariamente da origem e depois volta com o mesmo identificador.
+    PLUGGY.setTransactions(
+        "acc-alice",
+        java.util.List.of(
+            new TransactionFixture(
+                "tx-keep", "acc-alice", "Padaria", "-10.00", "2026-10-22", "POSTED", null)));
+    sync();
+    JsonNode removed = findTransactionByDescription(transactions(alice), "Saída para carteira");
+    assertThat(removed.path("status").asString()).isEqualTo("SOURCE_REMOVED");
+    assertThat(internalMatches("CONFIRMED").path("items")).hasSize(1);
+
+    PLUGGY.setTransactions(
+        "acc-alice",
+        java.util.List.of(
+            new TransactionFixture(
+                "tx-out",
+                "acc-alice",
+                "Saída para carteira",
+                "-80.00",
+                "2026-10-22",
+                "POSTED",
+                null),
+            new TransactionFixture(
+                "tx-keep", "acc-alice", "Padaria", "-10.00", "2026-10-22", "POSTED", null)));
+    sync();
+    JsonNode restored = findTransactionByDescription(transactions(alice), "Saída para carteira");
+    assertThat(restored.path("status").asString()).isEqualTo("POSTED");
+    assertThat(restored.path("reconciliationState").asString()).isEqualTo("MATCHED");
+    assertThat(internalMatches("CONFIRMED").path("items")).hasSize(1);
+
+    JsonNode summary = summary("from=2026-10-01&to=2026-10-31");
+    assertThat(summary.path("expenses").asString()).isEqualTo("10.00");
+    assertThat(summary.path("income").asString()).isEqualTo("0.00");
   }
 
   private void cleanUserData() {
@@ -384,6 +582,32 @@ class InternalMatchIT extends PostgresTestBase {
       }
     }
     throw new AssertionError("Transação não encontrada: " + id);
+  }
+
+  private static JsonNode findTransactionByDescription(JsonNode page, String description) {
+    for (JsonNode item : page.path("items")) {
+      if (description.equals(item.path("description").asString())) {
+        return item;
+      }
+    }
+    throw new AssertionError("Transação não encontrada: " + description);
+  }
+
+  private void sync() throws Exception {
+    alice
+        .post("/api/v1/connections/" + connectionId() + "/sync", null)
+        .andExpect(status().isAccepted());
+    syncJobService.processNext("internal-match-it", "internal-match-it");
+  }
+
+  private JsonNode summary(String query) throws Exception {
+    return json(
+        alice
+            .get("/api/v1/dashboard/summary?" + query)
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
   private String jsonMarker(String body) {

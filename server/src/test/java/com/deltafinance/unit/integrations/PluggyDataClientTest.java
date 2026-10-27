@@ -97,4 +97,44 @@ class PluggyDataClientTest {
     assertThat(second.getRequestUrl().queryParameter("after")).isEqualTo("YWJjPT0=");
     assertThat(second.getRequestUrl().queryParameter("dateFrom")).isEqualTo("2026-10-01");
   }
+
+  @Test
+  void leTotalMinimoMoedaEPagamentosOficiaisDaBill() {
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                """
+                {
+                  "results": [
+                    {"id": "bill-1", "billClosingDate": "2026-09-05T00:00:00.000Z",
+                     "dueDate": "2026-09-15T00:00:00.000Z", "totalAmount": 100.00,
+                     "minimumPaymentAmount": 10.00, "totalAmountCurrencyCode": "BRL",
+                     "payments": [
+                       {"id": "pay-1", "paymentDate": "2026-09-10T00:00:00.000Z",
+                        "amount": 100.00, "paymentMode": "PIX",
+                        "valueType": "FULL_PAYMENT", "currencyCode": "BRL"}
+                     ]}
+                  ],
+                  "page": 1,
+                  "totalPages": 1
+                }
+                """));
+
+    var bills = client.listBills("api-key", "acc-1");
+
+    assertThat(bills).hasSize(1);
+    var bill = bills.getFirst();
+    assertThat(bill.externalId()).isEqualTo("bill-1");
+    assertThat(bill.closingDate()).isEqualTo(LocalDate.of(2026, 9, 5));
+    assertThat(bill.dueDate()).isEqualTo(LocalDate.of(2026, 9, 15));
+    assertThat(bill.totalAmount()).isEqualByComparingTo("100.00");
+    assertThat(bill.minimumPaymentAmount()).isEqualByComparingTo("10.00");
+    assertThat(bill.currency()).isEqualTo("BRL");
+    assertThat(bill.payments()).hasSize(1);
+    assertThat(bill.payments().getFirst().externalId()).isEqualTo("pay-1");
+    assertThat(bill.payments().getFirst().amount()).isEqualByComparingTo("100.00");
+    assertThat(bill.payments().getFirst().paymentMode()).isEqualTo("PIX");
+    assertThat(bill.payments().getFirst().valueType()).isEqualTo("FULL_PAYMENT");
+  }
 }

@@ -23,6 +23,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
   List<Transaction> findByUserIdAndAccountIdOrderByPostedOnDescIdDesc(UUID userId, UUID accountId);
 
+  List<Transaction> findByUserIdAndAccountIdAndPostedOn(
+      UUID userId, UUID accountId, LocalDate postedOn);
+
+  long countByUserIdAndAccountIdAndInvoiceIdIsNullAndStatusIn(
+      UUID userId, UUID accountId, Collection<TransactionStatus> statuses);
+
   List<Transaction> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
   @Query(

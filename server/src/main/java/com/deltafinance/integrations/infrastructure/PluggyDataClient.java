@@ -1,5 +1,6 @@
 package com.deltafinance.integrations.infrastructure;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -22,10 +23,11 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Leitura de dados no provedor.
  *
- * <p>Endpoints usados: {@code GET /items/{id}}, {@code GET /accounts?itemId} e {@code GET
- * /v2/transactions} com cursor. Em transações a API usa {@code dateFrom}/{@code dateTo} e o {@code
- * next} é uma query string; não envie {@code pageSize} (a API recusa com 400 e usa 500 por padrão).
- * Nenhuma resposta bruta é propagada ao cliente; erros são sanitizados.
+ * <p>Endpoints usados: {@code GET /items/{id}}, {@code GET /accounts?itemId}, {@code GET
+ * /bills?accountId} e {@code GET /v2/transactions} com cursor. Em transações a API usa {@code
+ * dateFrom}/{@code dateTo} e o {@code next} é uma query string; não envie {@code pageSize} (a API
+ * recusa com 400 e usa 500 por padrão). Nenhuma resposta bruta é propagada ao cliente; erros são
+ * sanitizados.
  */
 @Component
 public class PluggyDataClient {
@@ -94,6 +96,7 @@ public class PluggyDataClient {
                     : type.trim().toUpperCase(java.util.Locale.ROOT),
                 node.path("subtype").asString(null),
                 node.path("name").asString(null),
+                node.path("number").asString(null),
                 PluggyModels.decimal(node, "balance"),
                 node.path("currencyCode").asString("BRL"),
                 node.path("creditData")));
@@ -106,6 +109,47 @@ public class PluggyDataClient {
       page++;
     }
     return new PluggyModels.PluggyAccountPage(accounts, !truncated);
+  }
+
+  /**
+   * Faturas oficiais de um cartão.
+   *
+   * <p>Além de inferir o ciclo quando {@code creditData.balanceCloseDate} falta, as Bills são
+   * persistidas como referência de conciliação (total, mínimo, vencimento e pagamentos oficiais). A
+   * leitura continua opcional: falhas não interrompem a sincronização de contas.
+   */
+  public List<PluggyModels.PluggyBill> listBills(String apiKey, String accountId) {
+    List<PluggyModels.PluggyBill> bills = new ArrayList<>();
+    int page = 1;
+    int totalPages = 1;
+    while (page <= totalPages && page <= MAX_PAGES) {
+      MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+      params.add("accountId", accountId);
+      params.add("pageSize", String.valueOf(PAGE_SIZE));
+      params.add("page", String.valueOf(page));
+      JsonNode root = getJson("/bills", null, params, apiKey);
+      JsonNode results = root.isArray() ? root : root.path("results");
+      if (!results.isArray()) {
+        throw new PluggyException("Resposta de faturas inválida.");
+      }
+      for (JsonNode node : results) {
+        bills.add(
+            new PluggyModels.PluggyBill(
+                node.path("id").asString(null),
+                PluggyModels.civilDate(node, "billClosingDate"),
+                PluggyModels.civilDate(node, "dueDate"),
+                PluggyModels.decimal(node, "totalAmount"),
+                PluggyModels.decimal(node, "minimumPaymentAmount"),
+                firstText(node, "totalAmountCurrencyCode", "currencyCode", "BRL"),
+                billPayments(node.path("payments"))));
+      }
+      totalPages = root.path("totalPages").asInt(1);
+      if (totalPages < 1) {
+        break;
+      }
+      page++;
+    }
+    return bills;
   }
 
   public PluggyModels.PluggyTransactionPage listTransactions(
@@ -233,12 +277,48 @@ public class PluggyDataClient {
     }
   }
 
+  private static List<PluggyModels.PluggyBillPayment> billPayments(JsonNode node) {
+    if (node == null || !node.isArray()) {
+      return List.of();
+    }
+    List<PluggyModels.PluggyBillPayment> payments = new ArrayList<>();
+    for (JsonNode payment : node) {
+      BigDecimal amount = PluggyModels.decimal(payment, "amount");
+      LocalDate paymentDate = PluggyModels.civilDate(payment, "paymentDate");
+      if (amount == null || paymentDate == null) {
+        continue;
+      }
+      payments.add(
+          new PluggyModels.PluggyBillPayment(
+              payment.path("id").asString(null),
+              paymentDate,
+              amount,
+              payment.path("paymentMode").asString(null),
+              payment.path("valueType").asString(null),
+              firstText(payment, "currencyCode", "totalAmountCurrencyCode", "BRL")));
+    }
+    return payments;
+  }
+
+  private static String firstText(JsonNode node, String first, String second, String fallback) {
+    String value = node.path(first).asString(null);
+    if (value == null || value.isBlank()) {
+      value = node.path(second).asString(null);
+    }
+    return value == null || value.isBlank()
+        ? fallback
+        : value.trim().toUpperCase(java.util.Locale.ROOT);
+  }
+
   private static String endpointKey(String path) {
     if (path.startsWith("/items/")) {
       return "items";
     }
     if (path.startsWith("/accounts")) {
       return "accounts";
+    }
+    if (path.startsWith("/bills")) {
+      return "bills";
     }
     if (path.startsWith("/v2/transactions")) {
       return "transactions";

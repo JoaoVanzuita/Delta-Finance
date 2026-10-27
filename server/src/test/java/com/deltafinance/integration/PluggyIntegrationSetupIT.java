@@ -357,11 +357,11 @@ class PluggyIntegrationSetupIT extends PostgresTestBase {
     PLUGGY.addTransaction(
         "card-a1",
         new TransactionFixture(
-            "tx-c1", "card-a1", "Loja", "-100.00", "2026-10-18", "POSTED", "Compras"));
+            "tx-c1", "card-a1", "Loja", "100.00", "2026-10-18", "POSTED", "Compras"));
     PLUGGY.addTransaction(
         "card-a1",
         new TransactionFixture(
-            "tx-c2", "card-a1", "Crédito cartão", "30.00", "2026-10-19", "POSTED", "Compras"));
+            "tx-c2", "card-a1", "Crédito cartão", "-30.00", "2026-10-19", "POSTED", "Compras"));
     PLUGGY.addTransaction(
         "acc-a2",
         new TransactionFixture(

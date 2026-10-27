@@ -26,6 +26,11 @@ export function CategoriesPage() {
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['categories'] })
     void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
+    void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
   }
 
   const create = useMutation({
@@ -53,7 +58,8 @@ export function CategoriesPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-ink">Categorias</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-ink-muted">
           Categorias predefinidas e personalizadas. Desativar não apaga transações: elas são
-          reatribuídas ou ficam sem categoria.
+          reatribuídas ou ficam sem categoria. Categorias do tipo transferência não entram em
+          receitas nem despesas.
         </p>
       </header>
 

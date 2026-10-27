@@ -16,6 +16,7 @@ const navigation: readonly NavigationItem[] = [
   { to: '/', label: 'Início', end: true },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/accounts', label: 'Contas' },
+  { to: '/cards', label: 'Cartões' },
   { to: '/transactions', label: 'Transações' },
   { to: '/categories', label: 'Categorias' },
   { to: '/reconciliation', label: 'Reconciliação' },

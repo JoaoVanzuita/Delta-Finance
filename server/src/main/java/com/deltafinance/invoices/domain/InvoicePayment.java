@@ -41,6 +41,9 @@ public class InvoicePayment extends BaseEntity {
   @Column(name = "source_transaction_id")
   private UUID sourceTransactionId;
 
+  @Column(name = "dedup_key", columnDefinition = "bytea")
+  private byte[] dedupKey;
+
   protected InvoicePayment() {
     // Hibernate
   }
@@ -115,6 +118,39 @@ public class InvoicePayment extends BaseEntity {
 
   public UUID getSourceTransactionId() {
     return sourceTransactionId;
+  }
+
+  public byte[] getDedupKey() {
+    return dedupKey;
+  }
+
+  /** Registra a chave de deduplicação de pagamentos importados; manual permanece nula. */
+  public void applyDedupKey(byte[] dedupKey) {
+    this.dedupKey = dedupKey;
+  }
+
+  /** Move o vínculo para outra transação equivalente (ex.: duplicata PENDING/POSTED). */
+  public void repointSource(UUID transactionId) {
+    this.sourceTransactionId = Objects.requireNonNull(transactionId, "transactionId");
+  }
+
+  /** Atualiza valor/data/chave quando a transação de origem é corrigida. */
+  public void applySourceData(byte[] amountEnc, LocalDate paidOn, byte[] dedupKey) {
+    this.amountEnc = Objects.requireNonNull(amountEnc, "amountEnc");
+    this.paidOn = Objects.requireNonNull(paidOn, "paidOn");
+    if (dedupKey != null) {
+      this.dedupKey = dedupKey;
+    }
+  }
+
+  /** Move o pagamento para outra fatura do mesmo cartão. */
+  public void reassignInvoice(UUID invoiceId) {
+    this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId");
+  }
+
+  /** Conta pagadora identificada por movimento interno confirmado. */
+  public void updatePaymentAccountId(UUID paymentAccountId) {
+    this.paymentAccountId = Objects.requireNonNull(paymentAccountId, "paymentAccountId");
   }
 
   public void confirm() {

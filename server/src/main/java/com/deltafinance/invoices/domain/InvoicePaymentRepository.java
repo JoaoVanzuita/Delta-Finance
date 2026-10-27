@@ -9,6 +9,11 @@ public interface InvoicePaymentRepository extends JpaRepository<InvoicePayment, 
 
   Optional<InvoicePayment> findByIdAndUserId(UUID id, UUID userId);
 
+  Optional<InvoicePayment> findByUserIdAndSourceTransactionId(
+      UUID userId, UUID sourceTransactionId);
+
+  Optional<InvoicePayment> findByUserIdAndDedupKey(UUID userId, byte[] dedupKey);
+
   List<InvoicePayment> findByUserIdAndInvoiceIdOrderByPaidOnAscCreatedAtAsc(
       UUID userId, UUID invoiceId);
 }

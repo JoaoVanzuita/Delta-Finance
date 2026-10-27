@@ -3,6 +3,8 @@ import { createBrowserRouter } from 'react-router'
 import { AccountDetailPage } from '@/features/accounts/pages/AccountDetailPage'
 import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
 import { ManualAccountPage } from '@/features/accounts/pages/ManualAccountPage'
+import { CardDetailPage } from '@/features/cards/pages/CardDetailPage'
+import { CardsPage } from '@/features/cards/pages/CardsPage'
 import { CategoriesPage } from '@/features/categories/pages/CategoriesPage'
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage'
 import { InvoiceDetailPage } from '@/features/invoices/pages/InvoiceDetailPage'
@@ -89,6 +91,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'cards',
+        element: (
+          <ProtectedRoute>
+            <CardsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: 'transactions',
         element: (
           <ProtectedRoute>
@@ -117,6 +127,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <ReconciliationPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'cards/:accountId',
+        element: (
+          <ProtectedRoute>
+            <CardDetailPage />
           </ProtectedRoute>
         ),
       },

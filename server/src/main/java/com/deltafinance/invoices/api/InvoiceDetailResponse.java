@@ -1,6 +1,7 @@
 package com.deltafinance.invoices.api;
 
 import com.deltafinance.invoices.application.InvoiceDetailView;
+import com.deltafinance.invoices.application.ProviderBillView;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -21,6 +22,8 @@ public record InvoiceDetailResponse(
     String source,
     boolean hasAdjustments,
     int adjustmentCount,
+    ProviderBillView providerBill,
+    boolean missingPurchases,
     List<InvoiceItemResponse> items,
     List<InvoicePaymentResponse> payments) {
 
@@ -42,6 +45,8 @@ public record InvoiceDetailResponse(
         invoice.source(),
         invoice.hasAdjustments(),
         invoice.adjustmentCount(),
+        invoice.providerBill(),
+        invoice.missingPurchases(),
         view.items().stream().map(InvoiceItemResponse::from).toList(),
         view.payments().stream().map(InvoicePaymentResponse::from).toList());
   }

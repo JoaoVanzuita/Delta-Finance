@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import { formatMoney } from '@/features/accounts/format'
 import {
@@ -256,6 +256,12 @@ export function DashboardPage() {
             <p className="mt-2 text-xs leading-relaxed text-ink-muted">
               Saldo devedor exibido como passivo separado. Não é somado ao saldo atual.
             </p>
+            <Link
+              to="/cards"
+              className="mt-3 inline-flex min-h-11 items-center rounded-card border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted"
+            >
+              Acompanhar cartões
+            </Link>
           </article>
           <article className="rounded-card border border-line bg-surface p-4">
             <h3 className="text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase">

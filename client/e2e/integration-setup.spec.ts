@@ -198,6 +198,59 @@ async function installStub(page: Page): Promise<StubState> {
       })
       return
     }
+    if (path === '/cards/overview' && method === 'GET') {
+      const items = state.configured
+        ? [
+            {
+              accountId: 'acc-2',
+              alias: 'Cartão Alfa',
+              institutionName: 'Banco Alfa',
+              status: 'ACTIVE',
+              currency: 'BRL',
+              hasCycle: true,
+              closingDay: 5,
+              dueDay: 15,
+              creditLimit: '5000.00',
+              creditBalance: '0.00',
+              usedAmount: '250.00',
+              outstanding: '250.00',
+              utilization: '5.00',
+              nextDueDate: '2026-11-15',
+              currentInvoice: {
+                id: 'invoice-1',
+                cardAccountId: 'acc-2',
+                cycleStart: '2026-09-06',
+                cycleEnd: '2026-10-05',
+                closingDate: '2026-10-05',
+                dueDate: '2026-11-15',
+                status: 'CLOSED',
+                total: '250.00',
+                paymentsTotal: '0.00',
+                outstanding: '250.00',
+                appliedCredit: '0.00',
+                minimumPayment: null,
+                source: 'LOCAL',
+                hasAdjustments: false,
+                adjustmentCount: 0,
+              },
+              nextDueInvoice: null,
+              unallocatedCount: 0,
+            },
+          ]
+        : []
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          totalOutstanding: state.configured ? '250.00' : '0.00',
+          totalLimit: state.configured ? '5000.00' : '0.00',
+          totalUsed: state.configured ? '250.00' : '0.00',
+          nextDueDate: state.configured ? '2026-11-15' : null,
+          items,
+        }),
+      })
+      return
+    }
     if (path === '/transactions' && method === 'GET') {
       const items = state.configured
         ? [
@@ -316,11 +369,17 @@ test.describe('configuração da integração', () => {
     await expect(page.getByText('Credenciais validadas e salvas.')).toBeVisible()
 
     await page.goto('/accounts')
-    await expect(page.getByRole('heading', { name: 'Contas e cartões' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Contas', exact: true })).toBeVisible()
     await expect(page.getByText('Conta Alfa')).toBeVisible()
-    await expect(page.getByText('Cartão Alfa')).toBeVisible()
+    await expect(page.getByText('Conta Dólar')).toBeVisible()
     await expect(page.getByText(/Moeda USD/)).toBeVisible()
-    await expect(page.getByText(/dia 5 \/ dia 15/)).toBeVisible()
+    await expect(page.getByText('Cartão Alfa')).toHaveCount(0)
+
+    await page.goto('/cards')
+    await expect(page.getByRole('heading', { name: 'Cartões de crédito' })).toBeVisible()
+    await expect(page.getByText('Cartão Alfa')).toBeVisible()
+    await expect(page.getByText('Limite total', { exact: true })).toBeVisible()
+    await expect(page.getByText('Fechada')).toBeVisible()
 
     await page.goto('/transactions')
     await expect(page.getByRole('heading', { name: 'Transações', exact: true })).toBeVisible()

@@ -3,6 +3,9 @@ package com.deltafinance.reconciliation.application;
 import com.deltafinance.accounts.domain.AccountType;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
+import com.deltafinance.categories.domain.Category;
+import com.deltafinance.categories.domain.CategoryKind;
+import com.deltafinance.categories.domain.CategoryRepository;
 import com.deltafinance.reconciliation.domain.InternalMatch;
 import com.deltafinance.reconciliation.domain.InternalMatchKind;
 import com.deltafinance.reconciliation.domain.InternalMatchRepository;
@@ -12,6 +15,7 @@ import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.pagination.CursorPage;
 import com.deltafinance.shared.time.Clock;
+import com.deltafinance.transactions.domain.ReconciliationState;
 import com.deltafinance.transactions.domain.Transaction;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionStatus;
@@ -51,11 +55,12 @@ public class InternalMatchService {
   private static final BigDecimal MIN_TOLERANCE = new BigDecimal("0.01");
   private static final BigDecimal TOLERANCE_RATE = new BigDecimal("0.005");
   private static final BigDecimal THRESHOLD = new BigDecimal("80");
-  private static final int LOOKBACK_DAYS = 120;
+  private static final int LOOKBACK_DAYS = 366;
 
   private final TransactionRepository transactionRepository;
   private final FinancialAccountRepository accountRepository;
   private final InternalMatchRepository matchRepository;
+  private final CategoryRepository categoryRepository;
   private final CryptoService cryptoService;
   private final Clock clock;
 
@@ -63,11 +68,13 @@ public class InternalMatchService {
       TransactionRepository transactionRepository,
       FinancialAccountRepository accountRepository,
       InternalMatchRepository matchRepository,
+      CategoryRepository categoryRepository,
       CryptoService cryptoService,
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
     this.matchRepository = matchRepository;
+    this.categoryRepository = categoryRepository;
     this.cryptoService = cryptoService;
     this.clock = clock;
   }
@@ -108,12 +115,21 @@ public class InternalMatchService {
                         && (transaction.getStatus() == TransactionStatus.POSTED
                             || transaction.getStatus() == TransactionStatus.RECONCILED))
             .toList();
-    if (transactions.size() < 2) {
-      return 0;
-    }
     Map<UUID, FinancialAccount> accounts = new HashMap<>();
     for (FinancialAccount account : accountRepository.findByUserIdOrderByCreatedAtAsc(userId)) {
       accounts.put(account.getId(), account);
+    }
+    // Um ajuste de sinal/valor na importação pode invalidar uma correspondência confirmada
+    // (por exemplo, pagamento de cartão que passou a ter o mesmo sinal dos demais débitos).
+    // Reabre esses pares antes de calcular candidatos para que a decisão seja refeita.
+    reopenInvalidConfirmedMatches(userId, accounts);
+    if (transactions.size() < 2) {
+      return 0;
+    }
+    Set<UUID> transferCategoryIds = transferCategoryIds(userId);
+    Map<UUID, BigDecimal> amounts = new HashMap<>();
+    for (Transaction transaction : transactions) {
+      amounts.put(transaction.getId(), effectiveAmount(transaction));
     }
 
     List<InternalMatch> existing = matchRepository.findByUserIdOrderByCreatedAtDesc(userId);
@@ -129,7 +145,7 @@ public class InternalMatchService {
 
     List<Candidate> candidates = new ArrayList<>();
     for (Transaction debit : transactions) {
-      BigDecimal debitAmount = effectiveAmount(debit);
+      BigDecimal debitAmount = amounts.get(debit.getId());
       if (debitAmount.signum() >= 0) {
         continue;
       }
@@ -137,11 +153,13 @@ public class InternalMatchService {
         if (debit.getId().equals(credit.getId())
             || usedTransactions.contains(debit.getId())
             || usedTransactions.contains(credit.getId())
+            || (isTransferCategory(debit, transferCategoryIds)
+                && isTransferCategory(credit, transferCategoryIds))
             || debit.getAccountId().equals(credit.getAccountId())
             || knownPairs.contains(pairKey(debit.getId(), credit.getId()))) {
           continue;
         }
-        BigDecimal creditAmount = effectiveAmount(credit);
+        BigDecimal creditAmount = amounts.get(credit.getId());
         if (creditAmount.signum() <= 0) {
           continue;
         }
@@ -220,14 +238,95 @@ public class InternalMatchService {
                 transaction.getUserId(), "transaction", "amount_effective", transaction.getId())));
   }
 
+  private Set<UUID> transferCategoryIds(UUID userId) {
+    Set<UUID> ids = new HashSet<>();
+    for (Category category : categoryRepository.findByUserIdOrderByNameEncAsc(userId)) {
+      if (category.getKind() == CategoryKind.TRANSFER) {
+        ids.add(category.getId());
+      }
+    }
+    return ids;
+  }
+
+  private static boolean isTransferCategory(
+      Transaction transaction, Set<UUID> transferCategoryIds) {
+    return transaction.getCategoryId() != null
+        && transferCategoryIds.contains(transaction.getCategoryId());
+  }
+
   private static InternalMatchKind kindOf(
       FinancialAccount debitAccount, FinancialAccount creditAccount) {
-    boolean debitCredit = debitAccount.getType() == AccountType.CREDIT;
-    boolean creditCredit = creditAccount.getType() == AccountType.CREDIT;
-    if (debitCredit == creditCredit) {
-      return debitCredit ? null : InternalMatchKind.TRANSFER;
+    boolean debitIsCreditCard = debitAccount.getType() == AccountType.CREDIT;
+    boolean creditIsCreditCard = creditAccount.getType() == AccountType.CREDIT;
+    if (debitIsCreditCard) {
+      // Débito no cartão é compra/encargo; não é pagamento de fatura nem transferência padrão.
+      return null;
     }
-    return InternalMatchKind.CARD_PAYMENT;
+    return creditIsCreditCard ? InternalMatchKind.CARD_PAYMENT : InternalMatchKind.TRANSFER;
+  }
+
+  /**
+   * Revalida correspondências automáticas confirmadas após uma atualização dos dados importados
+   * (sinal, valor ou tipo das pernas).
+   *
+   * <p>Pares que deixaram de fazer sentido são removidos e as transações voltam a {@code NONE};
+   * pares válidos recuperam {@code MATCHED} caso a transação tenha sido restaurada após uma remoção
+   * temporária na origem. Assim a exclusão dos totais continua ligada a uma correspondência
+   * confirmada, nunca apenas ao estado da transação.
+   */
+  private void reopenInvalidConfirmedMatches(UUID userId, Map<UUID, FinancialAccount> accounts) {
+    for (InternalMatch match : matchRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
+      if (match.getStatus() != InternalMatchStatus.CONFIRMED
+          || !CRITERIA_VERSION.equals(match.getCriteriaVersion())) {
+        continue;
+      }
+      Transaction debit =
+          transactionRepository
+              .findByIdAndUserId(match.getDebitTransactionId(), userId)
+              .orElse(null);
+      Transaction credit =
+          transactionRepository
+              .findByIdAndUserId(match.getCreditTransactionId(), userId)
+              .orElse(null);
+      boolean invalid = debit == null || credit == null;
+      if (!invalid) {
+        FinancialAccount debitAccount = accounts.get(debit.getAccountId());
+        FinancialAccount creditAccount = accounts.get(credit.getAccountId());
+        BigDecimal debitAmount = effectiveAmount(debit);
+        BigDecimal creditAmount = effectiveAmount(credit);
+        invalid =
+            debitAccount == null
+                || creditAccount == null
+                || debitAmount.signum() >= 0
+                || creditAmount.signum() <= 0
+                || kindOf(debitAccount, creditAccount) == null;
+      }
+      if (!invalid) {
+        ensureMatchedState(debit);
+        ensureMatchedState(credit);
+        continue;
+      }
+      matchRepository.delete(match);
+      clearMatchedState(debit);
+      clearMatchedState(credit);
+    }
+  }
+
+  private void ensureMatchedState(Transaction transaction) {
+    if (transaction == null || transaction.getReconciliationState() != ReconciliationState.NONE) {
+      return;
+    }
+    transaction.setReconciliationState(ReconciliationState.MATCHED);
+    transactionRepository.save(transaction);
+  }
+
+  private void clearMatchedState(Transaction transaction) {
+    if (transaction == null
+        || transaction.getReconciliationState() != ReconciliationState.MATCHED) {
+      return;
+    }
+    transaction.setReconciliationState(ReconciliationState.NONE);
+    transactionRepository.save(transaction);
   }
 
   private static BigDecimal score(

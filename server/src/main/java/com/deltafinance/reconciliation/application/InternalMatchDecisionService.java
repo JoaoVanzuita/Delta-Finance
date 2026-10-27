@@ -11,6 +11,7 @@ import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.domain.ReconciliationState;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,16 +22,19 @@ public class InternalMatchDecisionService {
   private final InternalMatchRepository matchRepository;
   private final TransactionRepository transactionRepository;
   private final AuditService auditService;
+  private final ApplicationEventPublisher eventPublisher;
   private final Clock clock;
 
   public InternalMatchDecisionService(
       InternalMatchRepository matchRepository,
       TransactionRepository transactionRepository,
       AuditService auditService,
+      ApplicationEventPublisher eventPublisher,
       Clock clock) {
     this.matchRepository = matchRepository;
     this.transactionRepository = transactionRepository;
     this.auditService = auditService;
+    this.eventPublisher = eventPublisher;
     this.clock = clock;
   }
 
@@ -43,6 +47,9 @@ public class InternalMatchDecisionService {
     markMatched(userId, match.getCreditTransactionId());
     auditService.record(
         userId, AuditEventType.INTERNAL_MATCH_CONFIRMED, "internal_match", match.getId());
+    eventPublisher.publishEvent(
+        new InternalMatchConfirmedEvent(
+            userId, match.getDebitTransactionId(), match.getCreditTransactionId()));
     return InternalMatchView.from(match);
   }
 

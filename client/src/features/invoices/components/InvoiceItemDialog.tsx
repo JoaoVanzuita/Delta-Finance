@@ -87,6 +87,11 @@ export function InvoiceItemDialog({
       void queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] })
       void queryClient.invalidateQueries({ queryKey: ['invoices'] })
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
+      void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
       onClose()
     },
     onError: (caught) => {

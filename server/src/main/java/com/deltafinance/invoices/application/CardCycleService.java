@@ -58,8 +58,19 @@ public class CardCycleService {
       YearMonth next = YearMonth.from(closingThisMonth).plusMonths(1);
       end = closingDate(next.getYear(), next.getMonthValue(), profile);
     }
-    LocalDate due = dueDate(end.plusMonths(1), profile);
+    LocalDate due = dueDate(end, profile);
     return new CardCycle(start, end, end, due);
+  }
+
+  /**
+   * Ciclo cuja fatura fecha no mês informado.
+   *
+   * <p>Usado quando o provedor informa o mês da fatura em {@code billForecastDate}: compras usam o
+   * próprio mês e pagamentos usam o mês anterior, pois o Pluggy informa o ciclo em que o pagamento
+   * foi lançado.
+   */
+  public CardCycle cycleForBillMonth(CardProfile profile, YearMonth month) {
+    return cycleFor(profile, closingDate(month.getYear(), month.getMonthValue(), profile));
   }
 
   public CardCycle nextCycle(CardProfile profile, CardCycle current) {
@@ -93,9 +104,14 @@ public class CardCycleService {
     return yearMonth.atDay(day);
   }
 
-  private static LocalDate dueDate(LocalDate monthReference, CardProfile profile) {
-    YearMonth yearMonth = YearMonth.from(monthReference);
-    int day = Math.min(profile.getDueDay(), yearMonth.lengthOfMonth());
-    return yearMonth.atDay(day);
+  private static LocalDate dueDate(LocalDate closingDate, CardProfile profile) {
+    YearMonth closingMonth = YearMonth.from(closingDate);
+    int sameMonthDay = Math.min(profile.getDueDay(), closingMonth.lengthOfMonth());
+    LocalDate sameMonth = closingMonth.atDay(sameMonthDay);
+    if (!sameMonth.isBefore(closingDate)) {
+      return sameMonth;
+    }
+    YearMonth nextMonth = closingMonth.plusMonths(1);
+    return nextMonth.atDay(Math.min(profile.getDueDay(), nextMonth.lengthOfMonth()));
   }
 }

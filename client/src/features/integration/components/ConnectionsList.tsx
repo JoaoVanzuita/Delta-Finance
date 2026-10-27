@@ -37,6 +37,7 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
     void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
     void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
     void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
+    void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
   }
 
   const sync = useMutation({

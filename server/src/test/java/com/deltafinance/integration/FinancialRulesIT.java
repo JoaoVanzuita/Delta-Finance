@@ -85,7 +85,7 @@ class FinancialRulesIT extends PostgresTestBase {
             "tx-regras-card",
             "acc-regras-card",
             "Compra cartão",
-            "-100.00",
+            "100.00",
             "2026-10-03",
             "POSTED",
             "Compras"));

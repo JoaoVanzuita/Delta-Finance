@@ -171,7 +171,7 @@ class FinalInvoiceIT extends PostgresTestBase {
             Map.of("paymentAccountId", bankId, "amount", "40.00", "paidOn", "2026-10-20"))
         .andExpect(status().isCreated());
     first = invoiceDetail(firstId);
-    assertThat(first.path("status").asString()).isEqualTo("PARTIALLY_PAID");
+    assertThat(first.path("status").asString()).isEqualTo("OVERDUE");
     assertThat(first.path("paymentsTotal").asString()).isEqualTo("40.00");
     assertThat(first.path("outstanding").asString()).isEqualTo("55.00");
 

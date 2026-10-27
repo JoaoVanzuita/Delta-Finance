@@ -43,13 +43,28 @@ public final class PluggyStub {
       String status,
       String category) {}
 
+  public record BillFixture(
+      String externalId,
+      String closingDate,
+      String dueDate,
+      String totalAmount,
+      String minimumPaymentAmount) {}
+
+  public record BillPaymentFixture(
+      String externalId, String paymentDate, String amount, String paymentMode, String valueType) {}
+
   private final MockWebServer server = new MockWebServer();
   private final Map<String, String> clients = new ConcurrentHashMap<>();
   private final Map<String, ItemFixture> items = new ConcurrentHashMap<>();
   private final Map<String, List<AccountFixture>> accountsByItem = new ConcurrentHashMap<>();
   private final Map<String, List<TransactionFixture>> transactionsByAccount =
       new ConcurrentHashMap<>();
+  private final Map<String, List<BillFixture>> billsByAccount = new ConcurrentHashMap<>();
+  private final Map<String, List<BillPaymentFixture>> billPaymentsByBill =
+      new ConcurrentHashMap<>();
   private final Map<String, Map<String, Object>> installmentMetadataByTransaction =
+      new ConcurrentHashMap<>();
+  private final Map<String, Map<String, Object>> creditCardMetadataByTransaction =
       new ConcurrentHashMap<>();
   private final List<RecordedRequest> requests = new CopyOnWriteArrayList<>();
   private final List<String> dataApiKeys = new CopyOnWriteArrayList<>();
@@ -57,6 +72,7 @@ public final class PluggyStub {
   private final Map<String, Integer> failuresRemaining = new ConcurrentHashMap<>();
   private final Map<String, Integer> failureStatus = new ConcurrentHashMap<>();
   private final Map<String, String> nextByAccount = new ConcurrentHashMap<>();
+  private final Map<String, String> accountNumbers = new ConcurrentHashMap<>();
   private final AtomicInteger authCalls = new AtomicInteger();
   private volatile boolean rotateKeys;
   private volatile String blockedPathPrefix;
@@ -94,13 +110,17 @@ public final class PluggyStub {
     items.clear();
     accountsByItem.clear();
     transactionsByAccount.clear();
+    billsByAccount.clear();
+    billPaymentsByBill.clear();
     installmentMetadataByTransaction.clear();
+    creditCardMetadataByTransaction.clear();
     requests.clear();
     dataApiKeys.clear();
     validApiKeys.clear();
     failuresRemaining.clear();
     failureStatus.clear();
     nextByAccount.clear();
+    accountNumbers.clear();
     authCalls.set(0);
     rotateKeys = false;
     blockedPathPrefix = null;
@@ -185,11 +205,40 @@ public final class PluggyStub {
         .add(transaction);
   }
 
+  public void addBill(String accountId, BillFixture bill) {
+    billsByAccount.computeIfAbsent(accountId, ignored -> new CopyOnWriteArrayList<>()).add(bill);
+  }
+
+  public void addBillPayment(String accountId, String billExternalId, BillPaymentFixture payment) {
+    billPaymentsByBill
+        .computeIfAbsent(accountId + "|" + billExternalId, ignored -> new CopyOnWriteArrayList<>())
+        .add(payment);
+  }
+
+  public void setBills(String accountId, List<BillFixture> bills) {
+    billsByAccount.put(accountId, new CopyOnWriteArrayList<>(bills));
+  }
+
+  public void setBillPayments(
+      String accountId, String billExternalId, List<BillPaymentFixture> payments) {
+    billPaymentsByBill.put(accountId + "|" + billExternalId, new CopyOnWriteArrayList<>(payments));
+  }
+
   /** Sobrescreve o creditCardMetadata devolvido para uma transação específica. */
   public void setInstallments(String externalTransactionId, int installmentNumber, int total) {
     installmentMetadataByTransaction.put(
         externalTransactionId,
         Map.of("installmentNumber", installmentNumber, "totalInstallments", total));
+  }
+
+  /** Acrescenta campos ao creditCardMetadata (ex.: billForecastDate) de uma transação. */
+  public void setCreditCardMetadata(String externalTransactionId, Map<String, Object> metadata) {
+    creditCardMetadataByTransaction.put(externalTransactionId, metadata);
+  }
+
+  /** Sobrescreve o número do cartão (últimos quatro dígitos) devolvido pelo provedor. */
+  public void setAccountNumber(String accountId, String number) {
+    accountNumbers.put(accountId, number);
   }
 
   public void setTransactions(String accountId, List<TransactionFixture> transactions) {
@@ -295,6 +344,9 @@ public final class PluggyStub {
       if (path.startsWith("/v2/transactions")) {
         return transactions(request.getRequestUrl().queryParameter("accountId"));
       }
+      if (path.startsWith("/bills")) {
+        return bills(request.getRequestUrl().queryParameter("accountId"));
+      }
       return response(404, Map.of("message", "not found"));
     }
 
@@ -312,6 +364,7 @@ public final class PluggyStub {
     private boolean requiresApiKey(String path) {
       return path.startsWith("/items/")
           || path.startsWith("/accounts")
+          || path.startsWith("/bills")
           || path.startsWith("/v2/transactions");
     }
 
@@ -360,11 +413,45 @@ public final class PluggyStub {
         body.put("type", account.type());
         body.put("subtype", account.subtype());
         body.put("name", account.name());
+        if ("CREDIT".equals(account.type())) {
+          body.put("number", accountNumbers.getOrDefault(account.externalId(), "4242"));
+        }
         body.put("balance", account.balance());
         body.put("currencyCode", "BRL");
         if (account.creditData() != null) {
           body.put("creditData", account.creditData());
         }
+        results.add(body);
+      }
+      return response(
+          200, Map.of("results", results, "page", 1, "totalPages", 1, "total", results.size()));
+    }
+
+    private MockResponse bills(String accountId) {
+      List<BillFixture> bills = billsByAccount.getOrDefault(accountId, List.of());
+      List<Map<String, Object>> results = new ArrayList<>();
+      for (BillFixture bill : bills) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", bill.externalId());
+        body.put("billClosingDate", bill.closingDate());
+        body.put("dueDate", bill.dueDate());
+        body.put("totalAmount", bill.totalAmount());
+        body.put("totalAmountCurrencyCode", "BRL");
+        body.put("minimumPaymentAmount", bill.minimumPaymentAmount());
+        List<BillPaymentFixture> payments =
+            billPaymentsByBill.getOrDefault(accountId + "|" + bill.externalId(), List.of());
+        List<Map<String, Object>> paymentResults = new ArrayList<>();
+        for (BillPaymentFixture payment : payments) {
+          Map<String, Object> paymentBody = new LinkedHashMap<>();
+          paymentBody.put("id", payment.externalId());
+          paymentBody.put("paymentDate", payment.paymentDate());
+          paymentBody.put("amount", payment.amount());
+          paymentBody.put("paymentMode", payment.paymentMode());
+          paymentBody.put("valueType", payment.valueType());
+          paymentBody.put("currencyCode", "BRL");
+          paymentResults.add(paymentBody);
+        }
+        body.put("payments", paymentResults);
         results.add(body);
       }
       return response(
@@ -385,10 +472,14 @@ public final class PluggyStub {
         body.put("status", transaction.status());
         body.put("category", transaction.category());
         body.put("currencyCode", "BRL");
-        body.put(
-            "creditCardMetadata",
-            installmentMetadataByTransaction.getOrDefault(
-                transaction.externalId(), Map.of("totalInstallments", 1, "installmentNumber", 1)));
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("totalInstallments", 1);
+        metadata.put("installmentNumber", 1);
+        metadata.putAll(
+            installmentMetadataByTransaction.getOrDefault(transaction.externalId(), Map.of()));
+        metadata.putAll(
+            creditCardMetadataByTransaction.getOrDefault(transaction.externalId(), Map.of()));
+        body.put("creditCardMetadata", metadata);
         results.add(body);
       }
       return response(

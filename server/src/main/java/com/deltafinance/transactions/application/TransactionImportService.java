@@ -32,6 +32,7 @@ import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -53,6 +54,11 @@ import tools.jackson.databind.JsonNode;
  * reconciliation_state=SOURCE_REMOVED}, saindo imediatamente dos totais correntes. Nenhuma linha é
  * apagada; se o mesmo identificador voltar em uma leitura posterior, a marca é limpa e o status
  * efetivo é restaurado automaticamente.
+ *
+ * <p>O sinal das transações de cartão de crédito é normalizado na importação: o Pluggy usa valores
+ * positivos para compras (aumentam a dívida) e negativos para pagamentos/créditos. Internamente a
+ * convenção é sempre negativa para saída e positiva para entrada, como nos lançamentos manuais. O
+ * valor bruto da origem permanece em {@code amount_source_enc} para auditoria.
  */
 @Service
 public class TransactionImportService {
@@ -60,6 +66,30 @@ public class TransactionImportService {
   private static final String TABLE = "transaction";
   private static final String SOURCE = "PLUGGY";
   private static final int MONTHS_INITIAL = 12;
+
+  /**
+   * Categorias do provedor que representam movimentação entre contas do próprio titular.
+   *
+   * <p>Elas são registradas como {@link CategoryKind#TRANSFER} para não compor receitas nem
+   * despesas, mesmo quando não há uma perna correspondente importada (ex.: cofrinho ou conta de
+   * outra instituição não conectada).
+   */
+  private static final Set<String> INTERNAL_TRANSFER_CATEGORIES =
+      Set.of(
+          "same person transfer",
+          "transfer - internal",
+          "internal transfer",
+          "credit card payment",
+          "pagamento de cartao de credito",
+          "pagamento de cartão de crédito",
+          "pagamento de fatura",
+          "transferencia - interna",
+          "transferência - interna",
+          "transferencia entre contas",
+          "transferência entre contas",
+          "transferencia mesma titularidade",
+          "transferência mesma titularidade",
+          "mesma titularidade");
 
   private final TransactionRepository transactionRepository;
   private final FinancialAccountRepository accountRepository;
@@ -252,7 +282,10 @@ public class TransactionImportService {
       // Sem valor/data não invente 0,00 nem "hoje": registre a falha e siga.
       return Outcome.FAILED;
     }
-    BigDecimal amount = imported.amount();
+    BigDecimal sourceAmount = imported.amount();
+    // Pluggy inverte o sinal em cartões: positivo é compra (dívida) e negativo é pagamento. A
+    // convenção interna é única (negativo = saída), então normalizamos já na importação.
+    BigDecimal amount = normalizeAmount(account, sourceAmount);
     String description = imported.description() == null ? "" : imported.description();
     LocalDate postedOn = imported.date();
     TransactionStatus status = mapStatus(imported.status());
@@ -262,7 +295,7 @@ public class TransactionImportService {
     byte[] fingerprint =
         hmacService.fingerprint(
             account.getId().toString(),
-            amount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
+            sourceAmount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
             postedOn.toString(),
             normalize(description),
             installmentMetadata(imported.creditCardMetadata()));
@@ -301,7 +334,11 @@ public class TransactionImportService {
     }
 
     byte[] amountSourceEnc =
-        encrypt(userId, "amount_source", transaction == null ? null : transaction.getId(), amount);
+        encrypt(
+            userId,
+            "amount_source",
+            transaction == null ? null : transaction.getId(),
+            sourceAmount);
     byte[] amountEffectiveEnc =
         encrypt(
             userId, "amount_effective", transaction == null ? null : transaction.getId(), amount);
@@ -347,6 +384,7 @@ public class TransactionImportService {
       transaction.applyInstallments(
           installmentValue(imported.creditCardMetadata(), "installmentNumber"),
           installmentValue(imported.creditCardMetadata(), "totalInstallments"));
+      transaction.applyProviderBillMonth(billForecastMonth(imported.creditCardMetadata()));
       transaction = transactionRepository.save(transaction);
       // Cifragens usam o ID recém-gerado; refaz para vincular o AAD correto.
       transaction.applyImported(
@@ -354,7 +392,7 @@ public class TransactionImportService {
           status,
           postedOn,
           postedOn,
-          encrypt(userId, "amount_source", transaction.getId(), amount),
+          encrypt(userId, "amount_source", transaction.getId(), sourceAmount),
           encrypt(userId, "amount_effective", transaction.getId(), amount),
           encrypt(userId, "description_source", transaction.getId(), description),
           encrypt(userId, "description_effective", transaction.getId(), description),
@@ -448,6 +486,7 @@ public class TransactionImportService {
     transaction.applyInstallments(
         installmentValue(imported.creditCardMetadata(), "installmentNumber"),
         installmentValue(imported.creditCardMetadata(), "totalInstallments"));
+    transaction.applyProviderBillMonth(billForecastMonth(imported.creditCardMetadata()));
     transactionRepository.save(transaction);
     upsertIdentityHistory(
         userId, account.getId(), transaction.getId(), imported.externalId(), externalIdEnc);
@@ -500,16 +539,26 @@ public class TransactionImportService {
       return null;
     }
     String normalized = normalize(providerCategory);
+    boolean internalTransfer = INTERNAL_TRANSFER_CATEGORIES.contains(normalized);
     byte[] hash = hmacService.hmac("category", normalized);
     var found = categoryRepository.findByUserIdAndNormalizedNameHash(userId, hash);
     if (found.isPresent()) {
-      return found.get().getId();
+      Category category = found.get();
+      if (internalTransfer && category.getKind() != CategoryKind.TRANSFER) {
+        // Corrige categorias já criadas por versões anteriores, mantendo a escolha do usuário
+        // para todas as demais categorias.
+        category.changeKind(CategoryKind.TRANSFER);
+        categoryRepository.save(category);
+      }
+      return category.getId();
     }
     UUID categoryId = UUID.randomUUID();
     CategoryKind kind =
-        type == TransactionType.CREDIT || type == TransactionType.REFUND
-            ? CategoryKind.INCOME
-            : CategoryKind.EXPENSE;
+        internalTransfer
+            ? CategoryKind.TRANSFER
+            : type == TransactionType.CREDIT || type == TransactionType.REFUND
+                ? CategoryKind.INCOME
+                : CategoryKind.EXPENSE;
     Category category =
         new Category(
             categoryId,
@@ -539,6 +588,17 @@ public class TransactionImportService {
         account.getExternalAccountIdEnc(),
         new CryptoContext(
             account.getUserId(), "financial_account", "external_account_id", account.getId()));
+  }
+
+  /**
+   * Converte o valor da origem para o sinal interno.
+   *
+   * <p>Para contas {@code CREDIT}, o Pluggy retorna compras como positivas (aumentam a dívida) e
+   * pagamentos/créditos como negativos. No restante do sistema a saída é negativa, então o valor é
+   * invertido. Contas {@code BANK}, {@code CASH} e {@code WALLET} já seguem a convenção interna.
+   */
+  private static BigDecimal normalizeAmount(FinancialAccount account, BigDecimal amount) {
+    return account.getType() == AccountType.CREDIT ? amount.negate() : amount;
   }
 
   private static TransactionStatus mapStatus(String status) {
@@ -577,6 +637,21 @@ public class TransactionImportService {
     }
     int parsed = value.asInt(0);
     return parsed > 0 ? parsed : null;
+  }
+
+  private static LocalDate billForecastMonth(JsonNode metadata) {
+    if (metadata == null || metadata.isMissingNode() || metadata.isNull()) {
+      return null;
+    }
+    String text = metadata.path("billForecastDate").asString(null);
+    if (text == null || text.isBlank()) {
+      return null;
+    }
+    try {
+      return YearMonth.parse(text.trim()).atDay(1);
+    } catch (RuntimeException exception) {
+      return null;
+    }
   }
 
   private static String installmentMetadata(JsonNode metadata) {

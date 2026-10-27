@@ -1,6 +1,7 @@
 package com.deltafinance.invoices.api;
 
 import com.deltafinance.invoices.application.InvoiceView;
+import com.deltafinance.invoices.application.ProviderBillView;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -19,7 +20,9 @@ public record InvoiceResponse(
     String minimumPayment,
     String source,
     boolean hasAdjustments,
-    int adjustmentCount) {
+    int adjustmentCount,
+    ProviderBillView providerBill,
+    boolean missingPurchases) {
 
   public static InvoiceResponse from(InvoiceView view) {
     return new InvoiceResponse(
@@ -37,6 +40,8 @@ public record InvoiceResponse(
         view.minimumPayment(),
         view.source(),
         view.hasAdjustments(),
-        view.adjustmentCount());
+        view.adjustmentCount(),
+        view.providerBill(),
+        view.missingPurchases());
   }
 }

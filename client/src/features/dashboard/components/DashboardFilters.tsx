@@ -130,7 +130,7 @@ export function DashboardFilters({ value, accounts, categories, onApply }: Dashb
             <option value="">Todas</option>
             <option value={UNCATEGORIZED_CATEGORY_ID}>Sem categoria</option>
             {categories
-              .filter((category) => category.active)
+              .filter((category) => category.active && category.kind !== 'TRANSFER')
               .map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}

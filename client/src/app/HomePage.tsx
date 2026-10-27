@@ -51,7 +51,7 @@ export function HomePage() {
         <ul className="mt-4 space-y-2 text-sm text-ink">
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
-            Contas manuais e importadas, cartões, faturas e transações
+            Contas manuais e importadas, cartões com painel próprio, faturas e transações
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />

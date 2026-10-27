@@ -104,6 +104,10 @@ public class Transaction extends BaseEntity {
   @Column(name = "total_installments")
   private Integer totalInstallments;
 
+  /** Primeiro dia do mês da fatura informado pelo provedor; nulo em lançamentos manuais. */
+  @Column(name = "provider_bill_month")
+  private LocalDate providerBillMonth;
+
   protected Transaction() {
     // Hibernate
   }
@@ -315,6 +319,15 @@ public class Transaction extends BaseEntity {
 
   public Integer getTotalInstallments() {
     return totalInstallments;
+  }
+
+  public LocalDate getProviderBillMonth() {
+    return providerBillMonth;
+  }
+
+  /** Mês da fatura informado pela origem; usado para alocar compras e pagamentos ao ciclo certo. */
+  public void applyProviderBillMonth(LocalDate providerBillMonth) {
+    this.providerBillMonth = providerBillMonth == null ? null : providerBillMonth.withDayOfMonth(1);
   }
 
   /** Metadados de parcelamento informados pela origem, quando existirem. */

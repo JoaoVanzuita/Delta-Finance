@@ -237,6 +237,23 @@ export interface paths {
         patch: operations["patchAccountsId"];
         trace?: never;
     };
+    "/cards/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Visão geral dos cartões de crédito */
+        get: operations["getCardsOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cards/{accountId}/profile": {
         parameters: {
             query?: never;
@@ -361,6 +378,26 @@ export interface paths {
         get: operations["getInvoicesId"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invoices/{id}/reconcile-provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Alinha o total da fatura ao total da Bill oficial
+         * @description Cria um item manual auditado com a diferença entre o total local e o total da Bill oficial. Em fatura paga, o status é preservado e o crédito aplicado é normalizado.
+         */
+        post: operations["postInvoicesIdReconcileProvider"];
         delete?: never;
         options?: never;
         head?: never;
@@ -945,8 +982,54 @@ export interface components {
             closingDay: number;
             dueDay: number;
             creditLimit?: string;
-            /** @description Crédito acumulado do cartão para faturas futuras; não compõe income, expenses nem currentBalance. */
+            /** @description Crédito acumulado do cartão para faturas futuras, inclusive excedente de pagamento; não compõe income, expenses nem currentBalance. */
             creditBalance: string;
+            /** @description Bandeira informada pelo provedor (ex.: VISA). */
+            brand?: string;
+            /** @description Nível informado pelo provedor (ex.: PLATINUM). */
+            level?: string;
+            /** @description Últimos quatro dígitos do cartão, quando informados. */
+            last4?: string;
+            /** @description Limite disponível oficial informado pelo provedor. */
+            availableCreditLimit?: string;
+        };
+        CardOverview: {
+            /** @description Soma do saldo devedor dos cartões em BRL. */
+            totalOutstanding: string;
+            /** @description Soma dos limites conhecidos dos cartões em BRL. */
+            totalLimit: string;
+            /** @description Soma do valor utilizado informado pelos cartões em BRL. */
+            totalUsed: string;
+            /** Format: date */
+            nextDueDate: string | null;
+            items: components["schemas"]["CardOverviewItem"][];
+        };
+        CardOverviewItem: {
+            /** Format: uuid */
+            accountId: string;
+            alias: string | null;
+            institutionName: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE" | "UNAVAILABLE" | "CLOSED";
+            currency: string;
+            hasCycle: boolean;
+            closingDay: number | null;
+            dueDay: number | null;
+            creditLimit: string | null;
+            creditBalance: string | null;
+            availableCreditLimit?: string | null;
+            brand?: string | null;
+            level?: string | null;
+            last4?: string | null;
+            usedAmount: string;
+            outstanding: string;
+            /** @description Percentual utilizado do limite, com duas casas decimais. */
+            utilization: string | null;
+            /** Format: date */
+            nextDueDate: string | null;
+            currentInvoice: components["schemas"]["Invoice"] | null;
+            nextDueInvoice: components["schemas"]["Invoice"] | null;
+            unallocatedCount: number;
         };
         CardProfileRequest: {
             closingDay: number;
@@ -1088,6 +1171,38 @@ export interface components {
             hasAdjustments: boolean;
             /** @description Quantidade de ajustes manuais. */
             adjustmentCount: number;
+            /** @description Bill oficial do provedor para conciliação; ausente quando o conector não a retorna. Não altera os totais locais. */
+            providerBill?: components["schemas"]["ProviderBill"];
+            /** @description Verdadeiro quando há pagamento confirmado sem compras locais no ciclo; indica lacuna no histórico do conector. */
+            missingPurchases: boolean;
+        };
+        ProviderBill: {
+            /** Format: date */
+            closingDate?: string;
+            /** Format: date */
+            dueDate: string;
+            total: string;
+            minimumPayment?: string;
+            /** @description Soma dos pagamentos oficiais informados na Bill e dentro da janela do ciclo. */
+            paymentsTotal: string;
+            /** @description total local menos total oficial. */
+            totalDifference: string;
+            /** @description pagamentos locais menos pagamentos oficiais. */
+            paymentsDifference: string;
+            /** @description Verdadeiro quando total e pagamentos oficiais coincidem com os locais. */
+            reconciled: boolean;
+            /** @description Pagamentos da Bill descartados por estarem fora da janela do ciclo (dados antigos do conector). */
+            ignoredPayments: number;
+            /** Format: date */
+            syncedOn: string;
+            payments: components["schemas"]["ProviderBillPayment"][];
+        };
+        ProviderBillPayment: {
+            /** Format: date */
+            paidOn: string;
+            amount: string;
+            paymentMode?: string;
+            valueType?: string;
         };
         InvoiceDetail: components["schemas"]["Invoice"] & {
             items?: components["schemas"]["InvoiceItem"][];
@@ -1171,6 +1286,10 @@ export interface components {
             status: "PENDING" | "CONFIRMED" | "REVERSED";
             /** @enum {string} */
             source: "MANUAL" | "IMPORTED";
+        };
+        InvoiceReconciliationRequest: {
+            /** @description Motivo do ajuste, preservado na descrição do item e na auditoria. */
+            reason: string;
         };
         InvoicePaymentRequest: {
             /** Format: uuid */
@@ -2087,6 +2206,27 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    getCardsOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cartões, faturas, limites e pendências de alocação. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardOverview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     putCardsAccountIdProfile: {
         parameters: {
             query?: never;
@@ -2401,6 +2541,38 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    postInvoicesIdReconcileProvider: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceReconciliationRequest"];
+            };
+        };
+        responses: {
+            /** @description Fatura reconciliada com a Bill oficial. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     postInvoicesIdItems: {

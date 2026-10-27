@@ -25,6 +25,9 @@ const statusLabels: Record<string, string> = {
 
 export function AccountsPage() {
   const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
+  const allAccounts = accountsQuery.data?.items ?? []
+  const accounts = allAccounts.filter((account) => account.type !== 'CREDIT')
+  const hasCards = allAccounts.some((account) => account.type === 'CREDIT')
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8">
@@ -33,10 +36,10 @@ export function AccountsPage() {
           <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
             Patrimônio do dia a dia
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Contas e cartões</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Contas</h1>
           <p className="max-w-2xl text-sm leading-relaxed text-ink-muted">
-            Contas importadas e cartões aparecem aqui. Campos não fornecidos pela origem são
-            sinalizados, sem estimativas.
+            Contas bancárias, carteiras e dinheiro. Cartões de crédito têm um painel próprio, com
+            faturas, limites e vencimentos. Campos não fornecidos pela origem são sinalizados.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -45,6 +48,12 @@ export function AccountsPage() {
             className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
           >
             Nova conta manual
+          </Link>
+          <Link
+            to="/cards"
+            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+          >
+            Ver cartões
           </Link>
           <Link
             to="/settings/integration"
@@ -72,24 +81,35 @@ export function AccountsPage() {
         </p>
       ) : null}
 
-      {accountsQuery.data && accountsQuery.data.items.length === 0 ? (
+      {accountsQuery.data && accounts.length === 0 ? (
         <section className="rounded-card border border-line bg-surface p-6">
-          <h2 className="text-lg font-semibold text-ink">Nenhuma conta ainda</h2>
+          <h2 className="text-lg font-semibold text-ink">Nenhuma conta bancária</h2>
           <p className="mt-2 text-sm text-ink-muted">
-            Configure sua integração pessoal e adicione um itemId para importar contas e cartões.
+            Configure sua integração pessoal e adicione um itemId para importar contas. Cartões de
+            crédito aparecem em uma área separada.
           </p>
-          <Link
-            to="/settings/integration"
-            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
-          >
-            Configurar Meu Pluggy
-          </Link>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              to="/settings/integration"
+              className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
+            >
+              Configurar Meu Pluggy
+            </Link>
+            {hasCards ? (
+              <Link
+                to="/cards"
+                className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+              >
+                Ver cartões
+              </Link>
+            ) : null}
+          </div>
         </section>
       ) : null}
 
-      {accountsQuery.data && accountsQuery.data.items.length > 0 ? (
+      {accounts.length > 0 ? (
         <ul className="grid gap-4 sm:grid-cols-2">
-          {accountsQuery.data.items.map((account) => (
+          {accounts.map((account) => (
             <li key={account.id}>
               <AccountCard account={account} />
             </li>
@@ -138,26 +158,6 @@ function AccountCard({ account }: { account: Account }) {
         <p className="rounded-card border border-warning/40 bg-warning/5 p-3 text-xs text-ink">
           Moeda {account.currency}: valores não entram nos totais consolidados em BRL.
         </p>
-      ) : null}
-
-      {account.cardProfile ? (
-        <div className="rounded-card border border-line bg-surface-muted p-3 text-sm">
-          <p className="font-medium text-ink">Cartão</p>
-          <dl className="mt-2 grid grid-cols-[1fr_auto] gap-1 text-xs">
-            <dt className="text-ink-muted">Fechamento / vencimento</dt>
-            <dd className="numeric text-right text-ink">
-              dia {account.cardProfile.closingDay} / dia {account.cardProfile.dueDay}
-            </dd>
-            <dt className="text-ink-muted">Limite</dt>
-            <dd className="numeric text-right text-ink">
-              {formatMoney(account.cardProfile.creditLimit, account.currency)}
-            </dd>
-            <dt className="text-ink-muted">Crédito acumulado</dt>
-            <dd className="numeric text-right text-ink">
-              {formatMoney(account.cardProfile.creditBalance, account.currency)}
-            </dd>
-          </dl>
-        </div>
       ) : null}
 
       <div className="mt-auto flex flex-wrap gap-3">

@@ -19,4 +19,6 @@ public record InvoiceView(
     String minimumPayment,
     String source,
     boolean hasAdjustments,
-    int adjustmentCount) {}
+    int adjustmentCount,
+    ProviderBillView providerBill,
+    boolean missingPurchases) {}

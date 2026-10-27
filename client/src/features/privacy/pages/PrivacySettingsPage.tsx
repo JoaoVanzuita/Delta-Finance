@@ -105,6 +105,7 @@ export function PrivacySettingsPage() {
       void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
+      void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
     },
     onError: (error) => {
       setDisconnectError(

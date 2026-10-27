@@ -9,10 +9,12 @@ import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.pagination.CursorPage;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +32,7 @@ public class InvoiceQueryService {
   private final InvoiceGenerationService generationService;
   private final InvoiceBalanceService balanceService;
   private final CardCycleService cardCycleService;
+  private final ProviderBillService providerBillService;
   private final CryptoService cryptoService;
 
   public InvoiceQueryService(
@@ -41,6 +44,7 @@ public class InvoiceQueryService {
       InvoiceGenerationService generationService,
       InvoiceBalanceService balanceService,
       CardCycleService cardCycleService,
+      ProviderBillService providerBillService,
       CryptoService cryptoService) {
     this.invoiceRepository = invoiceRepository;
     this.itemRepository = itemRepository;
@@ -50,6 +54,7 @@ public class InvoiceQueryService {
     this.generationService = generationService;
     this.balanceService = balanceService;
     this.cardCycleService = cardCycleService;
+    this.providerBillService = providerBillService;
     this.cryptoService = cryptoService;
   }
 
@@ -72,7 +77,10 @@ public class InvoiceQueryService {
     int pageSize = Math.min(100, Math.max(1, limit));
     boolean hasMore = filtered.size() > pageSize;
     List<Invoice> page = hasMore ? filtered.subList(0, pageSize) : filtered;
-    List<InvoiceView> views = page.stream().map(this::toView).toList();
+    Map<UUID, ProviderBillView> providerBills =
+        providerBillService.views(userId, cardAccountId, page);
+    List<InvoiceView> views =
+        page.stream().map(invoice -> toView(invoice, providerBills.get(invoice.getId()))).toList();
     String nextCursor =
         hasMore && !page.isEmpty()
             ? encode(page.getLast().getCycleStart(), page.getLast().getId())
@@ -89,6 +97,7 @@ public class InvoiceQueryService {
   public void ensureInvoices(UUID userId, UUID cardAccountId) {
     cardCycleService.requireCard(userId, cardAccountId);
     generationService.ensureInvoices(userId, cardAccountId);
+    generationService.ensureCurrentInvoice(userId, cardAccountId);
   }
 
   public InvoiceDetailView detail(UUID userId, UUID invoiceId) {
@@ -110,11 +119,24 @@ public class InvoiceQueryService {
             .stream()
             .map(paymentService::toView)
             .toList();
-    return new InvoiceDetailView(toView(refreshed), items, payments);
+    return new InvoiceDetailView(
+        toViews(userId, refreshed.getCardAccountId(), List.of(refreshed)).getFirst(),
+        items,
+        payments);
   }
 
   public InvoiceView get(UUID userId, UUID invoiceId) {
-    return toView(requireInvoice(userId, invoiceId));
+    Invoice invoice = requireInvoice(userId, invoiceId);
+    return toViews(userId, invoice.getCardAccountId(), List.of(invoice)).getFirst();
+  }
+
+  /** Converte faturas em visões carregando as Bills oficiais uma única vez por cartão. */
+  public List<InvoiceView> toViews(UUID userId, UUID cardAccountId, List<Invoice> invoices) {
+    Map<UUID, ProviderBillView> providerBills =
+        providerBillService.views(userId, cardAccountId, invoices);
+    return invoices.stream()
+        .map(invoice -> toView(invoice, providerBills.get(invoice.getId())))
+        .toList();
   }
 
   public Invoice requireInvoice(UUID userId, UUID invoiceId) {
@@ -123,7 +145,18 @@ public class InvoiceQueryService {
         .orElseThrow(NotFoundException::new);
   }
 
-  InvoiceView toView(Invoice invoice) {
+  InvoiceView toView(Invoice invoice, ProviderBillView providerBill) {
+    String minimumPayment =
+        invoice.getMinimumPaymentEnc() == null
+            ? null
+            : decrypt(invoice, "minimum_payment", invoice.getMinimumPaymentEnc());
+    if (minimumPayment == null && providerBill != null) {
+      minimumPayment = providerBill.minimumPayment();
+    }
+    String total = decrypt(invoice, "total", invoice.getTotalEnc());
+    String paymentsTotal = decrypt(invoice, "payments_total", invoice.getPaymentsTotalEnc());
+    boolean missingPurchases =
+        new BigDecimal(total).signum() == 0 && new BigDecimal(paymentsTotal).signum() > 0;
     return new InvoiceView(
         invoice.getId(),
         invoice.getCardAccountId(),
@@ -132,16 +165,16 @@ public class InvoiceQueryService {
         invoice.getClosingDate(),
         invoice.getDueDate(),
         invoice.getStatus().name(),
-        decrypt(invoice, "total", invoice.getTotalEnc()),
-        decrypt(invoice, "payments_total", invoice.getPaymentsTotalEnc()),
+        total,
+        paymentsTotal,
         decrypt(invoice, "outstanding", invoice.getOutstandingEnc()),
         decrypt(invoice, "applied_credit", invoice.getAppliedCreditEnc()),
-        invoice.getMinimumPaymentEnc() == null
-            ? null
-            : decrypt(invoice, "minimum_payment", invoice.getMinimumPaymentEnc()),
+        minimumPayment,
         invoice.getSource().name(),
         invoice.isHasAdjustments(),
-        invoice.getAdjustmentCount());
+        invoice.getAdjustmentCount(),
+        providerBill,
+        missingPurchases);
   }
 
   private String decrypt(Invoice invoice, String column, byte[] value) {

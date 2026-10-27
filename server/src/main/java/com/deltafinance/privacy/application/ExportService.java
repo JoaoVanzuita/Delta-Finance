@@ -190,12 +190,16 @@ public class ExportService {
                 "dueDay",
                 "creditLimit",
                 "creditBalance",
+                "brand",
+                "level",
+                "last4",
+                "availableCreditLimit",
                 "source",
                 "createdAt",
                 "updatedAt"),
             "select id, user_id, account_id, closing_day, due_day, credit_limit_enc,"
-                + " credit_balance_enc, source, created_at, updated_at from card_profile"
-                + " where user_id = ?",
+                + " credit_balance_enc, brand, level, last4_enc, available_credit_limit_enc,"
+                + " source, created_at, updated_at from card_profile where user_id = ?",
             rs -> {
               UUID id = uuid(rs, "id");
               UUID userId = rs.getObject("user_id", UUID.class);
@@ -216,6 +220,18 @@ public class ExportService {
                       "credit_balance",
                       id,
                       rs.getBytes("credit_balance_enc")));
+              row.put("brand", rs.getString("brand"));
+              row.put("level", rs.getString("level"));
+              row.put(
+                  "last4", decrypt(userId, "card_profile", "last4", id, rs.getBytes("last4_enc")));
+              row.put(
+                  "availableCreditLimit",
+                  decrypt(
+                      userId,
+                      "card_profile",
+                      "available_credit_limit",
+                      id,
+                      rs.getBytes("available_credit_limit_enc")));
               row.put("source", rs.getString("source"));
               row.put("createdAt", instant(rs, "created_at"));
               row.put("updatedAt", instant(rs, "updated_at"));
@@ -507,14 +523,15 @@ public class ExportService {
                 "reconciliationState",
                 "installmentNumber",
                 "totalInstallments",
+                "providerBillMonth",
                 "createdAt",
                 "updatedAt"),
             "select id, user_id, account_id, category_id, source, type, status, posted_on,"
                 + " source_posted_on, currency, amount_source_enc, amount_effective_enc,"
                 + " description_source_enc, description_effective_enc, related_transaction_id,"
                 + " invoice_id, adjustment_reason_enc, notes_enc, edited_fields,"
-                + " reconciliation_state, installment_number, total_installments, created_at,"
-                + " updated_at from transaction"
+                + " reconciliation_state, installment_number, total_installments,"
+                + " provider_bill_month, created_at, updated_at from transaction"
                 + " where user_id = ? order by posted_on, id",
             rs -> {
               UUID id = uuid(rs, "id");
@@ -577,6 +594,7 @@ public class ExportService {
               row.put("reconciliationState", rs.getString("reconciliation_state"));
               row.put("installmentNumber", rs.getObject("installment_number", Integer.class));
               row.put("totalInstallments", rs.getObject("total_installments", Integer.class));
+              row.put("providerBillMonth", date(rs, "provider_bill_month"));
               row.put("createdAt", instant(rs, "created_at"));
               row.put("updatedAt", instant(rs, "updated_at"));
               return row;
@@ -715,6 +733,88 @@ public class ExportService {
               row.put("paidOn", date(rs, "paid_on"));
               row.put("status", rs.getString("status"));
               row.put("source", rs.getString("source"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "provider_bills",
+            List.of(
+                "id",
+                "cardAccountId",
+                "closingDate",
+                "dueDate",
+                "total",
+                "minimumPayment",
+                "paymentsTotal",
+                "currency",
+                "syncedAt",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, card_account_id, closing_date, due_date, total_enc,"
+                + " minimum_payment_enc, payments_total_enc, currency, synced_at, created_at,"
+                + " updated_at from provider_bill where user_id = ? order by due_date, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("cardAccountId", uuid(rs, "card_account_id"));
+              row.put("closingDate", date(rs, "closing_date"));
+              row.put("dueDate", date(rs, "due_date"));
+              row.put(
+                  "total", decrypt(userId, "provider_bill", "total", id, rs.getBytes("total_enc")));
+              row.put(
+                  "minimumPayment",
+                  decrypt(
+                      userId,
+                      "provider_bill",
+                      "minimum_payment",
+                      id,
+                      rs.getBytes("minimum_payment_enc")));
+              row.put(
+                  "paymentsTotal",
+                  decrypt(
+                      userId,
+                      "provider_bill",
+                      "payments_total",
+                      id,
+                      rs.getBytes("payments_total_enc")));
+              row.put("currency", rs.getString("currency"));
+              row.put("syncedAt", instant(rs, "synced_at"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "provider_bill_payments",
+            List.of(
+                "id",
+                "providerBillId",
+                "paymentDate",
+                "amount",
+                "paymentMode",
+                "valueType",
+                "currency",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, provider_bill_id, payment_date, amount_enc, payment_mode,"
+                + " value_type, currency, created_at, updated_at from provider_bill_payment"
+                + " where user_id = ? order by payment_date, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("providerBillId", uuid(rs, "provider_bill_id"));
+              row.put("paymentDate", date(rs, "payment_date"));
+              row.put(
+                  "amount",
+                  decrypt(
+                      userId, "provider_bill_payment", "amount", id, rs.getBytes("amount_enc")));
+              row.put("paymentMode", rs.getString("payment_mode"));
+              row.put("valueType", rs.getString("value_type"));
+              row.put("currency", rs.getString("currency"));
               row.put("createdAt", instant(rs, "created_at"));
               row.put("updatedAt", instant(rs, "updated_at"));
               return row;

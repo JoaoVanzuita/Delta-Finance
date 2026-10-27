@@ -98,6 +98,19 @@ async function installStub(page: Page) {
         }),
       })
     }
+    if (path === '/cards/overview') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          totalOutstanding: '0.00',
+          totalLimit: '0.00',
+          totalUsed: '0.00',
+          nextDueDate: null,
+          items: [],
+        }),
+      })
+    }
     if (path === '/dashboard/categories' || path === '/dashboard/timeseries') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
     }
@@ -163,6 +176,7 @@ for (const viewport of [
     for (const path of [
       '/dashboard',
       '/accounts',
+      '/cards',
       '/transactions',
       '/investments',
       '/wealth',

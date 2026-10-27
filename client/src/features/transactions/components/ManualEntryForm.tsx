@@ -82,6 +82,11 @@ export function ManualEntryForm({
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       void queryClient.invalidateQueries({ queryKey: ['internalMatches'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
+      void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
       onCreated?.()
     },
     onError: (caught) => {

@@ -42,7 +42,7 @@ class MigrationIT extends PostgresTestBase {
   void baselineNaoContemObjetosLegados() {
     cleanDatabase();
 
-    migrate();
+    migrateTo("001");
 
     // Garante que o teste não passe por vacuidade caso a baseline não seja aplicada.
     assertThat(currentVersion()).isEqualTo("001");

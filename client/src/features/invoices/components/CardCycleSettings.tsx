@@ -33,6 +33,7 @@ export function CardCycleSettings({ accountId, profile }: CardCycleSettingsProps
       void queryClient.invalidateQueries({ queryKey: ['account', accountId] })
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
       void queryClient.invalidateQueries({ queryKey: ['invoices', accountId] })
+      void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
     },
     onError: (caught) => {
       setMessage(null)

@@ -126,6 +126,7 @@ const ROUTES: ReadonlyArray<{ path: string; name: string }> = [
   { path: '/dashboard', name: 'dashboard' },
   { path: '/accounts', name: 'contas' },
   { path: '/accounts/new', name: 'nova conta manual' },
+  { path: '/cards', name: 'cartões' },
   { path: '/transactions', name: 'transações' },
   { path: '/transactions/new', name: 'novo lançamento' },
   { path: '/categories', name: 'categorias' },

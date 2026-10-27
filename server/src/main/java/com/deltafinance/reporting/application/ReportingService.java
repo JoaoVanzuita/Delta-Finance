@@ -421,6 +421,8 @@ public class ReportingService {
       if (!accountIncluded(resolved, transaction.accountId())
           || !"BRL".equalsIgnoreCase(transaction.currency())
           || "TRANSFER".equals(transaction.type())
+          || (transaction.categoryId() != null
+              && resolved.transferCategoryIds().contains(transaction.categoryId()))
           || "MATCHED".equals(transaction.reconciliationState())
           || installmentTransactionIds.contains(transaction.id())
           || !isCreditAccount(resolved, transaction.accountId())) {
@@ -584,6 +586,10 @@ public class ReportingService {
       return false;
     }
     if ("TRANSFER".equals(transaction.type())) {
+      return false;
+    }
+    if (transaction.categoryId() != null
+        && resolved.transferCategoryIds().contains(transaction.categoryId())) {
       return false;
     }
     if ("MATCHED".equals(transaction.reconciliationState())) {
@@ -774,8 +780,14 @@ public class ReportingService {
     }
 
     Map<UUID, String> categoryNames = new HashMap<>();
+    Set<UUID> transferCategoryIds = new HashSet<>();
     for (CategoryView category : categoryService.listExisting(userId)) {
       categoryNames.put(category.id(), category.name());
+      if ("TRANSFER".equals(category.kind())) {
+        // Categorias do tipo transferência (inclusive as criadas a partir de "Same person
+        // transfer" e "Transfer - Internal" do provedor) não compõem receitas nem despesas.
+        transferCategoryIds.add(category.id());
+      }
     }
     if (query.categoryId() != null
         && !UNCATEGORIZED_ID.equals(query.categoryId())
@@ -805,6 +817,7 @@ public class ReportingService {
         maxAmount,
         accounts,
         categoryNames,
+        transferCategoryIds,
         accountQueryService.connectionIdsByAccount(userId));
   }
 
@@ -905,6 +918,7 @@ public class ReportingService {
       BigDecimal maxAmount,
       List<AccountView> accounts,
       Map<UUID, String> categoryNames,
+      Set<UUID> transferCategoryIds,
       Map<UUID, UUID> connectionIdsByAccount) {}
 
   private enum ReportPeriod {

@@ -97,13 +97,23 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function stubApi(invoice: typeof INVOICE = INVOICE) {
+function stubApi(invoice: Record<string, unknown> = INVOICE) {
   const mock = vi.fn((url: string, init: RequestInit) => {
     if (url.includes('/invoices/invoice-1/items') && init.method === 'POST') {
       return jsonResponse({ ...INVOICE.items[1], id: 'item-3' }, 201)
     }
     if (url.includes('/invoices/invoice-1/payments') && init.method === 'POST') {
       return jsonResponse({ ...INVOICE.payments[0], id: 'payment-2' }, 201)
+    }
+    if (url.includes('/invoices/invoice-1/reconcile-provider') && init.method === 'POST') {
+      const providerBill = invoice.providerBill as Record<string, unknown> | undefined
+      return jsonResponse({
+        ...invoice,
+        total: providerBill?.total ?? invoice.total,
+        providerBill: providerBill
+          ? { ...providerBill, totalDifference: '0.00', reconciled: true }
+          : undefined,
+      })
     }
     if (url.includes('/invoice-items/item-2/corrections')) {
       return jsonResponse([
@@ -156,7 +166,7 @@ describe('detalhe da fatura', () => {
     expect(screen.getByText('Juros')).toBeInTheDocument()
     expect(screen.getByText(/Crédito acumulado do cartão/)).toBeInTheDocument()
     expect(screen.getByText(/R\$\s*35,00/)).toBeInTheDocument()
-    expect(screen.getByText('2026-10-20 · Confirmado')).toBeInTheDocument()
+    expect(screen.getByText('2026-10-20 · Confirmado · Manual')).toBeInTheDocument()
   })
 
   it('adiciona item manual e abre histórico de correções', async () => {
@@ -206,6 +216,81 @@ describe('detalhe da fatura', () => {
     expect(screen.queryByRole('button', { name: 'Registrar pagamento' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Remover' })).not.toBeInTheDocument()
+  })
+
+  it('mostra a Bill oficial, o pagamento mínimo e as divergências', async () => {
+    stubApi({
+      ...INVOICE,
+      providerBill: {
+        closingDate: '2026-10-05',
+        dueDate: '2026-11-15',
+        total: '118.00',
+        minimumPayment: '24.00',
+        paymentsTotal: '20.00',
+        totalDifference: '2.00',
+        paymentsDifference: '0.00',
+        reconciled: false,
+        ignoredPayments: 0,
+        syncedOn: '2026-10-27',
+        payments: [
+          {
+            paidOn: '2026-10-20',
+            amount: '20.00',
+            paymentMode: 'PIX',
+            valueType: 'PARTIAL_PAYMENT',
+          },
+        ],
+      },
+    })
+    renderPage()
+
+    expect(await screen.findByText('Bill oficial do provedor')).toBeInTheDocument()
+    expect(screen.getByText('Divergente')).toBeInTheDocument()
+    expect(screen.getByText('Total oficial')).toBeInTheDocument()
+    expect(screen.getByText('Pagamento mínimo')).toBeInTheDocument()
+    expect(screen.getByText('Pagamentos oficiais')).toBeInTheDocument()
+    expect(screen.getByText('Diferença de total (local − oficial)')).toBeInTheDocument()
+    expect(screen.getByText('20/10/2026 · PIX · PARTIAL_PAYMENT')).toBeInTheDocument()
+    expect(screen.getByText(/O ajuste de conciliação é sempre explícito/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Conciliar fatura' })).toBeInTheDocument()
+  })
+
+  it('registra ajuste de conciliação com a Bill oficial', async () => {
+    const fetchMock = stubApi({
+      ...INVOICE,
+      providerBill: {
+        closingDate: '2026-10-05',
+        dueDate: '2026-11-15',
+        total: '140.00',
+        minimumPayment: '24.00',
+        paymentsTotal: '20.00',
+        totalDifference: '-20.00',
+        paymentsDifference: '0.00',
+        reconciled: false,
+        ignoredPayments: 0,
+        syncedOn: '2026-10-27',
+        payments: [],
+      },
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('Divergente')
+    await user.click(screen.getByRole('button', { name: 'Conciliar fatura' }))
+    const dialog = screen.getByRole('dialog')
+    await user.clear(within(dialog).getByLabelText('Motivo do ajuste'))
+    await user.type(within(dialog).getByLabelText('Motivo do ajuste'), 'Compra ausente')
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar ajuste' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([url, init]) =>
+          String(url).includes('/invoices/invoice-1/reconcile-provider') && init.method === 'POST',
+      )
+      expect(call).toBeDefined()
+      expect(JSON.parse(String(call?.[1].body))).toMatchObject({ reason: 'Compra ausente' })
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('registra pagamento parcial na conta escolhida', async () => {

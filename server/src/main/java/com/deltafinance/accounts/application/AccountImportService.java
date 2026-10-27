@@ -22,8 +22,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -36,11 +43,14 @@ import tools.jackson.databind.JsonNode;
 @Service
 public class AccountImportService {
 
+  private static final Logger LOG = LoggerFactory.getLogger(AccountImportService.class);
   private static final String ACCOUNT_TABLE = "financial_account";
   private static final String CARD_TABLE = "card_profile";
+  private static final int MAX_CYCLE_BILLS = 12;
 
   private final FinancialAccountRepository accountRepository;
   private final CardProfileRepository cardProfileRepository;
+  private final ApplicationEventPublisher eventPublisher;
   private final PluggyAuthClient authClient;
   private final PluggyDataClient dataClient;
   private final CryptoService cryptoService;
@@ -51,6 +61,7 @@ public class AccountImportService {
   public AccountImportService(
       FinancialAccountRepository accountRepository,
       CardProfileRepository cardProfileRepository,
+      ApplicationEventPublisher eventPublisher,
       PluggyAuthClient authClient,
       PluggyDataClient dataClient,
       CryptoService cryptoService,
@@ -59,6 +70,7 @@ public class AccountImportService {
       Clock clock) {
     this.accountRepository = accountRepository;
     this.cardProfileRepository = cardProfileRepository;
+    this.eventPublisher = eventPublisher;
     this.authClient = authClient;
     this.dataClient = dataClient;
     this.cryptoService = cryptoService;
@@ -86,7 +98,7 @@ public class AccountImportService {
     for (PluggyModels.PluggyAccount imported : page.items()) {
       cancellationRegistry.checkpoint();
       seenHashes.add(hmacService.externalIdHash("pluggy", imported.externalId()));
-      upsert(integration.getUserId(), connectionId, imported, item.institutionName(), now);
+      upsert(integration.getUserId(), connectionId, imported, item.institutionName(), now, apiKey);
     }
     // Leitura completa: contas ausentes saem dos saldos, mas preservam histórico e transações.
     if (page.complete()) {
@@ -118,7 +130,8 @@ public class AccountImportService {
       UUID connectionId,
       PluggyModels.PluggyAccount imported,
       String institutionName,
-      Instant now) {
+      Instant now,
+      String apiKey) {
     byte[] externalHash = hmacService.externalIdHash("pluggy", imported.externalId());
     FinancialAccount account =
         accountRepository
@@ -161,18 +174,40 @@ public class AccountImportService {
     accountRepository.save(account);
 
     if (account.getType() == AccountType.CREDIT) {
-      upsertCardProfile(userId, account.getId(), imported.creditData());
+      List<PluggyModels.PluggyBill> bills = loadBills(apiKey, imported.externalId());
+      upsertCardProfile(userId, account.getId(), imported, bills);
+      if (!bills.isEmpty()) {
+        eventPublisher.publishEvent(new CardBillsFetchedEvent(userId, account.getId(), bills));
+      }
     }
   }
 
-  private void upsertCardProfile(UUID userId, UUID accountId, JsonNode creditData) {
+  private void upsertCardProfile(
+      UUID userId,
+      UUID accountId,
+      PluggyModels.PluggyAccount imported,
+      List<PluggyModels.PluggyBill> bills) {
+    JsonNode creditData = imported.creditData();
     Integer providerClosing = dayOrNull(creditData, "balanceCloseDate");
     Integer providerDue = dayOrNull(creditData, "balanceDueDate");
     CardProfile existing =
         cardProfileRepository.findByAccountIdAndUserId(accountId, userId).orElse(null);
 
-    // Sem ciclo utilizável do provedor, não invente 1/1: o cartão fica sem perfil até o usuário
-    // configurar. Se já existe perfil (do usuário ou de um provedor anterior), preserve-o.
+    // Alguns conectores não enviam o fechamento em creditData, mas Bills trazem a data. Inferir
+    // apenas quando o ciclo pode ser atualizado pelo provedor; configuração do usuário prevalece.
+    if ((existing == null || existing.getSource() != CardProfileSource.USER)
+        && (providerClosing == null || providerDue == null)) {
+      InferredCycle inferred = inferCycleFromBills(bills);
+      if (providerClosing == null) {
+        providerClosing = inferred.closingDay();
+      }
+      if (providerDue == null) {
+        providerDue = inferred.dueDay();
+      }
+    }
+
+    // Sem ciclo utilizável, não invente 1/1: o cartão fica sem perfil até o usuário configurar.
+    // Se já existe perfil (do usuário ou de um provedor anterior), preserve-o.
     if (existing == null && (providerClosing == null || providerDue == null)) {
       return;
     }
@@ -189,21 +224,119 @@ public class AccountImportService {
     }
 
     BigDecimal limit = decimal(creditData, "creditLimit");
-    if (limit == null) {
-      limit = decimal(creditData, "availableCreditLimit");
-    }
     if (limit != null) {
       profile.updateCreditLimit(
           cryptoService.encrypt(
               limit.toPlainString(),
               new CryptoContext(userId, CARD_TABLE, "credit_limit", profile.getId())));
     }
+    BigDecimal availableLimit = decimal(creditData, "availableCreditLimit");
+    String last4 = lastFour(imported.number());
+    profile.updateProviderMetadata(
+        text(creditData, "brand"),
+        text(creditData, "level"),
+        last4 == null
+            ? null
+            : cryptoService.encrypt(
+                last4, new CryptoContext(userId, CARD_TABLE, "last4", profile.getId())),
+        availableLimit == null
+            ? null
+            : cryptoService.encrypt(
+                availableLimit.toPlainString(),
+                new CryptoContext(userId, CARD_TABLE, "available_credit_limit", profile.getId())));
     if (profile.getCreditBalanceEnc() == null) {
       profile.updateCreditBalance(
           cryptoService.encrypt(
               "0.00", new CryptoContext(userId, CARD_TABLE, "credit_balance", profile.getId())));
     }
     cardProfileRepository.save(profile);
+  }
+
+  private static String lastFour(String number) {
+    if (number == null || number.isBlank()) {
+      return null;
+    }
+    String digits = number.replaceAll("\\D", "");
+    if (digits.length() >= 4) {
+      return digits.substring(digits.length() - 4);
+    }
+    return number.trim();
+  }
+
+  private static String text(JsonNode node, String field) {
+    if (node == null || node.isMissingNode() || node.isNull()) {
+      return null;
+    }
+    String value = node.path(field).asString(null);
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+    return normalized.length() <= 32 ? normalized : normalized.substring(0, 32);
+  }
+
+  /**
+   * Infere o ciclo a partir do histórico de Bills do cartão.
+   *
+   * <p>O vencimento pode variar por fim de semana/feriado; por isso o dia é escolhido pela
+   * ocorrência mais frequente entre as últimas faturas, com desempate pela mais recente. Falhas são
+   * opcionais: a sincronização continua e o cartão permanece sem ciclo até configuração manual.
+   */
+  private List<PluggyModels.PluggyBill> loadBills(String apiKey, String externalAccountId) {
+    try {
+      return dataClient.listBills(apiKey, externalAccountId);
+    } catch (RuntimeException exception) {
+      LOG.warn(
+          "Não foi possível ler as faturas do cartão a partir do provedor: {}",
+          exception.getClass().getSimpleName());
+      return List.of();
+    }
+  }
+
+  /**
+   * Infere o ciclo pela ocorrência mais frequente entre as últimas Bills.
+   *
+   * <p>Falhas de leitura já foram tratadas em {@link #loadBills}; aqui a lista pode estar vazia.
+   */
+  private static InferredCycle inferCycleFromBills(List<PluggyModels.PluggyBill> bills) {
+    List<LocalDate> closings =
+        bills.stream()
+            .map(PluggyModels.PluggyBill::closingDate)
+            .filter(Objects::nonNull)
+            .sorted(Comparator.reverseOrder())
+            .limit(MAX_CYCLE_BILLS)
+            .toList();
+    List<LocalDate> dues =
+        bills.stream()
+            .map(PluggyModels.PluggyBill::dueDate)
+            .filter(Objects::nonNull)
+            .sorted(Comparator.reverseOrder())
+            .limit(MAX_CYCLE_BILLS)
+            .toList();
+    return new InferredCycle(modeDay(closings), modeDay(dues));
+  }
+
+  private static Integer modeDay(List<LocalDate> dates) {
+    if (dates.isEmpty()) {
+      return null;
+    }
+    Map<Integer, Long> counts = new LinkedHashMap<>();
+    for (LocalDate date : dates) {
+      counts.merge(date.getDayOfMonth(), 1L, Long::sum);
+    }
+    int bestDay = dates.getFirst().getDayOfMonth();
+    long bestCount = -1;
+    for (Map.Entry<Integer, Long> entry : counts.entrySet()) {
+      if (entry.getValue() > bestCount) {
+        bestCount = entry.getValue();
+        bestDay = entry.getKey();
+      }
+    }
+    return bestDay;
+  }
+
+  private record InferredCycle(Integer closingDay, Integer dueDay) {
+    private static final InferredCycle EMPTY = new InferredCycle(null, null);
   }
 
   private static AccountType mapType(String type) {

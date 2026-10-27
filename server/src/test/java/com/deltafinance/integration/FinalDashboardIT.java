@@ -78,7 +78,7 @@ class FinalDashboardIT extends PostgresTestBase {
             "tx-final-dashboard-card",
             "acc-final-dashboard-card",
             "Compra no cartão",
-            "-200.00",
+            "200.00",
             "2026-12-29",
             "POSTED",
             "Compras"));

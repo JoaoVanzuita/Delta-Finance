@@ -120,7 +120,17 @@ public class AccountQueryService {
             "card_profile",
             "credit_balance",
             profile.getId(),
-            profile.getCreditBalanceEnc()));
+            profile.getCreditBalanceEnc()),
+        profile.getBrand(),
+        profile.getLevel(),
+        decrypt(
+            profile.getUserId(), "card_profile", "last4", profile.getId(), profile.getLast4Enc()),
+        decrypt(
+            profile.getUserId(),
+            "card_profile",
+            "available_credit_limit",
+            profile.getId(),
+            profile.getAvailableCreditLimitEnc()));
   }
 
   private String decrypt(FinancialAccount account, byte[] ciphertext, String column) {

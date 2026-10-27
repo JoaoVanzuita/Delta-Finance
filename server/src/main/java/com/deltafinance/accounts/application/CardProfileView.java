@@ -2,6 +2,14 @@ package com.deltafinance.accounts.application;
 
 import java.util.UUID;
 
-/** Perfil de cartão exposto na API. */
+/** Metadados e valores do perfil de cartão. */
 public record CardProfileView(
-    UUID accountId, int closingDay, int dueDay, String creditLimit, String creditBalance) {}
+    UUID accountId,
+    int closingDay,
+    int dueDay,
+    String creditLimit,
+    String creditBalance,
+    String brand,
+    String level,
+    String last4,
+    String availableCreditLimit) {}

@@ -64,6 +64,8 @@ class ExportIT extends PostgresTestBase {
           "invoices",
           "invoice_items",
           "invoice_payments",
+          "provider_bills",
+          "provider_bill_payments",
           "invoice_item_corrections",
           "transaction_corrections",
           "internal_matches",

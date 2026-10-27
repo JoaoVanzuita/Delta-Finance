@@ -10,7 +10,9 @@ executadas pelo Flyway.
 
 - Nome: `V<versão>__<descrição>.sql`, versão numérica crescente e imutável.
 - Uma migração aplicada **nunca** é editada; correções exigem nova versão.
-- A próxima migração é `V002`; não reutilize números de migrações já aplicadas.
+- A próxima migração é `V003`; não reutilize números de migrações já aplicadas.
+  A `V002__card_bill_forecast.sql` adiciona o mês da fatura informado pelo
+  provedor para alocar compras e pagamentos ao ciclo correto.
 - Toda migração deve ser compatível com a versão anterior da aplicação durante
   o deploy (expand/contract), porque server antigo e novo podem coexistir por
   alguns segundos.

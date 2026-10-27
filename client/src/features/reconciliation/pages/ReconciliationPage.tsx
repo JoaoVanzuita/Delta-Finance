@@ -21,6 +21,12 @@ export function ReconciliationPage() {
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['internalMatches'] })
     void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    // Confirmar/rejeitar altera receitas, despesas e a pendência exibida no dashboard.
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
+    void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
   }
 
   const confirm = useMutation({

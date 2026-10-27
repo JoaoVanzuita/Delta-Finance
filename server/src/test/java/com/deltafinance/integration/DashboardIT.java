@@ -107,7 +107,7 @@ class DashboardIT extends PostgresTestBase {
             "tx-alice-card",
             "acc-alice-card",
             "Compra cartão",
-            "-300.00",
+            "300.00",
             "2026-10-03",
             "POSTED",
             "Mercado"));

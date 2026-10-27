@@ -29,10 +29,15 @@ export type InvoiceDetail = components['schemas']['InvoiceDetail']
 export type InvoiceItem = components['schemas']['InvoiceItem']
 export type InvoiceItemInput = components['schemas']['InvoiceItemRequest']
 export type InvoiceItemCorrection = components['schemas']['InvoiceItemCorrection']
+export type ProviderBill = components['schemas']['ProviderBill']
+export type ProviderBillPayment = components['schemas']['ProviderBillPayment']
 export type InvoicePayment = components['schemas']['InvoicePayment']
 export type InvoicePaymentInput = components['schemas']['InvoicePaymentRequest']
+export type InvoiceReconciliationInput = components['schemas']['InvoiceReconciliationRequest']
 export type CardProfileInput = components['schemas']['CardProfileRequest']
 export type CardProfile = components['schemas']['CardProfile']
+export type CardOverview = components['schemas']['CardOverview']
+export type CardOverviewItem = components['schemas']['CardOverviewItem']
 export type InvestmentPosition = components['schemas']['InvestmentPosition']
 export type InvestmentPositionPage = components['schemas']['InvestmentPositionPage']
 export type InvestmentPositionInput = components['schemas']['InvestmentPositionRequest']
@@ -165,6 +170,7 @@ export const financeApi = {
 
   updateCardProfile: (accountId: string, input: CardProfileInput) =>
     api.put<CardProfile>(`/cards/${accountId}/profile`, input),
+  cardOverview: () => api.get<CardOverview>('/cards/overview'),
   invoices: (accountId: string) => api.get<InvoicePage>(`/cards/${accountId}/invoices`),
   invoice: (id: string) => api.get<InvoiceDetail>(`/invoices/${id}`),
   addInvoiceItem: (invoiceId: string, input: InvoiceItemInput) =>
@@ -176,4 +182,6 @@ export const financeApi = {
     api.get<InvoiceItemCorrection[]>(`/invoice-items/${itemId}/corrections`),
   addInvoicePayment: (invoiceId: string, input: InvoicePaymentInput) =>
     api.post<InvoicePayment>(`/invoices/${invoiceId}/payments`, input),
+  reconcileInvoiceProvider: (invoiceId: string, input: InvoiceReconciliationInput) =>
+    api.post<InvoiceDetail>(`/invoices/${invoiceId}/reconcile-provider`, input),
 }

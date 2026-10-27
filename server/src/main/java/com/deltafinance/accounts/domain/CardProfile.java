@@ -32,6 +32,18 @@ public class CardProfile extends BaseEntity {
   @Column(name = "credit_balance_enc", columnDefinition = "bytea")
   private byte[] creditBalanceEnc;
 
+  @Column(name = "brand", length = 32)
+  private String brand;
+
+  @Column(name = "level", length = 32)
+  private String level;
+
+  @Column(name = "last4_enc", columnDefinition = "bytea")
+  private byte[] last4Enc;
+
+  @Column(name = "available_credit_limit_enc", columnDefinition = "bytea")
+  private byte[] availableCreditLimitEnc;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "source", nullable = false, length = 16)
   private CardProfileSource source;
@@ -73,6 +85,22 @@ public class CardProfile extends BaseEntity {
     return creditBalanceEnc;
   }
 
+  public String getBrand() {
+    return brand;
+  }
+
+  public String getLevel() {
+    return level;
+  }
+
+  public byte[] getLast4Enc() {
+    return last4Enc;
+  }
+
+  public byte[] getAvailableCreditLimitEnc() {
+    return availableCreditLimitEnc;
+  }
+
   public CardProfileSource getSource() {
     return source;
   }
@@ -96,6 +124,23 @@ public class CardProfile extends BaseEntity {
 
   public void updateCreditBalance(byte[] creditBalanceEnc) {
     this.creditBalanceEnc = creditBalanceEnc;
+  }
+
+  /** Atualiza apenas os metadados informados; valores nulos preservam o dado anterior. */
+  public void updateProviderMetadata(
+      String brand, String level, byte[] last4Enc, byte[] availableCreditLimitEnc) {
+    if (brand != null) {
+      this.brand = brand;
+    }
+    if (level != null) {
+      this.level = level;
+    }
+    if (last4Enc != null) {
+      this.last4Enc = last4Enc;
+    }
+    if (availableCreditLimitEnc != null) {
+      this.availableCreditLimitEnc = availableCreditLimitEnc;
+    }
   }
 
   private static int validDay(int day) {

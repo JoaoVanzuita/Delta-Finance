@@ -39,6 +39,7 @@ export function DeleteManualTransaction({ transaction }: DeleteManualTransaction
         'dashboard-entries',
         'internalMatches',
         'invoices',
+        'cards',
       ]) {
         void queryClient.invalidateQueries({ queryKey: [queryKey] })
       }

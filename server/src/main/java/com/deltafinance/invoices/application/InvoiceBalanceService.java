@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +45,7 @@ public class InvoiceBalanceService {
   private final InvoiceItemRepository itemRepository;
   private final InvoicePaymentRepository paymentRepository;
   private final CardProfileRepository cardProfileRepository;
+  private final ProviderBillService providerBillService;
   private final CryptoService cryptoService;
   private final Clock clock;
 
@@ -52,12 +54,14 @@ public class InvoiceBalanceService {
       InvoiceItemRepository itemRepository,
       InvoicePaymentRepository paymentRepository,
       CardProfileRepository cardProfileRepository,
+      ProviderBillService providerBillService,
       CryptoService cryptoService,
       Clock clock) {
     this.invoiceRepository = invoiceRepository;
     this.itemRepository = itemRepository;
     this.paymentRepository = paymentRepository;
     this.cardProfileRepository = cardProfileRepository;
+    this.providerBillService = providerBillService;
     this.cryptoService = cryptoService;
     this.clock = clock;
   }
@@ -78,6 +82,8 @@ public class InvoiceBalanceService {
             .thenComparing(Invoice::getId));
     BigDecimal creditPool = ZERO;
     LocalDate today = clock.today();
+    Map<UUID, BigDecimal> providerTotals =
+        providerBillService.totalsByInvoice(userId, cardAccountId, invoices);
 
     for (Invoice invoice : invoices) {
       List<InvoiceItem> items =
@@ -86,20 +92,29 @@ public class InvoiceBalanceService {
       Totals totals = totals(items);
       BigDecimal payments = paymentsTotal(userId, invoice.getId());
       BigDecimal applied = decryptInvoice(invoice, "applied_credit");
+      BigDecimal providerTotal = providerTotals.get(invoice.getId());
+      // O provedor pode confirmar um total maior que o local (compras ausentes). O excedente de
+      // pagamento só vira crédito sobre a maior obrigação conhecida, nunca sobre dados parciais.
+      BigDecimal effectiveTotal =
+          providerTotal == null ? totals.total() : totals.total().max(providerTotal);
       InvoiceStatus status;
 
       if (invoice.getStatus() == InvoiceStatus.PAID) {
-        // Fatura paga não é reaberta; o crédito já aplicado continua consumindo o pool.
+        // Fatura paga não é reaberta, mas o crédito aplicado é normalizado para manter
+        // total = pagamentos + crédito aplicado. Isso corrige históricos em que o crédito
+        // ficou menor que o total e o saldo devedor era forçado a zero.
         status = InvoiceStatus.PAID;
-        applied = applied.max(ZERO);
+        applied = totals.total().subtract(payments).max(ZERO).min(totals.total());
         creditPool = creditPool.subtract(applied.min(creditPool));
         creditPool = creditPool.add(totals.overflow());
+        creditPool = creditPool.add(excessPayment(effectiveTotal, applied, payments));
       } else {
         applied = creditPool.min(totals.total()).max(ZERO);
         creditPool = creditPool.subtract(applied);
         BigDecimal outstanding = totals.total().subtract(applied).subtract(payments).max(ZERO);
         status = statusFor(invoice, totals.total(), payments, outstanding, today);
         creditPool = creditPool.add(totals.overflow());
+        creditPool = creditPool.add(excessPayment(effectiveTotal, applied, payments));
       }
       BigDecimal outstanding =
           status == InvoiceStatus.PAID
@@ -159,6 +174,21 @@ public class InvoiceBalanceService {
     return new Totals(
         running.setScale(Money.SCALE, RoundingMode.HALF_EVEN),
         overflow.setScale(Money.SCALE, RoundingMode.HALF_EVEN));
+  }
+
+  /**
+   * Excedente de pagamento que deve virar crédito para faturas futuras.
+   *
+   * <p>Limitado a faturas com obrigação conhecida maior que zero: faturas históricas sem compras
+   * locais (total zero) normalmente indicam lacuna do conector, não crédito real.
+   */
+  private static BigDecimal excessPayment(
+      BigDecimal total, BigDecimal applied, BigDecimal payments) {
+    if (total.signum() <= 0) {
+      return ZERO;
+    }
+    BigDecimal obligation = total.subtract(applied).max(ZERO);
+    return payments.subtract(obligation).max(ZERO);
   }
 
   private BigDecimal paymentsTotal(UUID userId, UUID invoiceId) {

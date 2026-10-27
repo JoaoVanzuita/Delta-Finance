@@ -6,6 +6,7 @@ import com.deltafinance.invoices.application.InvoiceItemView;
 import com.deltafinance.invoices.application.InvoicePaymentService;
 import com.deltafinance.invoices.application.InvoicePaymentView;
 import com.deltafinance.invoices.application.InvoiceQueryService;
+import com.deltafinance.invoices.application.InvoiceReconciliationService;
 import com.deltafinance.invoices.application.InvoiceView;
 import com.deltafinance.security.AuthenticatedUser;
 import com.deltafinance.shared.pagination.CursorPage;
@@ -31,16 +32,19 @@ public class InvoiceController {
   private final InvoiceQueryService queryService;
   private final InvoiceItemService itemService;
   private final InvoicePaymentService paymentService;
+  private final InvoiceReconciliationService reconciliationService;
   private final AuthenticatedUser authenticatedUser;
 
   public InvoiceController(
       InvoiceQueryService queryService,
       InvoiceItemService itemService,
       InvoicePaymentService paymentService,
+      InvoiceReconciliationService reconciliationService,
       AuthenticatedUser authenticatedUser) {
     this.queryService = queryService;
     this.itemService = itemService;
     this.paymentService = paymentService;
+    this.reconciliationService = reconciliationService;
     this.authenticatedUser = authenticatedUser;
   }
 
@@ -95,5 +99,13 @@ public class InvoiceController {
       @PathVariable UUID id, @Valid @RequestBody InvoicePaymentRequest request) {
     InvoicePaymentView view = paymentService.add(authenticatedUser.requireId(), id, request);
     return InvoicePaymentResponse.from(view);
+  }
+
+  @PostMapping("/invoices/{id}/reconcile-provider")
+  public InvoiceDetailResponse reconcileWithProvider(
+      @PathVariable UUID id, @Valid @RequestBody InvoiceReconciliationRequest request) {
+    UUID userId = authenticatedUser.requireId();
+    reconciliationService.reconcile(userId, id, request.reason());
+    return InvoiceDetailResponse.from(queryService.detail(userId, id));
   }
 }

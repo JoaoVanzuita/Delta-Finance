@@ -7,6 +7,7 @@ import com.deltafinance.integrations.infrastructure.PluggyRateLimiter;
 import com.deltafinance.support.AuthTestClient;
 import com.deltafinance.support.PluggyStub;
 import com.deltafinance.support.PluggyStub.AccountFixture;
+import com.deltafinance.support.PluggyStub.BillFixture;
 import com.deltafinance.support.PostgresTestBase;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -49,6 +50,7 @@ class CardCycleImportIT extends PostgresTestBase {
   private AuthTestClient alice;
   private String cardWithoutCycleId;
   private String cardWithCycleId;
+  private String cardWithBillsId;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -72,7 +74,44 @@ class CardCycleImportIT extends PostgresTestBase {
             Map.of(
                 "balanceCloseDate", "2026-10-10",
                 "balanceDueDate", "2026-10-20",
-                "creditLimit", "2000.00")));
+                "creditLimit", "2000.00",
+                "availableCreditLimit", "1500.00",
+                "brand", "VISA",
+                "level", "PLATINUM")));
+    PLUGGY.setAccountNumber("acc-with-cycle", "9876");
+    PLUGGY.addAccount(
+        "item-cardcycle",
+        new AccountFixture(
+            "acc-with-bills",
+            "CREDIT",
+            "CREDIT_CARD",
+            "Cartão com Bills",
+            "0.00",
+            Map.of("balanceDueDate", "2026-10-19", "creditLimit", "3000.00")));
+    PLUGGY.addBill(
+        "acc-with-bills",
+        new BillFixture(
+            "bill-2026-08",
+            "2026-08-12T00:00:00.000Z",
+            "2026-08-19T00:00:00.000Z",
+            "100.00",
+            "10.00"));
+    PLUGGY.addBill(
+        "acc-with-bills",
+        new BillFixture(
+            "bill-2026-09",
+            "2026-09-12T00:00:00.000Z",
+            "2026-09-21T00:00:00.000Z",
+            "120.00",
+            "12.00"));
+    PLUGGY.addBill(
+        "acc-with-bills",
+        new BillFixture(
+            "bill-2026-10",
+            "2026-10-12T00:00:00.000Z",
+            "2026-10-19T00:00:00.000Z",
+            "140.00",
+            "14.00"));
 
     alice = new AuthTestClient(mockMvc, jsonMapper).csrf();
     alice.register(ALICE, PASSWORD).login(ALICE, PASSWORD);
@@ -95,10 +134,22 @@ class CardCycleImportIT extends PostgresTestBase {
         assertThat(account.path("cardProfile").path("closingDay").asInt()).isEqualTo(10);
         assertThat(account.path("cardProfile").path("dueDay").asInt()).isEqualTo(20);
         assertThat(account.path("cardProfile").path("creditLimit").asString()).isEqualTo("2000.00");
+        assertThat(account.path("cardProfile").path("availableCreditLimit").asString())
+            .isEqualTo("1500.00");
+        assertThat(account.path("cardProfile").path("brand").asString()).isEqualTo("VISA");
+        assertThat(account.path("cardProfile").path("level").asString()).isEqualTo("PLATINUM");
+        assertThat(account.path("cardProfile").path("last4").asString()).isEqualTo("9876");
+      }
+      if ("Cartão com Bills".equals(account.path("alias").asString())) {
+        cardWithBillsId = account.path("id").asString();
+        assertThat(account.path("cardProfile").path("closingDay").asInt()).isEqualTo(12);
+        assertThat(account.path("cardProfile").path("dueDay").asInt()).isEqualTo(19);
+        assertThat(account.path("cardProfile").path("creditLimit").asString()).isEqualTo("3000.00");
       }
     }
     assertThat(cardWithoutCycleId).isNotBlank();
     assertThat(cardWithCycleId).isNotBlank();
+    assertThat(cardWithBillsId).isNotBlank();
   }
 
   @Test
@@ -125,6 +176,24 @@ class CardCycleImportIT extends PostgresTestBase {
     JsonNode invoices = invoices(cardWithoutCycleId);
     assertThat(invoices.path("items")).hasSize(1);
     assertThat(invoices.path("items").get(0).path("total").asString()).isEqualTo("40.00");
+  }
+
+  @Test
+  void cartaoSemBalanceCloseDateUsaBillsParaInferirCicloEOrganizarCompras() throws Exception {
+    Map<String, Object> transaction = new LinkedHashMap<>();
+    transaction.put("accountId", cardWithBillsId);
+    transaction.put("type", "DEBIT");
+    transaction.put("postedOn", "2026-10-10");
+    transaction.put("amount", "50.00");
+    transaction.put("description", "Compra no ciclo inferido");
+    alice.post("/api/v1/transactions", transaction).andExpect(status().isCreated());
+
+    JsonNode invoices = invoices(cardWithBillsId);
+    assertThat(invoices.path("items")).hasSize(1);
+    assertThat(invoices.path("items").get(0).path("closingDate").asString())
+        .isEqualTo("2026-10-12");
+    assertThat(invoices.path("items").get(0).path("dueDate").asString()).isEqualTo("2026-10-19");
+    assertThat(invoices.path("items").get(0).path("total").asString()).isEqualTo("50.00");
   }
 
   private JsonNode accounts() throws Exception {

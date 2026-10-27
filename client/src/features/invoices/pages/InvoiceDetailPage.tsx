@@ -11,11 +11,13 @@ import {
   financeApi,
   type InvoiceItem,
   type InvoiceItemCorrection,
+  type ProviderBill,
 } from '@/features/integration/api'
 
 import { InvoiceItemDialog } from '../components/InvoiceItemDialog'
 import { InvoicePaymentDialog } from '../components/InvoicePaymentDialog'
 import { InvoiceStatus } from '../components/InvoiceStatus'
+import { ProviderReconciliationDialog } from '../components/ProviderReconciliationDialog'
 
 const KIND_LABELS: Record<string, string> = {
   PURCHASE: 'Compra',
@@ -47,6 +49,12 @@ export function InvoiceDetailPage() {
     enabled: Boolean(id),
   })
   const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
+  const cardAccountId = invoiceQuery.data?.cardAccountId
+  const transactionsQuery = useQuery({
+    queryKey: ['transactions', 'card', cardAccountId],
+    queryFn: () => financeApi.transactions({ limit: 200, accountId: cardAccountId ?? '' }),
+    enabled: Boolean(cardAccountId),
+  })
 
   const remove = useMutation({
     mutationFn: (itemId: string) => financeApi.deleteInvoiceItem(itemId),
@@ -54,6 +62,7 @@ export function InvoiceDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ['invoice', id] })
       void queryClient.invalidateQueries({ queryKey: ['invoices'] })
       void queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
     },
   })
 
@@ -85,6 +94,16 @@ export function InvoiceDetailPage() {
   const cardAccount = (accountsQuery.data?.items ?? []).find(
     (account) => account.id === invoice.cardAccountId,
   )
+  const pendingTransactions =
+    invoice.status === 'OPEN'
+      ? (transactionsQuery.data?.items ?? []).filter(
+          (transaction) =>
+            transaction.status === 'PENDING' &&
+            transaction.type === 'DEBIT' &&
+            transaction.postedOn >= invoice.cycleStart &&
+            transaction.postedOn <= invoice.cycleEnd,
+        )
+      : []
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
@@ -96,6 +115,18 @@ export function InvoiceDetailPage() {
       </Link>
 
       <InvoiceStatus invoice={invoice} creditBalance={cardAccount?.cardProfile?.creditBalance} />
+
+      {invoice.providerBill ? (
+        <ProviderReconciliation invoiceId={invoice.id} bill={invoice.providerBill} />
+      ) : null}
+
+      {invoice.missingPurchases ? (
+        <p className="rounded-card border border-warning/40 bg-warning/5 p-3 text-sm leading-relaxed text-ink">
+          Esta fatura tem pagamento registrado, mas nenhuma compra local no ciclo. O histórico do
+          conector pode estar incompleto; concilie com a Bill oficial ou registre um ajuste
+          explícito.
+        </p>
+      ) : null}
 
       {paid ? (
         <p className="rounded-card border border-line bg-surface-muted p-3 text-sm text-ink-muted">
@@ -112,6 +143,39 @@ export function InvoiceDetailPage() {
             ? remove.error.message
             : 'Não foi possível remover o item.'}
         </p>
+      ) : null}
+
+      {invoice.status === 'OPEN' ? (
+        <section
+          aria-labelledby="invoice-pending-heading"
+          className="space-y-2 rounded-card border border-warning/40 bg-warning/5 p-4"
+        >
+          <h2 id="invoice-pending-heading" className="text-sm font-semibold text-ink">
+            Compras pendentes neste ciclo
+          </h2>
+          <p className="text-xs leading-relaxed text-ink-muted">
+            Elas ainda não compõem o total nem o saldo devedor desta fatura.
+          </p>
+          {pendingTransactions.length === 0 ? (
+            <p className="text-sm text-ink-muted">Nenhuma compra pendente neste ciclo.</p>
+          ) : (
+            <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
+              {pendingTransactions.map((transaction) => (
+                <li
+                  key={transaction.id}
+                  className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 truncate text-ink">
+                    {transaction.postedOn} · {transaction.description ?? 'Sem descrição'}
+                  </span>
+                  <span className="numeric shrink-0 text-ink">
+                    {formatMoney(transaction.amount, transaction.currency)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       ) : null}
 
       <section className="space-y-3">
@@ -226,7 +290,8 @@ export function InvoiceDetailPage() {
             {payments.map((payment) => (
               <li key={payment.id} className="flex items-center justify-between gap-2 p-4 text-sm">
                 <span className="text-ink">
-                  {payment.paidOn} · {PAYMENT_STATUS_LABELS[payment.status] ?? payment.status}
+                  {payment.paidOn} · {PAYMENT_STATUS_LABELS[payment.status] ?? payment.status} ·{' '}
+                  {payment.source === 'IMPORTED' ? 'Importado' : 'Manual'}
                 </span>
                 <span className="numeric font-medium text-ink">
                   {formatMoney(payment.amount, 'BRL')}
@@ -288,4 +353,159 @@ function effectLabel(effect: string): string {
   if (effect === 'EXPENSE_INCREASE') return 'aumenta despesa'
   if (effect === 'EXPENSE_DECREASE') return 'reduz despesa'
   return 'sem efeito'
+}
+
+function ProviderReconciliation({
+  invoiceId,
+  bill,
+}: {
+  readonly invoiceId: string
+  readonly bill: ProviderBill
+}) {
+  const [dialog, setDialog] = useState(false)
+  const totalDifference = Number(bill.totalDifference) || 0
+  const paymentsDifference = Number(bill.paymentsDifference) || 0
+  const hasDifference = totalDifference !== 0 || paymentsDifference !== 0
+  const adjustment = (-totalDifference).toFixed(2)
+  return (
+    <section
+      aria-labelledby="provider-bill-heading"
+      className={
+        hasDifference
+          ? 'space-y-3 rounded-card border border-warning/40 bg-warning/5 p-4'
+          : 'space-y-3 rounded-card border border-income/30 bg-income/5 p-4'
+      }
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 id="provider-bill-heading" className="text-sm font-semibold text-ink">
+            Bill oficial do provedor
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+            Referência importada do provedor. O ajuste de conciliação é sempre explícito e auditado.
+          </p>
+        </div>
+        <span
+          className={
+            hasDifference
+              ? 'rounded-card border border-warning/40 bg-surface px-2 py-1 text-xs font-semibold text-warning'
+              : 'rounded-card border border-income/30 bg-surface px-2 py-1 text-xs font-semibold text-income'
+          }
+        >
+          {hasDifference ? 'Divergente' : 'Conciliada'}
+        </span>
+      </div>
+
+      <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-card border border-line bg-surface-muted p-3">
+          <dt className="text-xs text-ink-muted">Total oficial</dt>
+          <dd className="numeric mt-1 text-sm font-semibold text-ink">
+            {formatMoney(bill.total, 'BRL')}
+          </dd>
+        </div>
+        <div className="rounded-card border border-line bg-surface-muted p-3">
+          <dt className="text-xs text-ink-muted">Pagamento mínimo</dt>
+          <dd className="numeric mt-1 text-sm font-semibold text-ink">
+            {formatMoney(bill.minimumPayment, 'BRL')}
+          </dd>
+        </div>
+        <div className="rounded-card border border-line bg-surface-muted p-3">
+          <dt className="text-xs text-ink-muted">Pagamentos oficiais</dt>
+          <dd className="numeric mt-1 text-sm font-semibold text-ink">
+            {formatMoney(bill.paymentsTotal, 'BRL')}
+          </dd>
+        </div>
+        <div className="rounded-card border border-line bg-surface-muted p-3">
+          <dt className="text-xs text-ink-muted">Vencimento oficial</dt>
+          <dd className="mt-1 text-sm font-semibold text-ink">{formatDate(bill.dueDate)}</dd>
+        </div>
+      </dl>
+
+      {hasDifference ? (
+        <dl className="grid gap-2 text-sm sm:grid-cols-2">
+          <div className="flex items-baseline justify-between gap-2 rounded-card border border-line bg-surface px-3 py-2">
+            <dt className="text-ink-muted">Diferença de total (local − oficial)</dt>
+            <dd className="numeric font-semibold text-ink">
+              {formatMoney(bill.totalDifference, 'BRL')}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 rounded-card border border-line bg-surface px-3 py-2">
+            <dt className="text-ink-muted">Diferença de pagamentos (local − oficial)</dt>
+            <dd className="numeric font-semibold text-ink">
+              {formatMoney(bill.paymentsDifference, 'BRL')}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
+
+      {bill.payments.length > 0 ? (
+        <div>
+          <h3 className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
+            Pagamentos informados pelo provedor
+          </h3>
+          <ul className="mt-2 divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
+            {bill.payments.map((payment, index) => (
+              <li
+                key={`${payment.paidOn}-${payment.amount}-${index}`}
+                className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <span className="text-ink">
+                  {formatDate(payment.paidOn)}
+                  {payment.paymentMode ? ` · ${payment.paymentMode}` : ''}
+                  {payment.valueType ? ` · ${payment.valueType}` : ''}
+                </span>
+                <span className="numeric font-medium text-ink">
+                  {formatMoney(payment.amount, 'BRL')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-xs text-ink-muted">
+          Nenhum pagamento oficial informado para esta fatura.
+        </p>
+      )}
+
+      {bill.ignoredPayments > 0 ? (
+        <p className="text-xs text-ink-muted">
+          {bill.ignoredPayments} pagamento(s) da Bill foram ignorados por estarem fora da janela
+          deste ciclo.
+        </p>
+      ) : null}
+
+      {totalDifference !== 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-3">
+          <p className="max-w-xl text-xs leading-relaxed text-ink-muted">
+            O ajuste lança a diferença como item manual auditado. Em fatura paga, o status é
+            preservado e o crédito aplicado é normalizado.
+          </p>
+          <button
+            type="button"
+            onClick={() => setDialog(true)}
+            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-muted"
+          >
+            Conciliar fatura
+          </button>
+        </div>
+      ) : null}
+
+      {dialog ? (
+        <ProviderReconciliationDialog
+          invoiceId={invoiceId}
+          adjustment={adjustment}
+          onClose={() => setDialog(false)}
+        />
+      ) : null}
+    </section>
+  )
+}
+
+function formatDate(value: string): string {
+  const date = new Date(`${value}T12:00:00Z`)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeZone: 'America/Sao_Paulo',
+  }).format(date)
 }

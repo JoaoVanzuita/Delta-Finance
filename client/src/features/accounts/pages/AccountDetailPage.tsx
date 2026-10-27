@@ -70,7 +70,7 @@ export function AccountDetailPage() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
       <Link to="/accounts" className="text-sm font-medium text-action underline underline-offset-2">
-        ← Contas e cartões
+        ← Contas
       </Link>
 
       <header className="space-y-2">
@@ -149,12 +149,20 @@ export function AccountDetailPage() {
           Ver transações desta conta
         </Link>
         {account.type === 'CREDIT' ? (
-          <Link
-            to={`/cards/${account.id}/invoices`}
-            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
-          >
-            Ver faturas
-          </Link>
+          <>
+            <Link
+              to={`/cards/${account.id}/invoices`}
+              className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+            >
+              Ver faturas
+            </Link>
+            <Link
+              to="/cards"
+              className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
+            >
+              Painel de cartões
+            </Link>
+          </>
         ) : null}
         {account.origin === 'MANUAL' ? (
           <Link
