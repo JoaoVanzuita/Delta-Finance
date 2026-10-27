@@ -610,27 +610,131 @@ Regras:
 
 ## 7. Entidades de fases posteriores
 
-### 7.1 `investment_position` (fase secundária)
+### 7.1 `investment_position` (posição manual)
 
 `id`, `user_id`, `broker`, `asset_name_enc`, `ticker_enc`, `quantity_enc`,
 `reference_price_enc`, `reference_date`, `notes_enc`, `origin` (`MANUAL`),
-`created_at`, `updated_at`, `version`. O total é `quantity × reference_price`;
-quando apenas o total for informado, `reference_price = total ÷ quantity`,
-arredondado para 8 casas decimais.
+`exclude_from_wealth` (boolean, padrão `false`), `created_at`, `updated_at`,
+`version`. O total é `quantity × reference_price`; quando apenas o total for
+informado, `reference_price = total ÷ quantity`, arredondado para 8 casas
+decimais.
 
-### 7.2 `manual_asset_liability`
+A posição manual é um complemento do usuário. Ela não é sobrescrita por dados do
+provedor. `exclude_from_wealth` permite mantê-la como referência sem contar duas
+vezes quando existir uma posição importada equivalente.
+
+### 7.2 `provider_investment` (posição importada)
+
+Implementada na migração `V006__provider_investments.sql`.
+
+| Campo | Tipo | Classificação | Regra |
+|---|---|---|---|
+| `id` | uuid | plain | PK. |
+| `user_id` | uuid | plain | proprietário. |
+| `connection_id` | uuid | plain | FK `(user_id, connection_id)` para o item/conexão; investimento não é conta. |
+| `external_investment_id_enc` | bytea | enc | ID externo para chamadas de transações. |
+| `external_investment_id_hash` | bytea | hmac | unicidade `(user_id, connection_id, hash)`. |
+| `name_enc`, `code_enc`, `isin_enc`, `owner_enc` | bytea | enc | identificação do ativo. |
+| `institution_enc`, `issuer_enc` | bytea | enc | instituição/emissor quando informados. |
+| `type`, `subtype`, `status`, `currency` | text | plain | códigos normalizados do provedor. |
+| `quantity_enc`, `unit_value_enc` | bytea | enc | quantidade e preço unitário. |
+| `amount_enc`, `balance_enc` | bytea | enc | valor bruto e valor líquido atual; `balance` é o valor atual. |
+| `amount_original_enc`, `amount_profit_enc`, `amount_withdrawal_enc` | bytea | enc | custo original, lucro e disponível para saque, quando informados. |
+| `taxes_enc`, `taxes2_enc` | bytea | enc | IR e IOF informados. |
+| `rate_enc`, `rate_type`, `fixed_annual_rate_enc` | bytea/text | enc/plain | remuneração contratada de renda fixa; não é rentabilidade. |
+| `last_month_rate_enc`, `annual_rate_enc`, `last_twelve_months_rate_enc` | bytea | enc | rentabilidade informada de fundos, quando disponível. |
+| `reference_date`, `purchase_date`, `due_date`, `grace_period_date` | date | plain | datas informadas pelo provedor. |
+| `provider_updated_at`, `synced_at` | timestamptz | plain | atualização na origem e última leitura. |
+| `unavailable_at` | timestamptz | plain | nullable; posição ausente em leitura completa, preservada no histórico. |
+| `manual_cost_basis_enc`, `manual_cost_basis_updated_at` | bytea/timestamptz | enc/plain | custo informado pelo usuário, separado do valor do provedor. |
+| `user_asset_class` | text | plain | nullable; classificação informada pelo usuário para sobrepor `type`/`subtype`. |
+| `created_at`, `updated_at`, `version` | — | plain | auditoria e locking. |
+
+Regras:
+- `balance` é o valor atual; `amount` é o valor bruto; `quantity × unit_value`
+  pode ser usado para conferência, não para substituir `balance`.
+- `status` usa `ACTIVE`, `PENDING`, `CLOSED` internamente; a importação normaliza
+  `TOTAL_WITHDRAWAL` e `RETIRADA_TOTAL` para `CLOSED`.
+- Posições `CLOSED`, `unavailable_at` preenchido ou moeda diferente de BRL não
+  compõem o valor atual consolidado, mas permanecem visíveis no histórico.
+- A posição nunca é apagada por ausência na origem; apenas marcada como
+  indisponível.
+- `amountProfit`, taxas e `amountOriginal` são opcionais. Ausência é exibida como
+  "não informado", sem estimativa derivada de transações incompletas.
+- A classificação exibida usa `type`/`subtype` do provedor. Quando o subtipo não
+  distinguir FII de ação, o código pode ser usado como heurística com rótulo
+  explícito; `user_asset_class` sobrepõe a classificação automática.
+
+### 7.3 `provider_investment_transaction`
+
+| Campo | Tipo | Classificação | Regra |
+|---|---|---|---|
+| `id` | uuid | plain | PK. |
+| `user_id` | uuid | plain | proprietário. |
+| `provider_investment_id` | uuid | plain | FK `(user_id, provider_investment_id)`. |
+| `external_transaction_id_enc` | bytea | enc | ID externo, quando presente. |
+| `external_transaction_id_hash` | bytea | hmac | dedup quando o ID existe. |
+| `dedup_key` | bytea | hmac | HMAC de tipo, data, valor, quantidade e descrição quando o ID falta. |
+| `type`, `movement_type` | text | plain | `BUY`, `SELL`, `TAX`, `TRANSFER`, `INTEREST`, `AMORTIZATION`. |
+| `trade_date`, `transaction_date` | date | plain | datas civis da operação. |
+| `quantity_enc`, `unit_value_enc`, `amount_enc`, `net_amount_enc` | bytea | enc | valores da movimentação. |
+| `description_enc`, `brokerage_number_enc`, `expenses_enc` | bytea | enc | descrição, nota e despesas quando informadas. |
+| `last_seen_at`, `removed_at` | timestamptz | plain | controle de ausência na origem. |
+| `created_at`, `updated_at`, `version` | — | plain | auditoria e locking. |
+
+Regras:
+- `INTEREST` representa dividendos, aluguel de FII, JCP e cupons.
+- `BUY` compõe aplicação; `SELL` e `AMORTIZATION` são resgates/devolução de
+  principal; `TAX` é custo; `TRANSFER` é neutro.
+- Movimentações de investimento não viram `transaction` bancária e não afetam o
+  fluxo de caixa.
+- Ausência em leitura completa marca `removed_at` e exclui dos agregados, sem
+  apagar o registro.
+
+### 7.4 `provider_investment_sync`
+
+`id`, `user_id`, `connection_id`, `scope`, `resource_count`,
+`available_resource_count`, `pending_resource_count`,
+`unavailable_resource_count`, `resources_collected_at`, `last_synced_at`,
+`error_code`, `created_at`, `updated_at`, `version`. Único
+`(user_id, connection_id)`.
+
+`scope` usa:
+- `AVAILABLE`: há recurso de investimento disponível.
+- `NOT_SHARED`: a instituição não compartilha investimentos neste consentimento.
+- `PENDING_AUTHORIZATION`: há recurso aguardando autorização no banco.
+- `UNKNOWN`: a lista de recursos nunca foi lida.
+- `ERROR`: a leitura de recursos falhou.
+
+`products` não substitui `scope`: um item pode listar `INVESTMENTS` e não
+compartilhar nenhuma posição.
+
+### 7.5 `investment_income` (provento manual)
+
+`id`, `user_id`, `provider_investment_id` (nullable), `investment_position_id`
+(nullable), `income_type` (`DIVIDEND`, `INTEREST`, `JCP`, `RENT`, `COUPON`,
+`OTHER`), `income_date`, `amount_enc`, `description_enc`, `source` (`MANUAL`),
+`created_at`, `updated_at`, `version`.
+
+Exatamente um entre `provider_investment_id` e `investment_position_id` é
+preenchido. Proventos do provedor vêm de `provider_investment_transaction` com
+`type=INTEREST`; esta tabela guarda apenas o complemento manual. O provento
+manual é identificado como tal no painel e não é somado automaticamente às
+receitas do dashboard principal.
+
+### 7.6 `manual_asset_liability`
 
 `id`, `user_id`, `kind` (`ASSET`, `LIABILITY`), `type`, `description_enc`,
 `reference_value_enc`, `reference_date`, `notes_enc`, `created_at`,
 `updated_at`, `version`.
 
-### 7.3 Snapshots patrimoniais
+### 7.7 Snapshots patrimoniais
 
 Os snapshots patrimoniais foram removidos em 2026-10-26 (S-02). Não há tabelas
 `wealth_snapshot`/`wealth_snapshot_item` no schema ativo; a visão patrimonial é
 calculada a partir dos dados atuais e dos itens manuais.
 
-### 7.4 `financial_goal`
+### 7.8 `financial_goal`
 
 `id`, `user_id`, `name_enc`, `description_enc`, `notes_enc`, `type`,
 `target_amount_enc`, `target_date`, `status`, `progress_rule`, `changed_at`,
@@ -642,7 +746,7 @@ calculada a partir dos dados atuais e dos itens manuais.
 `notes_enc` guarda observações livres (até 2000 caracteres) e não participa do
 cálculo de progresso nem da detecção de alteração material.
 
-### 7.5 `goal_allocation`
+### 7.9 `goal_allocation`
 
 `id`, `user_id`, `goal_id`, `source_type`, `source_id`, `allocation_mode`
 (`FIXED_AMOUNT`, `PERCENTAGE`), `allocated_amount_enc`, `allocation_ratio`,
@@ -656,11 +760,26 @@ para metas mais antigas. Percentuais se limitam ao disponível; valores fixos n�
 são truncados e a API sinaliza `capacityExceeded=true`. Contas fora de BRL não
 podem ser fonte. O nome legível da fonte é derivado em tempo de leitura.
 
-### 7.6 `goal_progress_snapshot`
+### 7.10 `goal_progress_snapshot`
 
 `id`, `user_id`, `goal_id`, `reference_date`, `current_value_enc`,
 `percentage`, `remaining_enc`, `rule_version`, `created_at`. Único
 `(goal_id, reference_date)`.
+
+### 7.11 Regras de consolidação de investimentos
+
+- Posições importadas `ACTIVE`, em BRL e sem `unavailable_at` entram uma única
+  vez no patrimônio pelo `balance`.
+- Posições `CLOSED`, indisponíveis ou em outra moeda aparecem com motivo de
+  exclusão e não compõem o total.
+- Posições manuais entram pelo total `quantity × reference_price`, salvo quando
+  `exclude_from_wealth=true`.
+- Duplicidade entre manual e importada é sinalizada; nenhum registro é apagado,
+  mesclado ou convertido automaticamente.
+- O histórico de proventos e movimentações é permitido. Não há snapshots
+  patrimoniais nem série histórica de valor de portfólio.
+- Falha de investimento não altera o patrimônio anterior nem interrompe a
+  sincronização bancária.
 
 ## 8. Transições de estado
 

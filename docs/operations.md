@@ -193,28 +193,54 @@ tem acesso.
 - Não há feature flag: o ciclo de vida automático está sempre ativo e o rollback
   é por deploy/reversão do código (ADR-0005).
 
-## Investimentos manuais
+## Investimentos
 
-- Módulo da fase secundária (`/investments`, `/api/v1/investments/positions`).
-- Posições são registros manuais com corretora, ativo, ticker opcional,
-  quantidade, preço de referência **ou** valor total, data de referência e
-  observações.
-- O total é `quantidade × preço unitário`; quando apenas o total é informado, o
-  preço unitário é `total ÷ quantidade`, arredondado a 8 casas decimais. Valores e
-  datas são os informados pelo usuário, nunca cotação de mercado.
-- Não há importação automática, sincronização, recomendação de compra,
-  venda ou alocação, nem criação de ordens. A disponibilidade dos conectores
-  XP/Santander no Meu Pluggy permanece não validada até o gate real; o módulo não
-  depende do MVP bancário.
-- Posições manuais entram na visão patrimonial e podem ser fonte de alocação de
+- Módulo da fase secundária (`/investments`). Importa posições de itens do
+  Meu Pluggy e mantém posições manuais complementares.
+- **Investimento não é conta.** `/accounts` só retorna `BANK`/`CREDIT`; as
+  posições vêm de `GET /investments?itemId=` e não têm `accountId`. Não criar
+  conta sintética.
+- A cobertura é verificada por `GET /items/{id}/resources`. Um item pode listar
+  `INVESTMENTS` em `products` e não compartilhar nenhuma posição; `products` não
+  é prova. Estados: `AVAILABLE`, `NOT_SHARED`, `PENDING_AUTHORIZATION`,
+  `UNKNOWN` e `ERROR`, considerando `resourcesCollectedAt` e
+  `hasResourcesPendingAuthorization`.
+- Posições importadas usam `balance` como valor atual; `amount` é o valor bruto.
+  `TOTAL_WITHDRAWAL`/`RETIRADA_TOTAL` são normalizados para encerrada e não
+  compõem o valor atual, mas permanecem no histórico. Ausência em leitura
+  completa marca a posição como indisponível; nada é apagado.
+- Transações `BUY`, `SELL`, `TAX`, `TRANSFER`, `INTEREST` e `AMORTIZATION` são
+  persistidas apenas no módulo de investimentos. Elas não viram transações
+  bancárias e não alteram o fluxo de caixa.
+- `INTEREST` é a fonte de dividendos, aluguel de FII, JCP e cupons. Open Finance
+  pode não enviar `INTEREST`, `amountProfit`, `amountOriginal` ou taxas de
+  rentabilidade. Nesses casos o painel mostra "não informado" e **não deriva**
+  rentabilidade de histórico incompleto. `rate`/`rateType` são remuneração
+  contratada, não desempenho.
+- O usuário pode registrar provento manual e custo informado para uma posição
+  importada. Esses dados aparecem como manuais/estimados, não sobrescrevem o
+  provedor e são auditados. O provento manual não é somado automaticamente às
+  receitas do dashboard principal.
+- Posições importadas ativas entram uma única vez no patrimônio; encerradas,
+  indisponíveis e fora de BRL ficam de fora com motivo. Duplicidade entre posição
+  manual e importada é sinalizada, sem exclusão automática; a posição manual pode
+  ser marcada para não contar no patrimônio.
+- Falha de investimento não interrompe contas, cartões e transações; os dados
+  anteriores são preservados e a falha aparece como aviso não bloqueante.
+- Não há recomendação de compra, venda ou alocação, nem snapshots históricos de
+  valor de portfólio. A importação foi validada para XP via Meu Pluggy em
+  2026-10-27; outras instituições dependem de validação por consentimento.
+- Posições manuais continuam com total `quantidade × preço unitário`; quando
+  apenas o total é informado, o preço é `total ÷ quantidade`, com 8 casas
+  decimais. Elas entram na visão patrimonial e podem ser fonte de alocação de
   metas.
 
 ## Patrimônio
 
 - Módulo pós-MVP (`/wealth`, `/api/v1/wealth/*`). A visão atual consolida contas,
-  cartões como passivos, posições de investimento e ativos/passivos manuais. Cada
-  origem entra uma única vez; exclusões aparecem com o motivo explícito e não
-  compõem o total.
+  cartões como passivos, posições de investimento importadas e manuais e
+  ativos/passivos manuais. Cada origem entra uma única vez; exclusões aparecem
+  com o motivo explícito e não compõem o total.
 - Valores manuais e de referência são os informados pelo usuário, não cotação de
   mercado.
 - Snapshots patrimoniais foram removidos em 2026-10-26 (S-02); a visão atual não
@@ -258,9 +284,11 @@ tem acesso.
 - Descrições, valores e histórico de metas são cifrados; metadados de consulta
   (corretora, origem, tipo, estado, percentual e datas) ficam em claro para
   consulta e ordenação.
-- O schema ativo tem 24 tabelas de domínio, mais as tabelas de sessão do Spring
-  e o histórico do Flyway. Webhooks, snapshots patrimoniais, Bills e dívida
-  inicial não fazem parte da baseline.
+- O schema ativo tem as tabelas de domínio do núcleo bancário, cartões,
+  investimentos, patrimônio e metas, mais as tabelas de sessão do Spring e o
+  histórico do Flyway. Webhooks, snapshots patrimoniais e dívida inicial não
+  fazem parte da baseline; Bills estão em migração própria (`V003`) e os
+  investimentos importados serão adicionados em `V006`.
 - Acesso administrativo local:
 
 ```bash

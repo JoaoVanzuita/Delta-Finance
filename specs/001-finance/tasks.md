@@ -404,21 +404,22 @@ T197–T199 concluídas. US9 e US10 estão liberadas, mas não foram iniciadas.
 **Gate manual validado em 2026-10-24**: T182 executado e aprovado com duas
 aplicações Meu Pluggy independentes e múltiplos itemIds; critérios e evidências
 sanitizadas em `docs/runbooks/pluggy-acceptance.md`. A Phase 11 (US8) foi
-implementada antes desta validação por decisão do proprietário; o módulo
-permanece somente manual e não declara importação automática validada.
+implementada antes desta validação por decisão do proprietário e entregou o
+registro manual. Em 2026-10-27 a importação de investimentos foi validada para
+XP via Meu Pluggy; a Phase 11A amplia o módulo sem reabrir o gate bancário.
 
 **Checkpoint**: MVP bancário validado com dados reais, backup/restauração,
 segurança, performance e acessibilidade; fases secundárias separadas.
 
 ---
 
-## Phase 11: User Story 8 - Acompanhar investimentos manualmente (Priority: P3 - fase secundária)
+## Phase 11: User Story 8 - Acompanhar investimentos (base manual) (Priority: P3 - fase secundária)
 
-**Goal**: posições manuais de ações/FIIs, sem promessa de importação automática
-não validada.
+**Goal**: posições manuais de ações/FIIs, base histórica do módulo. A importação
+automática foi adicionada na Phase 11A após validação real.
 
 **Independent Test**: cadastrar, editar e excluir posições, conferir totais e
-data de referência e verificar que nenhuma importação automática é anunciada.
+data de referência e verificar que nenhuma recomendação é exibida.
 
 ### Tests for User Story 8
 
@@ -438,12 +439,52 @@ bancário.
 
 ---
 
+## Phase 11A: Importação de investimentos (pós-validação XP/Meu Pluggy)
+
+**Goal**: importar posições de itens com recursos de investimento, exibir
+dashboard de alocação e valor atual, diagnosticar cobertura por conexão e
+complementar proventos/rendimento com dados manuais identificados.
+
+**Independent Test**: sincronizar um item com recursos `VARIABLE_INCOME`,
+conferir posições ativas e encerradas, cobertura, provento `INTEREST` e provento
+manual, custo informado, ausência de recomendação e falha isolada de
+investimentos sem afetar contas/transações.
+
+### Documentação e contrato
+
+- [X] T200 [US8] Atualizar spec, plano, data-model, research, runbook de aceitação e documentação operacional para a importação de investimentos validada em 2026-10-27, incluindo cobertura por `resources`, limites de Open Finance, proventos/custo manual e ausência de snapshots históricos, em `specs/001-finance/*` e `docs/*`.
+- [ ] T201 [US8] Atualizar `contracts/openapi.yaml` e regenerar `client/src/lib/api/schema.d.ts` com overview, holdings, cobertura, proventos e custo informado; validar `openapi:check`.
+
+### Testes
+
+- [ ] T202 [P] [US8] Testes de importação, dedup, posição encerrada, indisponível, `INTEREST`, cobertura `AVAILABLE/NOT_SHARED/PENDING/UNKNOWN/ERROR`, isolamento por usuário e falha isolada em `server/src/test/java/com/deltafinance/integration/InvestmentImportIT.java`.
+- [ ] T203 [P] [US8] Testes de dashboard, estados vazios, cobertura, provento manual, custo informado, duplicidade e ausência de recomendação em `client/src/features/investments/__tests__/`.
+- [ ] T204 [P] [US8] Fixtures de investimentos, recursos e transações no `PluggyStub` em `server/src/test/java/com/deltafinance/support/PluggyStub.java`.
+
+### Implementação
+
+- [ ] T205 [US8] Criar migração `V006__provider_investments.sql` com `provider_investment`, `provider_investment_transaction`, `provider_investment_sync` e `investment_income`, incluindo cifragem, HMAC, FKs e índices.
+- [ ] T206 [US8] Estender `PluggyModels`/`PluggyDataClient` com investimentos, transações, recursos do item e buckets de rate limit.
+- [ ] T207 [US8] Implementar entidades, repositórios e `InvestmentImportService`, com normalização de tipo/status, upsert idempotente, marcação de indisponibilidade e auditoria.
+- [ ] T208 [US8] Integrar a importação ao `PluggySyncService` sem bloquear contas/transações; ajustar status de sincronização e registrar cobertura por conexão.
+- [ ] T209 [US8] Implementar API de overview, holdings, cobertura, proventos manuais e custo informado.
+- [ ] T210 [US8] Redesenhar `/investments` como dashboard, incluindo resumo, alocação, classificação por tipo/código, posições ativas/encerradas, proventos, cobertura e posições manuais.
+- [ ] T211 [US8] Incluir posições importadas ativas no patrimônio, com aviso de duplicidade e opção de excluir a manual do total.
+- [ ] T212 [US8] Atualizar exportação, rotação de chaves, exclusão de conta, limpeza de testes e documentação de privacidade para as novas tabelas/campos.
+- [ ] T213 [US8] Adicionar E2E e acessibilidade de investimentos importados em `client/e2e/investments.spec.ts` e `client/e2e/a11y.spec.ts`.
+
+**Checkpoint**: importação de investimentos funcional, isolada por usuário e
+conexão, sem recomendação e sem bloquear o núcleo bancário.
+
+---
+
 ## Phase 12: User Story 9 - Acompanhar patrimônio consolidado (Priority: P4 - pós-MVP)
 
-**Goal**: ativos, passivos, patrimônio líquido e snapshots datados.
+**Goal**: ativos, passivos, patrimônio líquido e visão atual, sem snapshots
+datados.
 
-**Independent Test**: combinar saldos, cartões, investimentos e itens manuais,
-gerar snapshots e conferir cálculos, datas, lacunas e ausência de dupla contagem.
+**Independent Test**: combinar saldos, cartões, investimentos e itens manuais e
+conferir cálculos, datas, lacunas e ausência de dupla contagem.
 
 ### Tests for User Story 9
 
@@ -509,8 +550,10 @@ posterior.
 - **Foundational (Phase 2)**: depende do Setup; bloqueia todas as histórias.
 - **US1–US7 (MVP bancário)**: dependem da Fundação.
 - **MVP Hardening e gate (Phase 10)**: depende de US1–US7; bloqueia US8–US10.
-- **US8 (fase secundária)**: inicia somente após a Phase 10 (T182 incluído);
-  não bloqueia o MVP.
+- **US8 (fase secundária)**: a base manual iniciou após a Phase 10 (T182
+  incluído); não bloqueia o MVP.
+- **Phase 11A (importação de investimentos)**: inicia após a validação real de
+  2026-10-27; não bloqueia o MVP nem reabre o gate bancário.
 - **US9–US10 (pós-MVP)**: iniciam após o gate e não bloqueiam o MVP.
 - **Documentação final (Phase 14)**: depende de US8–US10.
 
@@ -611,9 +654,10 @@ Nenhuma tarefa de US8–US10 pode iniciar antes de a Phase 10 ser concluída
 6. US4 entrega leitura dos dados.
 7. US7 entrega controle e saída.
 8. Phase 10 entrega o MVP validado com dados reais.
-9. US8 entrega investimentos manuais.
-10. US9/US10 entregam patrimônio e metas após o MVP.
-11. Phase 14 atualiza a documentação final.
+9. US8 entrega a base manual de investimentos.
+10. Phase 11A entrega importação, dashboard, cobertura e proventos.
+11. US9/US10 entregam patrimônio e metas após o MVP.
+12. Phase 14 atualiza a documentação final.
 
 ### Parallel Team Strategy
 

@@ -113,6 +113,23 @@ Fatos confirmados:
   reguladas e apenas em alguns conectores diretos. **Não presumir** que o fluxo
   Meu Pluggy fornecerá Bills. O MVP deve construir e manter faturas localmente,
   importando Bills quando estiverem disponíveis.
+- Investimento **não é conta**: `/accounts` só retorna `BANK`/`CREDIT`. As
+  posições vêm de `GET /investments?itemId=`, sem `accountId`, e devem ser
+  vinculadas ao item/conexão.
+- `products` não prova cobertura. Um item pode listar `INVESTMENTS` e não
+  compartilhar nenhuma posição. A verificação correta é
+  `GET /items/{id}/resources`, filtrando `BANK_FIXED_INCOME`,
+  `CREDIT_FIXED_INCOME`, `VARIABLE_INCOME`, `TREASURE_TITLE` e `FUND`, com
+  `resourcesCollectedAt` e `hasResourcesPendingAuthorization`.
+- A importação de investimentos foi validada em 2026-10-27 para uma conexão XP
+  via Meu Pluggy: 6 recursos `VARIABLE_INCOME` disponíveis e 6 posições. Os
+  outros itens da instalação não compartilhavam investimentos, apesar de listarem
+  `INVESTMENTS` em `products`.
+- `GET /investments/{id}/transactions` traz `BUY`, `SELL`, `TAX`, `TRANSFER`,
+  `INTEREST` e `AMORTIZATION`. `INTEREST` é a fonte de dividendos, aluguel de
+  FII, JCP e cupons. Open Finance pode omitir `INTEREST`, `amountProfit`,
+  `amountOriginal` e taxas de rentabilidade; não derivar rentabilidade de
+  histórico incompleto.
 - Webhooks exigem URL HTTPS, respondem `2xx` em até 10 segundos e têm até 3
   tentativas. Eventos de transação não trazem `clientUserId`; a associação deve
   ser feita pelo `itemId` persistido localmente.
@@ -144,7 +161,7 @@ no mesmo repositório, servida pelo próprio stack Docker Compose.
 | `reconciliation` | sugestões de transferência interna, pagamento de fatura e confirmação do usuário. |
 | `reporting` | dashboard, agregações, filtros e drill-down. |
 | `privacy` | exportação, exclusão de conta e desconexão. |
-| `investments` | posições manuais de ações/FIIs, fase secundária. |
+| `investments` | posições importadas, posições manuais, proventos, custo informado, dashboard e cobertura por conexão. |
 | `wealth` | ativos, passivos, snapshots e patrimônio líquido, fase posterior. |
 | `goals` | metas, alocações e progresso, fase posterior. |
 | `shared` | dinheiro, tempo, erros, paginação, auditoria e utilidades. |
@@ -442,8 +459,11 @@ estar explícito no runbook.
 - Rotação da chave de índice HMAC: runbook de manutenção, não automática no MVP.
 - Webhooks: opcionais e dependentes de HTTPS público; não são pré-requisito para
   a conclusão do MVP.
-- Importação automática de investimentos: fora do MVP; só após validação real.
-- Patrimônio e metas: fase posterior, com modelo já previsto.
+- Importação de investimentos: validada para XP via Meu Pluggy em 2026-10-27;
+  posições, cobertura e proventos seguem as regras de recursos do item. Outras
+  instituições, tipos e campos dependem de validação por consentimento.
+- Patrimônio e metas: fase posterior, com modelo já previsto; sem snapshots
+  patrimoniais datados.
 
 ## 13. Fontes
 

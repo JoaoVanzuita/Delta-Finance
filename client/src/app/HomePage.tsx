@@ -63,7 +63,7 @@ export function HomePage() {
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />
-            Investimentos manuais, patrimônio e metas com histórico datado
+            Investimentos importados e manuais, patrimônio atual e metas com histórico
           </li>
           <li className="flex gap-2">
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-income" />

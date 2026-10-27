@@ -329,36 +329,50 @@ sincronização e que a exclusão remove o acesso sem afetar o outro usuário.
 
 ---
 
-### User Story 8 - Acompanhar investimentos manualmente (Priority: P3 - fase secundária)
+### User Story 8 - Acompanhar investimentos importados e manuais (Priority: P3 - fase secundária)
 
-Como membro da família, quero registrar manualmente minhas posições de ações e
-fundos imobiliários, inicialmente com foco em XP Investimentos e Santander
-Corretora, para acompanhar o que possuo sem depender de uma integração ainda não
-validada.
+Como membro da família, quero importar automaticamente as posições de
+investimento compartilhadas pelo Meu Pluggy e, quando o provedor não entregar
+algum dado, complementar com posições e proventos manuais, para acompanhar
+alocação, dividendos e rendimento sem recomendações.
 
-**Why this priority**: investimentos são um módulo secundário. O registro manual
-entrega valor sem presumir que os conectores estejam disponíveis no fluxo Meu
-Pluggy.
+**Why this priority**: investimentos continuam secundários em relação ao núcleo
+bancário, mas a importação já foi validada para uma conexão XP via Meu Pluggy.
+O módulo não pode presumir cobertura de outras instituições nem completar
+lacunas com valores inventados.
 
-**Independent Test**: cadastrar, editar e excluir posições manuais, conferir os
-totais e a data de referência e verificar que nenhuma importação automática é
-oferecida ou anunciada sem validação real.
+**Independent Test**: importar posições de um item com recursos
+`VARIABLE_INCOME`, conferir valor atual, tipo, status e cobertura; cadastrar um
+provento manual e um custo informado; confirmar que posições encerradas ficam
+fora do total, que dados ausentes aparecem como "não informado" e que nenhuma
+recomendação é exibida.
 
 **Acceptance Scenarios**:
 
-1. **Given** um usuário autenticado, **When** ele cadastra uma posição com ativo,
-   ticker ou código, quantidade, preço ou valor de referência, data de
-   referência, corretora e observações, **Then** a posição é exibida como
-   registro manual.
-2. **Given** uma posição manual, **When** o total de investimentos é exibido,
-   **Then** o valor usa a data de referência e é identificado como informado pelo
-   usuário, não como cotação de mercado.
-3. **Given** que a disponibilidade do conector no Meu Pluggy não foi validada,
-   **When** o módulo de investimentos é apresentado, **Then** o sistema não
-   oferece nem declara importação automática como funcional.
-4. **Given** qualquer posição de investimento, **When** o usuário consulta o
+1. **Given** uma conexão cujo item declara recursos de investimento
+   `AVAILABLE`, **When** a sincronização ocorre, **Then** as posições são
+   importadas e atualizadas pelo identificador externo, sem duplicar registros, e
+   o valor atual usa o `balance` do provedor.
+2. **Given** um item sem recursos de investimento, **When** o módulo é exibido,
+   **Then** nenhuma posição é inventada e a interface explica que a instituição
+   não compartilha investimentos naquele consentimento, sem tratar como erro.
+3. **Given** uma posição com status `TOTAL_WITHDRAWAL`, **When** os totais são
+   calculados, **Then** ela aparece como encerrada, não compõe o valor atual e
+   permanece no histórico.
+4. **Given** uma posição com `amountProfit` ou taxas de rentabilidade
+   informadas, **When** o detalhe é exibido, **Then** o valor é identificado como
+   informado pelo provedor; quando ausente, o sistema mostra "não informado" e
+   não deriva rentabilidade de histórico incompleto.
+5. **Given** uma transação `INTEREST` do provedor, **When** o painel de proventos
+   é exibido, **Then** ela aparece como dividendo/provento; quando o provedor não
+   envia `INTEREST`, o usuário pode registrar um provento manual identificado
+   como tal.
+6. **Given** uma posição manual e uma importada com o mesmo código, **When** o
+   módulo é exibido, **Then** o sistema avisa sobre possível duplicidade e não
+   apaga nem mescla registros automaticamente.
+7. **Given** qualquer posição de investimento, **When** o usuário consulta o
    módulo, **Then** não recebe recomendação de compra, venda ou alocação.
-5. **Given** que o módulo secundário não está concluído, **When** o MVP bancário
+8. **Given** que o módulo secundário não está concluído, **When** o MVP bancário
    é avaliado, **Then** sua conclusão não depende de investimentos.
 
 ---
@@ -374,8 +388,8 @@ bancário. Deve ser especificado para orientar a evolução do modelo, sem bloqu
 a primeira entrega.
 
 **Independent Test**: combinar saldos de contas, cartões, posições de
-investimento e ativos/passivos manuais, gerar snapshots e conferir cálculos,
-datas, lacunas e ausência de dupla contagem.
+investimento e ativos/passivos manuais, conferir cálculos, datas, lacunas e
+ausência de dupla contagem.
 
 **Acceptance Scenarios**:
 
@@ -391,7 +405,7 @@ datas, lacunas e ausência de dupla contagem.
 4. **Given** um valor de referência manual, **When** ele é exibido, **Then** não
    é apresentado como cotação de mercado.
 5. **Given** dois usuários, **When** cada um consulta seu patrimônio, **Then**
-   nenhum vê ativos, passivos ou snapshots do outro.
+   nenhum vê ativos, passivos ou a visão patrimonial do outro.
 
 ---
 
@@ -950,17 +964,55 @@ ausência de movimentação financeira.
   explícito para 8 casas decimais. O total DEVE usar a data e o valor de
   referência informados e ser apresentado como dado do usuário, não como cotação
   de mercado.
-- **FR-118**: Importação automática de investimentos só DEVE ser declarada
-  funcional após validação real de que o conector e os dados necessários estão
-  acessíveis pela modalidade pessoal Meu Pluggy.
+- **FR-118**: A importação automática de investimentos DEVE ocorrer somente para
+  itens cujo `GET /items/{id}/resources` declare recursos de investimento
+  (`BANK_FIXED_INCOME`, `CREDIT_FIXED_INCOME`, `VARIABLE_INCOME`,
+  `TREASURE_TITLE` ou `FUND`). A presença de `INVESTMENTS` em `products` NÃO
+  constitui prova de cobertura.
 - **FR-119**: Cobertura pública de conector direto ou teste em Sandbox NÃO
   constitui prova de disponibilidade no Meu Pluggy.
 - **FR-120**: O módulo de investimentos NÃO DEVE oferecer recomendação de
   compra, venda, alocação ou consultoria de investimentos.
 - **FR-121**: O módulo de investimentos NÃO DEVE atrasar a integração bancária,
   o dashboard ou os critérios de conclusão do MVP.
-- **FR-122**: XP Investimentos e Santander Corretora são instituições de
-  interesse da fase secundária, sem promessa de cobertura automática.
+- **FR-122**: XP Investimentos via Meu Pluggy foi validada em 2026-10-27 para
+  posições de renda variável. Santander Corretora e demais instituições, tipos e
+  campos não são presumidos; cada consentimento deve ser verificado pelos
+  recursos do item.
+- **FR-122A**: A importação DEVE persistir posições por item/conexão, com
+  identificador externo, tipo, subtipo, status, moeda, quantidade, valor
+  unitário, valor bruto, saldo líquido e datas informadas. Ausência em leitura
+  completa DEVE marcar a posição como indisponível, nunca apagar histórico.
+- **FR-122B**: A cobertura por conexão DEVE distinguir `AVAILABLE`,
+  `NOT_SHARED`, `PENDING_AUTHORIZATION`, `UNKNOWN` e `ERROR`, usando
+  `resources`, `resourcesCollectedAt` e `hasResourcesPendingAuthorization`.
+- **FR-122C**: O valor atual de uma posição importada DEVE ser o `balance` do
+  provedor. Posições `TOTAL_WITHDRAWAL`/`RETIRADA_TOTAL` NÃO DEVEM compor o valor
+  atual, mas DEVEM permanecer visíveis no histórico. Posições em moeda diferente
+  de BRL NÃO DEVEM compor totais consolidados e DEVEM exibir o motivo.
+- **FR-122D**: Proventos (`INTEREST`) e rentabilidade informada
+  (`amountProfit`, `lastMonthRate`, `annualRate`, `lastTwelveMonthsRate`)
+  DEVEM ser exibidos com a origem "provedor". Quando ausentes, o sistema DEVE
+  mostrar "não informado" e NÃO DEVE derivar rentabilidade de transações
+  incompletas. `rate`, `rateType` e `fixedAnnualRate` DEVEM ser tratados como
+  remuneração contratada, não como desempenho.
+- **FR-122E**: O usuário DEVE poder registrar proventos manuais e custo
+  informado para posições importadas. Esses dados DEVEM ser identificados como
+  manuais/estimados, não DEVEM sobrescrever valores do provedor e DEVEM ser
+  auditados.
+- **FR-122F**: Duplicidade entre posição manual e importada DEVE ser sinalizada.
+  O sistema NÃO DEVE apagar, mesclar ou excluir automaticamente; o usuário pode
+  optar por não contar a posição manual no patrimônio.
+- **FR-122G**: Falha na importação de investimentos NÃO DEVE interromper a
+  sincronização de contas, cartões e transações. Dados anteriores DEVEM ser
+  preservados e a falha DEVE aparecer como aviso não bloqueante.
+- **FR-122H**: Posições importadas ativas DEVEM entrar uma única vez na visão
+  patrimonial. Posições encerradas, indisponíveis e fora de BRL NÃO DEVEM
+  compor o patrimônio.
+- **FR-122I**: A classificação DEVE usar `type`/`subtype` do provedor. Quando o
+  subtipo não distinguir FII de ação, o sistema PODE inferir pelo código com
+  rótulo explícito de "classificação por código" e DEVE permitir que o usuário
+  sobrescreva a classificação.
 
 #### Patrimônio e metas - fase posterior ao MVP
 
@@ -971,8 +1023,11 @@ ausência de movimentação financeira.
   duplicar o mesmo valor em fontes diferentes.
 - **FR-125**: O sistema DEVE permitir cadastrar ativos e passivos manuais com
   tipo, descrição, valor de referência, data da posição e observações.
-- **FR-126**: O sistema NÃO DEVE manter snapshots patrimoniais datados; a visão
-  consolidada representa apenas a posição atual e não reconstrói o passado.
+- **FR-126**: O sistema NÃO DEVE manter snapshots patrimoniais datados nem
+  séries históricas de valor de portfólio; a visão consolidada representa apenas
+  a posição atual e não reconstrói o passado. O histórico de proventos e
+  movimentações de investimento É permitido porque deriva de eventos datados, não
+  de snapshots de valor.
 - **FR-127**: O sistema DEVE explicar que dados antigos só podem ser
   reconstruídos quando houver histórico suficiente e NÃO DEVE inferir saldos
   passados a partir de dados atuais incompletos.
@@ -1080,9 +1135,18 @@ ausência de movimentação financeira.
   pertencente a um usuário.
 - **Registro de sincronização**: tentativa de leitura de uma integração ou item,
   com início, fim, resultado, estado, totais processados e erro sanitizado.
-- **Posição de investimento**: registro manual de ativo, ticker ou código,
-  quantidade, preço unitário de referência, data, corretora e observações,
-  pertencente a um usuário.
+- **Posição de investimento manual**: registro informado pelo usuário com ativo,
+  ticker ou código, quantidade, preço unitário de referência, data, corretora e
+  observações.
+- **Posição de investimento importada**: posição compartilhada por um item do
+  provedor, com tipo, subtipo, status, quantidade, valores, datas e origem
+  externa; não é conta bancária.
+- **Movimentação de investimento**: aplicação, resgate, imposto, transferência,
+  provento ou amortização informada pelo provedor para uma posição importada.
+- **Provento de investimento**: dividendo, JCP, aluguel de FII, cupom ou outro
+  rendimento, importado (`INTEREST`) ou informado manualmente.
+- **Cobertura de investimentos**: estado por conexão que indica se a instituição
+  compartilha investimentos, se há autorização pendente ou se a leitura falhou.
 - **Ativo ou passivo manual**: item patrimonial informado pelo usuário, com tipo,
   descrição, valor de referência, data da posição e observações.
 - **Meta financeira**: objetivo com valor-alvo, prazo opcional, estado, regra de
@@ -1133,9 +1197,17 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
 - A classificação de compras e pagamentos de fatura depende dos dados
   disponíveis e da confirmação do usuário; a ausência de dados não pode gerar
   fatura fictícia.
-- A disponibilidade de conectores de investimento no Meu Pluggy para XP
-  Investimentos e Santander Corretora não é presumida e depende de validação
-  real.
+- A importação de investimentos foi validada em 2026-10-27 para uma conexão XP
+  via Meu Pluggy, com posições de renda variável. Santander Corretora, outras
+  instituições, outros tipos de investimento e outros campos não são presumidos;
+  a cobertura deve ser verificada por item e consentimento.
+- O item pode listar `INVESTMENTS` em `products` sem compartilhar investimentos;
+  a fonte de verdade é `/items/{id}/resources`, com `resourcesCollectedAt` e
+  `hasResourcesPendingAuthorization`.
+- Open Finance pode não informar `amountProfit`, `amountOriginal` ou taxas de
+  rentabilidade, e o histórico de transações de investimento pode ser
+  incompleto. O sistema deve exibir a ausência e aceitar custo/proventos
+  informados pelo usuário, sem derivar rentabilidade de dados incompletos.
 - A indisponibilidade, mudança de contrato ou alteração de limites do provedor
   são riscos externos; nenhuma resposta vazia ou falha pode ser tratada como
   exclusão de dados.
@@ -1163,13 +1235,13 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
 
 **Fase secundária**:
 
-- registro manual de posições de ações e fundos imobiliários;
-- importação automática de investimentos somente após validação real do conector
-  e da cobertura no fluxo Meu Pluggy.
+- importação automática de investimentos validada para XP via Meu Pluggy;
+- dashboard de posições, alocação, proventos e rendimento com origem explícita;
+- registro manual complementar de posições, proventos e custo informado.
 
 **Fase posterior ao MVP**:
 
-- acompanhamento de patrimônio bruto, passivos, patrimônio líquido e snapshots;
+- acompanhamento de patrimônio bruto, passivos e patrimônio líquido;
 - metas financeiras com regras de progresso e histórico.
 
 **Fora de escopo do MVP**:
@@ -1179,7 +1251,10 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
 - sincronização em tempo real ou promessa de atualização imediata da instituição;
 - execução de pagamentos, transferências bancárias, ordens de investimento e
   aconselhamento financeiro;
-- importação automática de investimentos antes de validação real;
+- importação automática de investimentos para conectores, instituições ou tipos
+  não validados;
+- séries históricas de valor de portfólio, snapshots patrimoniais datados e
+  reconstrução de saldos passados;
 - aplicativos nativos para celular;
 - conversão automática entre moedas ou suporte completo a moedas diferentes de
   BRL;
@@ -1237,10 +1312,11 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
   zoom de 200%, apenas com teclado e com leitor de tela, sem bloqueios críticos.
 - **SC-014**: Com o provedor indisponível, 100% dos dados já importados,
   lançamentos manuais e relatórios continuam acessíveis e nenhum dado é perdido.
-- **SC-015**: Na fase secundária, posições manuais de investimento exibem
-  valores e datas de referência corretos, e nenhuma importação automática é
-  anunciada sem validação real; a conclusão do MVP bancário não depende desse
-  módulo.
+- **SC-015**: Na fase secundária, posições importadas de itens com recursos de
+  investimento exibem valor atual, tipo, status e cobertura corretos; posições
+  encerradas ficam fora do total; proventos e rentabilidade mostram a origem ou
+  "não informado"; conexões sem cobertura são explicadas; nenhuma recomendação é
+  exibida; a conclusão do MVP bancário não depende desse módulo.
 - **SC-016**: Na fase posterior, patrimônio líquido corresponde a ativos menos
   passivos em 100% dos casos testados, sem dupla contagem, e histórico
   insuficiente não infere saldos passados. Na fase de metas, a regra de progresso
@@ -1327,10 +1403,12 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
   automaticamente.
 - Parcelas futuras são projetadas e contabilizadas apenas no ciclo em que vencem;
   a fatura é uma visão de acompanhamento e não movimenta dinheiro.
-- Valores de referência de investimentos e de ativos manuais são informados pelo
-  usuário e não representam cotação de mercado em tempo real.
-- Patrimônio, metas e importação automática de investimentos não fazem parte dos
-  critérios de conclusão do MVP bancário.
+- Valores de referência de investimentos manuais são informados pelo usuário e
+  não representam cotação de mercado em tempo real. Posições importadas usam o
+  `balance` do provedor e podem não ter rentabilidade informada.
+- Patrimônio, metas e importação de investimentos não fazem parte dos critérios
+  de conclusão do MVP bancário. A importação foi validada para XP via Meu Pluggy,
+  sem promessa de cobertura para outras instituições.
 - A documentação e os limites do Meu Pluggy podem mudar; a implementação deverá
   verificar a versão vigente e registrar a data da verificação.
 - O sistema não fornece aconselhamento financeiro, recomendação de investimento

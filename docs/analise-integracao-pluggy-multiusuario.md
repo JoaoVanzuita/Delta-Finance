@@ -232,23 +232,45 @@ A interface deve mostrar quantos `itemId` estão configurados por usuário e ale
 
 ### XP Investimentos
 
-A tabela pública da Pluggy para conectores diretos de investimentos mostra XP Investimentos com cobertura para `Equity` e `Real Estate`, que correspondem às classes amplas em que se encontram ações e fundos imobiliários. A API também descreve posições de investimento com campos como nome, código, tipo, quantidade, valor e saldo.
+A tabela pública da Pluggy para conectores diretos de investimentos mostra XP
+Investimentos com cobertura para `Equity` e `Real Estate`, que correspondem às
+classes amplas em que se encontram ações e fundos imobiliários. A API também
+descreve posições de investimento com campos como nome, código, tipo, quantidade,
+valor e saldo.
 
-Entretanto, a cobertura de um conector direto não prova que ele esteja disponível pela cadeia de acesso do Meu Pluggy pessoal. A possibilidade de conectar a XP para investimentos precisa ser testada no Dashboard e confirmada para a modalidade pessoal antes de integrar automaticamente esses dados.
+**Validação real em 2026-10-27**: uma conexão XP via Meu Pluggy declarou 6
+recursos `VARIABLE_INCOME` como `AVAILABLE` e retornou 6 posições (3 ativas e 3
+encerradas). Isso comprova a viabilidade de posições de renda variável pelo fluxo
+Meu Pluggy nesta instalação. Não comprova outros tipos de investimento, outros
+campos nem outras instituições. Em Open Finance, `amountProfit`, `amountOriginal`,
+`lastMonthRate`, `annualRate` e `lastTwelveMonthsRate` vieram nulos, e nenhuma
+transação `INTEREST` foi retornada.
 
 ### Santander Corretora
 
-A tabela pública de conectores diretos de investimento consultada lista XP Investimentos, BTG Pactual, Avenue e EQI, mas não lista Santander Corretora nesse conjunto. A tabela também apresenta Santander Empresas como conector empresarial com cobertura limitada a renda fixa e fundos mútuos, não a ações/FIIs. Isso não é evidência suficiente para prometer acesso a ações e FIIs da Santander Corretora no contexto pessoal.
+A tabela pública de conectores diretos de investimento consultada lista XP
+Investimentos, BTG Pactual, Avenue e EQI, mas não lista Santander Corretora nesse
+conjunto. A tabela também apresenta Santander Empresas como conector empresarial
+com cobertura limitada a renda fixa e fundos mútuos, não a ações/FIIs. Não há
+evidência suficiente para prometer acesso a ações e FIIs da Santander Corretora
+no contexto pessoal. A cobertura deve ser verificada por item e consentimento.
 
 ### Decisão recomendada
 
-- Manter XP e Santander como corretoras-alvo para a evolução de investimentos.
-- Implementar primeiro o registro manual de posições, se o módulo for necessário antes de confirmar a cobertura.
-- Fazer prova de conceito separada para cada conector/modalidade antes de declarar importação automática.
-- Não atrasar sincronização bancária, cartões e dashboard do MVP por causa das corretoras.
-- Não fornecer recomendações de investimento; limitar o módulo a acompanhamento de dados/posições.
+- Importar posições somente de itens cujo `/items/{id}/resources` declare
+  recursos de investimento; `products` sozinho não é prova.
+- Não criar conta sintética: investimento não é conta na Pluggy e não tem
+  `accountId`.
+- Exibir cobertura por conexão e explicar quando a instituição não compartilha
+  investimentos.
+- Exibir valor atual, tipo, status e posições encerradas; não derivar
+  rentabilidade de histórico incompleto.
+- Aceitar provento manual e custo informado quando o provedor não entregar
+  `INTEREST`/`amountProfit`, sempre com origem explícita.
+- Não atrasar sincronização bancária, cartões e dashboard do MVP.
+- Não fornecer recomendações de investimento; limitar o módulo a acompanhamento.
 
-Fontes: [Produto Investimento](https://docs.pluggy.ai/pt/docs/products/investments) e [Cobertura de investimentos](https://docs.pluggy.ai/en/docs/connections/investments-coverage).
+Fontes: [Produto Investimento](https://docs.pluggy.ai/pt/docs/products/investments), [Transações de Investimento](https://docs.pluggy.ai/pt/docs/products/investment-transactions), [Cobertura de investimentos](https://docs.pluggy.ai/en/docs/connections/investments-coverage), [Recursos do item](https://docs.pluggy.ai/en/docs/connections/resources) e [Cobertura de transações de investimento](https://docs.pluggy.ai/en/docs/connections/investment-transactions-coverage).
 
 ## 13. Riscos e decisões técnicas recomendadas
 

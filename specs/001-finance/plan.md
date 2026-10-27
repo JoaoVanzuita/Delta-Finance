@@ -110,7 +110,7 @@ de usuário; 139 requisitos funcionais; 26 critérios de sucesso.
 | VI. Confiabilidade e observabilidade | PASS | Fila de jobs, retries, `sync_run`, auditoria, health checks, métricas, logs JSON e preservação de dados. |
 | VII. UX e acessibilidade | PASS | React responsivo, WCAG 2.1 AA, estados explícitos, gráficos com alternativa textual e drill-down. |
 | VIII. Self-hosting | PASS | Compose com `db`, `server`, `client`, `proxy`; configuração externa; migrações; backup/restauração; HTTPS. |
-| IX. Investimentos com escopo controlado | PASS | Apenas posições manuais no MVP secundário; importação automática só após validação real. |
+| IX. Investimentos com escopo controlado | PASS | Posições importadas para itens com recursos `AVAILABLE` e posições manuais complementares; importação validada para XP via Meu Pluggy, sem histórico de valor. |
 | X. Patrimônio e metas | PASS | Modelo previsto em `data-model.md`; implementação e UI em fase posterior. |
 | XI. Decisões e documentação | PASS | `research.md`, `data-model.md`, contratos, quickstart, runbooks e registro de limitações externas. |
 
@@ -467,10 +467,21 @@ demonstrados.
 
 ### Etapa 12 — Fase secundária: investimentos
 
-- Implementar posições manuais de ações/FIIs.
-- Validar separadamente a disponibilidade de conectores XP/Santander no fluxo
-  Meu Pluggy antes de qualquer promessa de importação automática.
-- Não atrasar o MVP bancário nem incluir recomendação de investimento.
+- Importar posições de itens cujo `/items/{id}/resources` declare recursos de
+  investimento; `products` sozinho não é prova de cobertura.
+- Exibir dashboard de valor atual, alocação por tipo, posições encerradas,
+  cobertura por conexão, proventos e rendimento com origem explícita.
+- Classificar por `type`/`subtype` do provedor; quando necessário, inferir
+  FII/ação pelo código com rótulo explícito e permitir override do usuário.
+- Manter a alocação de metas restrita às fontes atuais; investimento importado
+  entra no patrimônio, mas não como fonte de meta nesta fase.
+- Manter posições manuais como complemento e permitir provento manual e custo
+  informado quando o provedor não entregar `INTEREST`, `amountProfit` ou
+  `amountOriginal`.
+- Não derivar rentabilidade de histórico de transações incompleto, não manter
+  snapshots históricos de valor e não incluir recomendação de investimento.
+- Não atrasar o MVP bancário; falhas de investimento não interrompem a
+  sincronização de contas, cartões e transações.
 
 ### Etapa 13 — Fase posterior: patrimônio e metas
 
@@ -493,9 +504,10 @@ demonstrados.
 - `/cards/:accountId/invoices`, `/invoices/:id`.
 - `/reconciliation` para sugestões pendentes.
 - `/settings/integration`, `/settings/privacy`.
-- `/investments` na fase secundária; `/wealth` e `/goals` somente na fase
-  posterior. A navegação reserva a hierarquia, mas não exibe telas vazias nem
-  atalhos que sugiram funcionalidades concluídas.
+- `/investments` na fase secundária, com dashboard de posições importadas,
+  posições manuais, proventos, cobertura e rendimento; `/wealth` e `/goals`
+  somente na fase posterior. A navegação reserva a hierarquia, mas não exibe
+  telas vazias nem atalhos que sugiram funcionalidades concluídas.
 
 ### Componentes e estado
 
@@ -822,6 +834,9 @@ tipografia, paleta e componentes, com a acessibilidade como restrição.
 | Autorização anual expira | Leituras vazias | `consentExpiresAt`, `LOGIN_ERROR`, estado de ação, dados preservados. |
 | Rate limit por IP | Sync falhando | Janela de 7 dias, reconciliação mensal, concorrência limitada, backoff. |
 | Webhook indisponível em LAN | Atraso de parcelas | Sincronização programada é o único caminho de atualização; webhooks foram removidos (S-04). |
+| Item lista `INVESTMENTS` em `products` sem compartilhar investimentos | Falso positivo de cobertura e telas vazias | Usar `/items/{id}/resources`, `resourcesCollectedAt` e `hasResourcesPendingAuthorization`; explicar a cobertura por conexão. |
+| Open Finance não envia rentabilidade, `amountOriginal` ou `INTEREST` | Dashboard sem dividendos/rendimento | Exibir "não informado"; aceitar provento manual e custo informado; nunca derivar de histórico incompleto. |
+| Posição manual duplica posição importada | Dupla contagem no patrimônio | Aviso de duplicidade e opção de não contar a manual; sem exclusão automática. |
 | Agregação de valores cifrados lenta | Dashboard acima da meta | Filtro por metadados, varredura limitada, testes k6, possível cache de leitura no futuro. |
 | Perda da chave | Dados irrecuperáveis | Backup separado do key ring, runbook e aviso explícito. |
 | Escopo de faturas aumentar o MVP | Atraso | Módulo isolado; implementação após o núcleo bancário, antes do gate final. |
@@ -848,10 +863,12 @@ Sandbox, mocks e dados sintéticos não contam para esse gate.
 
 ## Post-MVP Evolution
 
-- **Investimentos**: posições manuais de ações/FIIs; importação automática
-  somente após validação real do conector no Meu Pluggy.
-- **Patrimônio**: ativos, passivos, snapshots datados e patrimônio líquido;
-  modelo já previsto, sem UI no MVP.
+- **Investimentos**: posições importadas de itens com recursos de investimento e
+  posições manuais complementares; dashboard de alocação, proventos e
+  rendimento, sem snapshots históricos de valor. A importação foi validada para
+  XP via Meu Pluggy; outras instituições dependem de validação por consentimento.
+- **Patrimônio**: ativos, passivos e patrimônio líquido; modelo já previsto, sem
+  UI no MVP e sem snapshots patrimoniais datados.
 - **Metas**: valor-alvo, prazo, regra de progresso, alocações explícitas com
   `allocation_mode`, histórico e ausência de movimentação de dinheiro.
 - **Multi-moeda**: fora do MVP; registros em moeda diferente de BRL são

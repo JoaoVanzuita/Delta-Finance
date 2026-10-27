@@ -8,10 +8,10 @@ Meu Pluggy, sem compartilhamento de credenciais.
 > **Estado**: escopo funcional de `specs/001-finance` implementado até a fase
 > posterior. O MVP bancário cobre identidade, contas e cartões manuais ou via Meu
 > Pluggy, transações, categorias, faturas, reconciliação, dashboard, relatórios,
-> privacidade e exportação. Investimentos manuais, patrimônio e metas estão
-> disponíveis como módulos secundário e posteriores. Nenhum módulo movimenta
-> dinheiro, cria ordens ou oferece recomendação de investimento; a validação de
-> release segue [`docs/release-checklist.md`](docs/release-checklist.md).
+> privacidade e exportação. Investimentos importados e manuais, patrimônio e
+> metas estão disponíveis como módulos secundário e posteriores. Nenhum módulo
+> movimenta dinheiro, cria ordens ou oferece recomendação de investimento; a
+> validação de release segue [`docs/release-checklist.md`](docs/release-checklist.md).
 
 ## Stack
 
@@ -54,11 +54,14 @@ compose.yaml            stack self-hosted completa
 - **Dashboard e relatórios**: resultado do período, saldo, categorias, série
   temporal, drill-down paginado e exportação dos próprios dados na área de
   privacidade.
-- **Investimentos (fase secundária)**: posições manuais de ações e FIIs, com total
-  calculado pela data de referência informada. Não há importação automática nem
-  recomendação de compra, venda ou alocação.
-- **Patrimônio (pós-MVP)**: ativos, passivos e snapshots datados, sem dupla
-  contagem e sem inferir saldos passados quando falta histórico.
+- **Investimentos (fase secundária)**: importação de posições de itens Meu
+  Pluggy com recursos de investimento, dashboard de alocação, posições
+  encerradas, cobertura por conexão, proventos e custo informado. O provedor pode
+  não enviar dividendos/rentabilidade; nesse caso o painel mostra "não informado"
+  e aceita complemento manual. Não há recomendação de compra, venda ou alocação,
+  nem histórico de valor de portfólio.
+- **Patrimônio (pós-MVP)**: ativos, passivos e patrimônio líquido atual, sem
+  dupla contagem e sem snapshots históricos nem inferência de saldos passados.
 - **Metas (pós-MVP)**: progresso por alocações explícitas, patrimônio líquido ou
   redução de dívida, com histórico datado (um snapshot por meta/dia, gravado sob
   demanda). Metas não movimentam dinheiro, não criam ordens e não executam ações
