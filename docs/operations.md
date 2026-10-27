@@ -184,8 +184,8 @@ tem acesso.
 - PostgreSQL 18.6, volume `pgdata`.
 - Migrações Flyway em `server/src/main/resources/db/migration/`, aplicadas no
   start. A baseline consolidada é `V001__baseline.sql` (2026-10-26); as migrações
-  históricas estão em `docs/archive/migrations-v001-v019/`. Nunca edite uma
-  migração já aplicada; crie a próxima versão (`V002` em diante).
+  anteriores foram consolidadas nela e permanecem no histórico do Git. Nunca
+  edite uma migração já aplicada; crie a próxima versão (`V002` em diante).
 - `MigrationIT` valida banco vazio, snapshot da versão anterior, aplicação
   idempotente e ausência de objetos legados.
 - `idempotency_key` guarda replay apenas de transações, itens de fatura e

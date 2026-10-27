@@ -1,16 +1,16 @@
 # Migrações Flyway
 
 A baseline atual é o arquivo `V001__baseline.sql`, consolidado em 2026-10-26 a
-partir das migrações `V001`–`V019`. Ele já contém o schema ativo, sem webhooks,
-snapshots patrimoniais, Bills ou dívida inicial. As migrações históricas estão
-arquivadas em
-[`docs/archive/migrations-v001-v019/`](../../../../../../docs/archive/migrations-v001-v019/).
+partir das migrações anteriores. Ele já contém o schema ativo, sem webhooks,
+snapshots patrimoniais, Bills ou dívida inicial. As migrações anteriores foram
+consolidadas nesta baseline e permanecem apenas no histórico do Git; não são
+executadas pelo Flyway.
 
 ## Regras
 
 - Nome: `V<versão>__<descrição>.sql`, versão numérica crescente e imutável.
 - Uma migração aplicada **nunca** é editada; correções exigem nova versão.
-- A próxima migração é `V002`; não reutilize números das migrações arquivadas.
+- A próxima migração é `V002`; não reutilize números de migrações já aplicadas.
 - Toda migração deve ser compatível com a versão anterior da aplicação durante
   o deploy (expand/contract), porque server antigo e novo podem coexistir por
   alguns segundos.

@@ -4,16 +4,11 @@
 **Escopo:** comportamento implementado no backend (`server/`) e no frontend (`client/`), confrontado com `specs/001-finance/`.  
 **Público:** desenvolvedores, operadores e responsáveis pelo produto.
 
-> **Reanálise de simplificação:** este catálogo foi usado como base para
-> [`analise-simplificacao.md`](analise-simplificacao.md), que descreve a
-> arquitetura, os invariantes, as restrições e as opções de corte/refatoração
-> com impacto e esforço. Use os dois documentos juntos ao decidir o que manter.
-
 > Este documento descreve o que o sistema faz **hoje**, não apenas o que a
 > especificação planeja. Onde o código não entrega o comportamento completo da
-> spec, a limitação é marcada como **Parcial** ou **Não implementado** e remete ao
-> relatório de divergências em
-> [`relatorio-divergencias-specs-codigo.md`](relatorio-divergencias-specs-codigo.md).
+> spec, a limitação é marcada como **Parcial** ou **Não implementado**. O
+> contrato REST está em
+> [`specs/001-finance/contracts/openapi.yaml`](../specs/001-finance/contracts/openapi.yaml).
 
 ## Legenda de estado
 
@@ -68,10 +63,9 @@ O backend é um monólito modular Spring Boot. Os módulos principais são:
 ### 2.2 Frontend
 
 A SPA usa React, React Router, TanStack Query, React Hook Form, Zod, Tailwind CSS
-e componentes locais. A composição principal está em `client/src/app/` e as telas
-em `client/src/features/<domínio>/pages/`. Os componentes reutilizáveis e o
-detalhamento de cada tela estão em
-[`telas-e-componentes.md`](telas-e-componentes.md).
+e componentes locais. A composição principal está em `client/src/app/`, as telas
+em `client/src/features/<domínio>/pages/` e os componentes reutilizáveis em
+`client/src/components/`.
 
 ## 3. Identidade, sessão e isolamento
 
@@ -963,8 +957,8 @@ Decisões intencionais que podem parecer limitações:
 - **Filtro de cartão:** cartões são filtrados como `accountId`, junto das contas,
   sem um filtro separado na UI.
 
-O detalhamento, evidências de código, impacto e correção de cada item estão em
-[`relatorio-divergencias-specs-codigo.md`](relatorio-divergencias-specs-codigo.md).
+As limitações acima refletem o comportamento atual do código e do contrato
+OpenAPI.
 
 ## 20. Referências
 

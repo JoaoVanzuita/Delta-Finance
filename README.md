@@ -174,36 +174,21 @@ snapshot/restore para testar migrações. A baseline atual é
 
 - [`docs/funcionalidades.md`](docs/funcionalidades.md): funcionalidades
   implementadas, regras de negócio e limitações atuais.
-- [`docs/analise-simplificacao.md`](docs/analise-simplificacao.md): reanálise do
-  sistema, invariantes, restrições e mapa de simplificação com cenários,
-  candidatos de remoção, impacto e esforço.
-- [`docs/telas-e-componentes.md`](docs/telas-e-componentes.md): rotas, telas,
-  componentes da SPA e relação com as funcionalidades.
-- [`docs/relatorio-divergencias-specs-codigo.md`](docs/relatorio-divergencias-specs-codigo.md):
-  divergências entre `specs/` e o código, com impacto e recomendações.
-- [`docs/plano-implementacao-correcoes.md`](docs/plano-implementacao-correcoes.md):
-  planejamento, checklists e critérios de aceite para as correções necessárias.
-- [`docs/fase-0-baseline-e-inventario.md`](docs/fase-0-baseline-e-inventario.md):
-  baseline, matriz de cobertura e evidências da Fase 0.
-- [`docs/fase-1-seguranca-sessao.md`](docs/fase-1-seguranca-sessao.md):
-  correções de sessão, login, cadastro, idempotência, reset e auditoria.
-- [`docs/fase-2-importacao-correcoes.md`](docs/fase-2-importacao-correcoes.md):
-  fingerprint, dados ausentes, reembolsos e correção de transferências.
-- [`docs/fase-3-faturas-relatorios.md`](docs/fase-3-faturas-relatorios.md):
-  espelho de fatura, fatura paga, parcelas e consistência dos relatórios.
-- [`docs/fase-4-sincronizacao-conexoes.md`](docs/fase-4-sincronizacao-conexoes.md):
-  recuperação/cancelamento de sync, limite de conexões e leitura truncada.
-- [`docs/fase-5-metas.md`](docs/fase-5-metas.md):
-  cálculo de dívida, capacidade das fontes, observações e rastreabilidade.
-- [`docs/adr/README.md`](docs/adr/README.md): decisões arquiteturais e semânticas
-  que bloqueiam ou orientam as correções.
 - [`docs/operations.md`](docs/operations.md): operação, health checks, logs,
   sincronização, investimentos, patrimônio, metas, migrações e backups.
+- [`docs/security.md`](docs/security.md): modelo de segurança, criptografia,
+  sessão, retenção e exportação.
 - [`docs/accessibility.md`](docs/accessibility.md): rotas cobertas e critérios de
   acessibilidade.
 - [`docs/release-checklist.md`](docs/release-checklist.md): versões fixadas e
   gates de release.
 - [`docs/runbooks/README.md`](docs/runbooks/README.md): índice de runbooks.
+- [`docs/analise-integracao-pluggy-multiusuario.md`](docs/analise-integracao-pluggy-multiusuario.md):
+  análise técnica da integração multiusuário com o Meu Pluggy.
 - [`deploy/README.md`](deploy/README.md): TLS, key ring e scripts operacionais.
+- [`specs/001-finance/spec.md`](specs/001-finance/spec.md): requisitos
+  funcionais.
+- [`specs/001-finance/data-model.md`](specs/001-finance/data-model.md): modelo de
+  dados e classificação dos campos.
 - [`specs/001-finance/contracts/openapi.yaml`](specs/001-finance/contracts/openapi.yaml):
   contrato REST versionado.
