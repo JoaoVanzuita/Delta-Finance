@@ -51,6 +51,11 @@ const HOLDINGS = [
     syncedAt: '2026-10-27T12:00:00Z',
     unavailableAt: null,
     manualCostBasis: null,
+    costBasis: null,
+    costBasisSource: 'UNAVAILABLE',
+    incomeTotal: '12.50',
+    estimatedProfit: null,
+    estimatedReturnPercentage: null,
     userAssetClass: null,
     profitSource: 'UNAVAILABLE',
     stale: false,
@@ -90,6 +95,11 @@ const HOLDINGS = [
     syncedAt: '2026-10-27T12:00:00Z',
     unavailableAt: null,
     manualCostBasis: null,
+    costBasis: '450.00',
+    costBasisSource: 'PROVIDER',
+    incomeTotal: '0.00',
+    estimatedProfit: '50.00',
+    estimatedReturnPercentage: '11.11',
     userAssetClass: null,
     profitSource: 'PROVIDER',
     stale: false,
@@ -129,6 +139,11 @@ const HOLDINGS = [
     syncedAt: '2026-10-27T12:00:00Z',
     unavailableAt: null,
     manualCostBasis: null,
+    costBasis: null,
+    costBasisSource: 'UNAVAILABLE',
+    incomeTotal: '0.00',
+    estimatedProfit: null,
+    estimatedReturnPercentage: null,
     userAssetClass: null,
     profitSource: 'UNAVAILABLE',
     stale: false,
@@ -148,6 +163,8 @@ const OVERVIEW: Record<string, unknown> = {
   incomeSource: 'PROVIDER',
   profitReported: '50.00',
   profitCoverageCount: 1,
+  estimatedProfit: '50.00',
+  estimatedProfitCoverageCount: 1,
   lastSyncedAt: '2026-10-27T12:00:00Z',
   stale: false,
   allocation: [{ assetClass: 'FII', value: '1500.00', count: 2, percentage: '100.00' }],
@@ -186,14 +203,18 @@ const INCOME = {
   byMonth: [{ month: '2026-10', amount: '12.50', count: 1 }],
   items: [
     {
+      id: null,
+      targetType: 'PROVIDER',
       date: '2026-10-26',
       investmentId: 'holding-1',
       investmentName: 'FII Alfa',
       code: 'AAAA11',
       type: 'EQUITY',
+      incomeType: 'INTEREST',
       amount: '12.50',
       description: 'Rendimento',
       source: 'PROVIDER',
+      editable: false,
     },
   ],
 }
@@ -239,6 +260,27 @@ interface State {
   positions: Position[]
 }
 
+interface Holding {
+  id: string
+  name?: string | null
+  code?: string | null
+  type: string
+  status: string
+  assetClass: string
+  classificationSource: string
+  balance?: string | null
+  amountOriginal?: string | null
+  incomeTotal?: string | null
+  manualCostBasis?: string | null
+  costBasis?: string | null
+  costBasisSource?: string
+  estimatedProfit?: string | null
+  estimatedReturnPercentage?: string | null
+  userAssetClass?: string | null
+  unavailableAt?: string | null
+  [key: string]: unknown
+}
+
 interface Overrides {
   readonly overview?: typeof OVERVIEW
   readonly holdings?: typeof HOLDINGS
@@ -262,8 +304,73 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
     ],
   }
   const overview = overrides.overview ?? OVERVIEW
-  const holdings = overrides.holdings ?? HOLDINGS
-  const income = overrides.income ?? INCOME
+  let holdings: Holding[] = (overrides.holdings ?? HOLDINGS).map((holding) => ({
+    ...holding,
+  }))
+  const baseIncome = overrides.income ?? INCOME
+  const providerIncomeItems = baseIncome.items.filter((item) => !item.editable)
+  let manualIncomes: Array<Record<string, unknown>> = []
+
+  function currentIncome() {
+    const items = [...providerIncomeItems, ...manualIncomes].sort((left, right) =>
+      String(right.date).localeCompare(String(left.date)),
+    )
+    const total = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+    const months = new Map<string, { amount: number; count: number }>()
+    for (const item of items) {
+      const month = String(item.date).slice(0, 7)
+      const entry = months.get(month) ?? { amount: 0, count: 0 }
+      entry.amount += Number(item.amount) || 0
+      entry.count += 1
+      months.set(month, entry)
+    }
+    const hasProvider = items.some((item) => item.source === 'PROVIDER')
+    const hasManual = items.some((item) => item.source === 'MANUAL')
+    return {
+      ...baseIncome,
+      total: total.toFixed(2),
+      source:
+        hasProvider && hasManual
+          ? 'MIXED'
+          : hasProvider
+            ? 'PROVIDER'
+            : hasManual
+              ? 'MANUAL'
+              : 'UNAVAILABLE',
+      byMonth: [...months.entries()].map(([month, entry]) => ({
+        month,
+        amount: entry.amount.toFixed(2),
+        count: entry.count,
+      })),
+      items,
+    }
+  }
+
+  function targetFor(body: Record<string, string>) {
+    if (body.providerInvestmentId) {
+      const holding = holdings.find((item) => item.id === body.providerInvestmentId)
+      if (!holding) return null
+      return {
+        targetType: 'PROVIDER',
+        targetId: holding.id,
+        targetName: holding.name ?? 'Posição importada',
+        targetCode: holding.code ?? null,
+        type: holding.type,
+      }
+    }
+    if (body.investmentPositionId) {
+      const position = state.positions.find((item) => item.id === body.investmentPositionId)
+      if (!position) return null
+      return {
+        targetType: 'MANUAL',
+        targetId: position.id,
+        targetName: position.assetName,
+        targetCode: position.ticker ?? null,
+        type: 'MANUAL',
+      }
+    }
+    return null
+  }
 
   await page
     .context()
@@ -297,12 +404,67 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
         body: JSON.stringify(overview),
       })
     }
-    if (path === '/investments/income') {
+    if (path === '/investments/income' && method === 'GET') {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(income),
+        body: JSON.stringify(currentIncome()),
       })
+    }
+    if (path === '/investments/income' && method === 'POST') {
+      const body = request.postDataJSON() as Record<string, string>
+      const target = targetFor(body)
+      if (!target) return route.fulfill({ status: 422, body: '{}' })
+      const created = {
+        id: `income-${manualIncomes.length + 1}`,
+        targetType: target.targetType,
+        date: body.incomeDate ?? '2026-10-27',
+        investmentId: target.targetId,
+        investmentName: target.targetName,
+        code: target.targetCode,
+        type: target.type,
+        incomeType: body.incomeType ?? 'OTHER',
+        amount: body.amount ?? '0.00',
+        description: body.description ?? null,
+        source: 'MANUAL',
+        editable: true,
+      }
+      manualIncomes = [created, ...manualIncomes]
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(created),
+      })
+    }
+    if (path.startsWith('/investments/income/') && method === 'PATCH') {
+      const id = path.split('/').pop()
+      const body = request.postDataJSON() as Record<string, string>
+      const target = targetFor(body)
+      const existing = manualIncomes.find((item) => item.id === id)
+      if (!target || !existing) return route.fulfill({ status: 404, body: '{}' })
+      const updated = {
+        ...existing,
+        targetType: target.targetType,
+        investmentId: target.targetId,
+        investmentName: target.targetName,
+        code: target.targetCode,
+        type: target.type,
+        incomeType: body.incomeType ?? existing.incomeType,
+        date: body.incomeDate ?? existing.date,
+        amount: body.amount ?? existing.amount,
+        description: body.description ?? existing.description,
+      }
+      manualIncomes = manualIncomes.map((item) => (item.id === id ? updated : item))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(updated),
+      })
+    }
+    if (path.startsWith('/investments/income/') && method === 'DELETE') {
+      const id = path.split('/').pop()
+      manualIncomes = manualIncomes.filter((item) => item.id !== id)
+      return route.fulfill({ status: 204 })
     }
     if (path === '/investments/holdings') {
       const status = url.searchParams.get('status') ?? 'ALL'
@@ -374,6 +536,53 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
       state.positions = state.positions.filter((item) => item.id !== id)
       return route.fulfill({ status: 204 })
     }
+    if (
+      path.startsWith('/investments/holdings/') &&
+      path.endsWith('/cost-basis') &&
+      method === 'PATCH'
+    ) {
+      const id = path.split('/')[3]
+      const body = request.postDataJSON() as Record<string, string | null>
+      const holding = holdings.find((item) => item.id === id)
+      if (!holding) return route.fulfill({ status: 404, body: '{}' })
+      const manual =
+        body.costBasis && String(body.costBasis).trim() !== '' ? Number(body.costBasis) : null
+      const provider = holding.amountOriginal == null ? null : Number(holding.amountOriginal)
+      const cost = manual ?? provider
+      const balance = Number(holding.balance) || 0
+      const income = Number(holding.incomeTotal) || 0
+      const profit = cost == null ? null : balance + income - cost
+      const updated = {
+        ...holding,
+        manualCostBasis: manual == null ? null : manual.toFixed(2),
+        costBasis: cost == null ? null : cost.toFixed(2),
+        costBasisSource: manual != null ? 'MANUAL' : provider != null ? 'PROVIDER' : 'UNAVAILABLE',
+        estimatedProfit: profit == null ? null : profit.toFixed(2),
+        estimatedReturnPercentage:
+          profit == null || cost == null || cost <= 0 ? null : ((profit / cost) * 100).toFixed(2),
+      }
+      holdings = holdings.map((item) => (item.id === id ? updated : item))
+      return route.fulfill({ status: 204 })
+    }
+    if (
+      path.startsWith('/investments/holdings/') &&
+      path.endsWith('/asset-class') &&
+      method === 'PATCH'
+    ) {
+      const id = path.split('/')[3]
+      const body = request.postDataJSON() as Record<string, string | null>
+      const holding = holdings.find((item) => item.id === id)
+      if (!holding) return route.fulfill({ status: 404, body: '{}' })
+      const assetClass = body.assetClass ? String(body.assetClass) : null
+      const updated = {
+        ...holding,
+        userAssetClass: assetClass,
+        assetClass: assetClass ?? holding.assetClass,
+        classificationSource: assetClass ? 'USER' : holding.classificationSource,
+      }
+      holdings = holdings.map((item) => (item.id === id ? updated : item))
+      return route.fulfill({ status: 204 })
+    }
     return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' })
   })
 
@@ -437,6 +646,29 @@ test('registra, edita e exclui posição manual no dashboard', async ({ page }) 
   await editedRow.getByRole('button', { name: 'Excluir' }).click()
   await editedRow.getByRole('button', { name: 'Confirmar exclusão' }).click()
   await expect(manual.getByText('Fundo imobiliário atualizado')).toHaveCount(0)
+})
+
+test('registra provento manual e custo informado', async ({ page }) => {
+  await installStub(page)
+  await page.goto('/investments')
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Investimentos' })).toBeVisible()
+  const income = page.getByRole('region', { name: 'Proventos' })
+  await page.locator('summary').filter({ hasText: 'Registrar provento manual' }).click()
+  await income.getByLabel('Posição').selectOption({ label: 'FII Alfa (AAAA11) · importado' })
+  await income.getByLabel('Valor (BRL)').fill('7.50')
+  await income.getByLabel('Descrição (opcional)').fill('Dividendo manual')
+  await income.getByRole('button', { name: 'Registrar provento' }).click()
+
+  await expect(income.getByRole('cell', { name: 'Dividendo' })).toBeVisible()
+  await expect(income.getByText('R$ 20,00').first()).toBeVisible()
+
+  const card = page.getByRole('listitem').filter({ hasText: 'FII Alfa' })
+  await card.getByText('Detalhes do provedor').click()
+  await card.getByLabel('Custo informado (BRL)').fill('900.00')
+  await card.getByRole('button', { name: 'Salvar custo' }).click()
+  await expect(card.getByText('Custo informado atualizado.')).toBeVisible()
+  await expect(card.getByText('R$ 112,50')).toBeVisible()
 })
 
 test('explica ausência de cobertura e de proventos sem inventar dados', async ({ page }) => {

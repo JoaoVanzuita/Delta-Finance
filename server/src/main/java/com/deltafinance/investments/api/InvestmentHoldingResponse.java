@@ -41,6 +41,11 @@ public record InvestmentHoldingResponse(
     Instant syncedAt,
     Instant unavailableAt,
     String manualCostBasis,
+    String costBasis,
+    String costBasisSource,
+    String incomeTotal,
+    String estimatedProfit,
+    String estimatedReturnPercentage,
     String userAssetClass,
     String profitSource,
     boolean stale) {
@@ -81,6 +86,11 @@ public record InvestmentHoldingResponse(
         view.syncedAt(),
         view.unavailableAt(),
         view.manualCostBasis(),
+        view.costBasis(),
+        view.costBasisSource(),
+        view.incomeTotal(),
+        view.estimatedProfit(),
+        view.estimatedReturnPercentage(),
         view.userAssetClass(),
         view.profitSource(),
         view.stale());

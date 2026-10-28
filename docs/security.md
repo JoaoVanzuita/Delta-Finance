@@ -86,8 +86,8 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
 
 - `GET /api/v1/me/export` gera, em streaming, um ZIP com JSON Lines e CSV por
   conjunto de dados ativo do titular: perfil, contas, cartões, posições de
-  investimento manuais e importadas, movimentações de investimento, cobertura de
-  investimentos por conexão, ativos/passivos manuais, metas, alocações e
+  investimento manuais e importadas, movimentações de investimento, proventos
+  manuais, cobertura de investimentos por conexão, ativos/passivos manuais, metas, alocações e
   histórico de metas, categorias, transações, faturas, itens, pagamentos, Bills
   oficiais e pagamentos oficiais, correções, reconciliações, integrações (somente
   metadados), conexões (sem itemId/HMAC), execuções de sincronização, jobs e

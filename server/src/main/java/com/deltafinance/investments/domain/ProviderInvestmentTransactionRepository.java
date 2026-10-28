@@ -16,4 +16,6 @@ public interface ProviderInvestmentTransactionRepository
 
   List<ProviderInvestmentTransaction> findByUserIdAndTypeAndRemovedAtIsNull(
       UUID userId, String type);
+
+  List<ProviderInvestmentTransaction> findByUserIdAndRemovedAtIsNull(UUID userId);
 }

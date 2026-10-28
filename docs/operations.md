@@ -197,12 +197,12 @@ tem acesso.
 
 - Módulo da fase secundária (`/investments`). Importa posições de itens do
   Meu Pluggy e mantém posições manuais complementares.
-- **Estado atual**: a importação backend e o dashboard de leitura estão
-  implementados na migração `V006`; a UI exibe posições, alocação, cobertura,
-  proventos do provedor e posições manuais. Provento manual e custo informado
-  entram na fase seguinte. O sync persiste posições, movimentações e cobertura.
-  A leitura pública usa `GET /api/v1/investments/overview`, `/holdings`,
-  `/holdings/{id}`, `/sources` e `/income`.
+- **Estado atual**: a importação, o dashboard, os proventos manuais e o custo
+  informado estão implementados (`V006` e `V007`). O sync persiste posições,
+  movimentações e cobertura. A leitura usa `GET /api/v1/investments/overview`,
+  `/holdings`, `/holdings/{id}`, `/sources` e `/income`; as escritas usam
+  `POST/PATCH/DELETE /income`, `PATCH /holdings/{id}/cost-basis` e
+  `PATCH /holdings/{id}/asset-class`.
 - **Investimento não é conta.** `/accounts` só retorna `BANK`/`CREDIT`; as
   posições vêm de `GET /investments?itemId=` e não têm `accountId`. Não criar
   conta sintética.
@@ -223,10 +223,20 @@ tem acesso.
   rentabilidade. Nesses casos o painel mostra "não informado" e **não deriva**
   rentabilidade de histórico incompleto. `rate`/`rateType` são remuneração
   contratada, não desempenho.
-- O usuário poderá registrar provento manual e custo informado para uma posição
-  importada. Esses dados aparecerão como manuais/estimados, não sobrescreverão o
-  provedor e serão auditados. O provento manual não é somado automaticamente às
-  receitas do dashboard principal.
+- O usuário pode registrar provento manual e custo informado para uma posição
+  importada ou manual. Esses dados aparecem como manuais/estimados, não
+  sobrescrevem o provedor e são auditados. O provento manual não é somado
+  automaticamente às receitas do dashboard principal.
+- O resultado estimado de uma posição importada é
+  `balance + proventos + resgates - custo`. O custo manual tem prioridade sobre
+  `amountOriginal`; sem custo conhecido não há estimativa. `SELL` e
+  `AMORTIZATION` entram como resgates; `INTEREST` e proventos manuais entram como
+  proventos. O percentual é o resultado dividido pelo custo.
+- A classificação manual do usuário sobrepõe `type/subtype` e a heurística por
+  código; limpar a classificação volta à regra automática.
+- Proventos manuais usam `investment_income` e apontam para exatamente uma
+  posição; a origem é sempre `MANUAL`. Proventos do provedor continuam vindo de
+  `provider_investment_transaction` com `type=INTEREST`.
 - Posições importadas ativas entram uma única vez no patrimônio; encerradas,
   indisponíveis e fora de BRL ficam de fora com motivo. Duplicidade entre posição
   manual e importada é sinalizada, sem exclusão automática; a posição manual pode
@@ -296,7 +306,7 @@ tem acesso.
   investimentos, patrimônio e metas, mais as tabelas de sessão do Spring e o
   histórico do Flyway. Webhooks, snapshots patrimoniais e dívida inicial não
   fazem parte da baseline; Bills estão em migração própria (`V003`) e os
-  investimentos importados foram adicionados em `V006`.
+  investimentos importados em `V006` e proventos manuais em `V007`.
 - Acesso administrativo local:
 
 ```bash

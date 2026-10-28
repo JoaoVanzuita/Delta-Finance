@@ -20,6 +20,8 @@ public record InvestmentOverviewResponse(
     String incomeSource,
     String profitReported,
     int profitCoverageCount,
+    String estimatedProfit,
+    int estimatedProfitCoverageCount,
     Instant lastSyncedAt,
     boolean stale,
     List<AllocationResponse> allocation,
@@ -44,6 +46,8 @@ public record InvestmentOverviewResponse(
         view.incomeSource(),
         view.profitReported(),
         view.profitCoverageCount(),
+        view.estimatedProfit(),
+        view.estimatedProfitCoverageCount(),
         view.lastSyncedAt(),
         view.stale(),
         view.allocation().stream()

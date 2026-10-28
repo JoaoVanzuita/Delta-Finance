@@ -45,6 +45,11 @@ public record InvestmentHoldingView(
     Instant syncedAt,
     Instant unavailableAt,
     String manualCostBasis,
+    String costBasis,
+    String costBasisSource,
+    String incomeTotal,
+    String estimatedProfit,
+    String estimatedReturnPercentage,
     String userAssetClass,
     String profitSource,
     boolean stale) {}

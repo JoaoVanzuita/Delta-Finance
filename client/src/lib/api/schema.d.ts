@@ -742,11 +742,70 @@ export interface paths {
         /** Lista proventos informados pelo provedor */
         get: operations["getInvestmentsIncome"];
         put?: never;
-        post?: never;
+        /** Registra um provento manual */
+        post: operations["postInvestmentsIncome"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/investments/income/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Exclui um provento manual */
+        delete: operations["deleteInvestmentsIncomeId"];
+        options?: never;
+        head?: never;
+        /** Edita um provento manual */
+        patch: operations["patchInvestmentsIncomeId"];
+        trace?: never;
+    };
+    "/investments/holdings/{id}/cost-basis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Atualiza o custo informado de uma posição importada */
+        patch: operations["patchInvestmentsHoldingsIdCostBasis"];
+        trace?: never;
+    };
+    "/investments/holdings/{id}/asset-class": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Atualiza a classificação informada de uma posição importada */
+        patch: operations["patchInvestmentsHoldingsIdAssetClass"];
         trace?: never;
     };
     "/investments/positions": {
@@ -1540,6 +1599,59 @@ export interface components {
             /** @enum {string} */
             confirmation: "EXCLUIR";
         };
+        InvestmentIncomeRequest: {
+            /**
+             * Format: uuid
+             * @description Posição importada; informe exatamente um destino.
+             */
+            providerInvestmentId?: string;
+            /**
+             * Format: uuid
+             * @description Posição manual; informe exatamente um destino.
+             */
+            investmentPositionId?: string;
+            /** @enum {string} */
+            incomeType: "DIVIDEND" | "INTEREST" | "JCP" | "RENT" | "COUPON" | "OTHER";
+            /**
+             * Format: date
+             * @description Data do recebimento; não pode estar no futuro.
+             */
+            incomeDate: string;
+            /** @description Valor positivo em BRL. */
+            amount: string;
+            description?: string;
+        };
+        InvestmentIncomeEntry: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            targetType: "PROVIDER" | "MANUAL";
+            /** Format: uuid */
+            targetId: string;
+            targetName?: string | null;
+            targetCode?: string | null;
+            /** @enum {string} */
+            incomeType: "DIVIDEND" | "INTEREST" | "JCP" | "RENT" | "COUPON" | "OTHER";
+            /** Format: date */
+            incomeDate: string;
+            amount: string;
+            description?: string | null;
+            /** @enum {string} */
+            source: "MANUAL";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        InvestmentCostBasisRequest: {
+            /** @description Custo informado; nulo ou vazio limpa o valor. */
+            costBasis?: string | null;
+        };
+        InvestmentAssetClassRequest: {
+            /**
+             * @description Nulo ou vazio volta à classificação automática do provedor.
+             * @enum {string|null}
+             */
+            assetClass?: "FII" | "ACAO" | "BDR" | "DERIVATIVO" | "RENDA_FIXA" | "FUNDO" | "ETF" | "TITULO" | "COE" | "OUTRO" | null;
+        };
         InvestmentOverview: {
             /** Format: date */
             referenceDate: string;
@@ -1558,6 +1670,9 @@ export interface components {
             /** @description Soma de amountProfit informado pelo provedor; nulo quando nenhuma posição informa. */
             profitReported?: string | null;
             profitCoverageCount: number;
+            /** @description Resultado estimado com custo informado ou custo original do provedor, incluindo proventos e resgates; nulo quando nenhuma posição tem custo. */
+            estimatedProfit?: string | null;
+            estimatedProfitCoverageCount?: number;
             /** Format: date-time */
             lastSyncedAt?: string | null;
             /** @description Verdadeiro quando alguma posição ativa tem referência com mais de 30 dias. */
@@ -1644,6 +1759,16 @@ export interface components {
             /** Format: date-time */
             unavailableAt?: string | null;
             manualCostBasis?: string | null;
+            /** @description Custo usado no resultado estimado; manual tem prioridade sobre amountOriginal. */
+            costBasis?: string | null;
+            /** @enum {string} */
+            costBasisSource?: "MANUAL" | "PROVIDER" | "UNAVAILABLE";
+            /** @description Proventos do provedor e manuais somados para esta posição. */
+            incomeTotal?: string;
+            /** @description balance + proventos + resgates - costBasis; nulo sem custo conhecido. */
+            estimatedProfit?: string | null;
+            /** @description Resultado estimado dividido pelo custo, com duas casas decimais. */
+            estimatedReturnPercentage?: string | null;
             userAssetClass?: string | null;
             /** @enum {string} */
             profitSource: "PROVIDER" | "UNAVAILABLE";
@@ -1670,17 +1795,30 @@ export interface components {
             count: number;
         };
         InvestmentIncomeItem: {
+            /**
+             * Format: uuid
+             * @description Identificador do provento manual; nulo para INTEREST do provedor.
+             */
+            id?: string | null;
+            /** @enum {string} */
+            targetType: "PROVIDER" | "MANUAL";
             /** Format: date */
             date: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Posição importada ou manual associada.
+             */
             investmentId: string;
             investmentName?: string | null;
             code?: string | null;
             type?: string | null;
+            /** @enum {string} */
+            incomeType: "DIVIDEND" | "INTEREST" | "JCP" | "RENT" | "COUPON" | "OTHER";
             amount: string;
             description?: string | null;
             /** @enum {string} */
             source: "PROVIDER" | "MANUAL";
+            editable: boolean;
         };
         InvestmentPosition: {
             /** Format: uuid */
@@ -3478,6 +3616,133 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    postInvestmentsIncome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentIncomeRequest"];
+            };
+        };
+        responses: {
+            /** @description Provento manual criado. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentIncomeEntry"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteInvestmentsIncomeId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provento manual excluído. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    patchInvestmentsIncomeId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentIncomeRequest"];
+            };
+        };
+        responses: {
+            /** @description Provento manual atualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentIncomeEntry"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    patchInvestmentsHoldingsIdCostBasis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentCostBasisRequest"];
+            };
+        };
+        responses: {
+            /** @description Custo informado atualizado ou limpo. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    patchInvestmentsHoldingsIdAssetClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestmentAssetClassRequest"];
+            };
+        };
+        responses: {
+            /** @description Classificação informada atualizada ou limpa. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getInvestmentsPositions: {

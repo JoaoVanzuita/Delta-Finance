@@ -49,6 +49,10 @@ export type InvestmentSource = components['schemas']['InvestmentSource']
 export type InvestmentSourceList = components['schemas']['InvestmentSourceList']
 export type InvestmentIncome = components['schemas']['InvestmentIncome']
 export type InvestmentIncomeItem = components['schemas']['InvestmentIncomeItem']
+export type InvestmentIncomeEntry = components['schemas']['InvestmentIncomeEntry']
+export type InvestmentIncomeInput = components['schemas']['InvestmentIncomeRequest']
+export type InvestmentCostBasisInput = components['schemas']['InvestmentCostBasisRequest']
+export type InvestmentAssetClassInput = components['schemas']['InvestmentAssetClassRequest']
 export type WealthOverview = components['schemas']['WealthOverview']
 export type WealthItem = components['schemas']['WealthItem']
 export type WealthManualItem = components['schemas']['WealthManualItem']
@@ -165,6 +169,15 @@ export const financeApi = {
     const query = params.toString()
     return api.get<InvestmentIncome>(`/investments/income${query ? `?${query}` : ''}`)
   },
+  createInvestmentIncome: (input: InvestmentIncomeInput) =>
+    api.post<InvestmentIncomeEntry>('/investments/income', input),
+  updateInvestmentIncome: (id: string, input: InvestmentIncomeInput) =>
+    api.patch<InvestmentIncomeEntry>(`/investments/income/${id}`, input),
+  deleteInvestmentIncome: (id: string) => api.delete<void>(`/investments/income/${id}`),
+  updateInvestmentCostBasis: (id: string, input: InvestmentCostBasisInput) =>
+    api.patch<void>(`/investments/holdings/${id}/cost-basis`, input),
+  updateInvestmentAssetClass: (id: string, input: InvestmentAssetClassInput) =>
+    api.patch<void>(`/investments/holdings/${id}/asset-class`, input),
 
   positions: (cursor?: string, limit = 50) => {
     const params = new URLSearchParams({ limit: String(limit) })

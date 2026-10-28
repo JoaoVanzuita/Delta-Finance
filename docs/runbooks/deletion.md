@@ -34,7 +34,7 @@ retenção ou verificação de que uma conta foi encerrada sem afetar outras.
   internos.
 - Tabelas dos módulos mantidos `goal_progress_snapshot`, `goal_allocation`,
   `financial_goal`, `investment_position`, `provider_investment_transaction`,
-  `provider_investment`, `provider_investment_sync` e
+  `provider_investment`, `provider_investment_sync`, `investment_income` e
   `manual_asset_liability` do titular, apagadas explicitamente porque o tombstone
   de `app_user` não dispara o cascade.
 - Categorias, integração Pluggy, conexões, jobs, execuções de sincronização e
@@ -66,6 +66,7 @@ union all select 'investment_position', count(*) from investment_position where 
 union all select 'provider_investment_transaction', count(*) from provider_investment_transaction where user_id = '<user-id>'
 union all select 'provider_investment', count(*) from provider_investment where user_id = '<user-id>'
 union all select 'provider_investment_sync', count(*) from provider_investment_sync where user_id = '<user-id>'
+union all select 'investment_income', count(*) from investment_income where user_id = '<user-id>'
 union all select 'manual_asset_liability', count(*) from manual_asset_liability where user_id = '<user-id>'
 union all select 'financial_goal', count(*) from financial_goal where user_id = '<user-id>'
 union all select 'goal_allocation', count(*) from goal_allocation where user_id = '<user-id>'

@@ -44,6 +44,7 @@ class KeyRotationIT extends PostgresTestBase {
   private UUID providerInvestmentId;
   private UUID providerTransactionId;
   private UUID providerSyncId;
+  private UUID investmentIncomeId;
 
   @BeforeEach
   void setUp() {
@@ -89,6 +90,7 @@ class KeyRotationIT extends PostgresTestBase {
     providerInvestmentId = UUID.randomUUID();
     providerTransactionId = UUID.randomUUID();
     providerSyncId = UUID.randomUUID();
+    investmentIncomeId = UUID.randomUUID();
     insertPostMvpRows(now);
   }
 
@@ -279,6 +281,20 @@ class KeyRotationIT extends PostgresTestBase {
         now);
     jdbcTemplate.update(
         """
+        insert into investment_income
+          (id, user_id, provider_investment_id, income_type, income_date, amount_enc,
+           description_enc, source, created_at, updated_at, version)
+        values (?, ?, ?, 'DIVIDEND', '2026-10-01', ?, ?, 'MANUAL', ?, ?, 0)
+        """,
+        investmentIncomeId,
+        user.id(),
+        providerInvestmentId,
+        encrypt(investmentIncomeId, "investment_income", "amount", "10.00"),
+        encrypt(investmentIncomeId, "investment_income", "description", "Provento rotacionado"),
+        now,
+        now);
+    jdbcTemplate.update(
+        """
         insert into provider_investment_sync
           (id, user_id, connection_id, scope, resource_count, available_resource_count,
            pending_resource_count, unavailable_resource_count, resources_collected_at,
@@ -371,6 +387,7 @@ class KeyRotationIT extends PostgresTestBase {
         "annual_rate",
         "last_twelve_months_rate",
         "manual_cost_basis");
+    assertRotated(investmentIncomeId, "investment_income", "amount", "description");
     assertRotated(
         providerTransactionId,
         "provider_investment_transaction",

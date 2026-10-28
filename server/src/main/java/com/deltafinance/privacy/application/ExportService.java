@@ -1162,6 +1162,47 @@ public class ExportService {
               return row;
             }),
         new Dataset(
+            "investment_incomes",
+            List.of(
+                "id",
+                "providerInvestmentId",
+                "investmentPositionId",
+                "incomeType",
+                "incomeDate",
+                "amount",
+                "description",
+                "source",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, provider_investment_id, investment_position_id, income_type,"
+                + " income_date, amount_enc, description_enc, source, created_at, updated_at"
+                + " from investment_income where user_id = ? order by income_date desc, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("providerInvestmentId", uuid(rs, "provider_investment_id"));
+              row.put("investmentPositionId", uuid(rs, "investment_position_id"));
+              row.put("incomeType", rs.getString("income_type"));
+              row.put("incomeDate", date(rs, "income_date"));
+              row.put(
+                  "amount",
+                  decrypt(userId, "investment_income", "amount", id, rs.getBytes("amount_enc")));
+              row.put(
+                  "description",
+                  decrypt(
+                      userId,
+                      "investment_income",
+                      "description",
+                      id,
+                      rs.getBytes("description_enc")));
+              row.put("source", rs.getString("source"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
             "invoice_item_corrections",
             List.of(
                 "id", "invoiceItemId", "fieldName", "oldValue", "newValue", "reason", "changedAt"),

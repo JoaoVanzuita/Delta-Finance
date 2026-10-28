@@ -56,10 +56,11 @@ compose.yaml            stack self-hosted completa
   privacidade.
 - **Investimentos (fase secundária)**: importação de posições de itens Meu
   Pluggy com recursos de investimento, dashboard de alocação, posições
-  encerradas, cobertura por conexão, proventos e custo informado. O provedor pode
-  não enviar dividendos/rentabilidade; nesse caso o painel mostra "não informado"
-  e aceita complemento manual. Não há recomendação de compra, venda ou alocação,
-  nem histórico de valor de portfólio.
+  encerradas, cobertura por conexão, proventos do provedor e manuais, custo
+  informado e resultado estimado. O provedor pode não enviar
+  dividendos/rentabilidade; nesse caso o painel mostra "não informado" e aceita
+  complemento manual. Não há recomendação de compra, venda ou alocação, nem
+  histórico de valor de portfólio.
 - **Patrimônio (pós-MVP)**: ativos, passivos e patrimônio líquido atual, sem
   dupla contagem e sem snapshots históricos nem inferência de saldos passados.
 - **Metas (pós-MVP)**: progresso por alocações explícitas, patrimônio líquido ou

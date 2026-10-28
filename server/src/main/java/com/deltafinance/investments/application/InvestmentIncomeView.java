@@ -16,12 +16,16 @@ public record InvestmentIncomeView(
   public record Month(String month, String amount, int count) {}
 
   public record Item(
-      LocalDate date,
+      UUID id,
+      String targetType,
       UUID investmentId,
       String investmentName,
       String code,
       String type,
+      String incomeType,
+      LocalDate date,
       String amount,
       String description,
-      String source) {}
+      String source,
+      boolean editable) {}
 }

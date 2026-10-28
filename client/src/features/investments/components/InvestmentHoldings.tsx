@@ -2,14 +2,16 @@ import { formatDateTime, formatMoney } from '@/features/accounts/format'
 import type { InvestmentHolding } from '@/features/integration/api'
 
 import { formatQuantity, formatReferenceDate, formatUnitPrice } from '../format'
+import { HoldingSettingsForm } from './HoldingSettingsForm'
 import { assetClassLabel, CLASSIFICATION_SOURCE_LABELS, HOLDING_STATUS_LABELS } from '../labels'
 
 interface InvestmentHoldingsProps {
   readonly items: readonly InvestmentHolding[]
+  readonly onChanged: () => void
 }
 
 /** Lista de posições importadas, com detalhes sob demanda e sem recomendação. */
-export function InvestmentHoldings({ items }: InvestmentHoldingsProps) {
+export function InvestmentHoldings({ items, onChanged }: InvestmentHoldingsProps) {
   if (items.length === 0) {
     return (
       <p className="rounded-card border border-line bg-surface-muted p-4 text-sm text-ink-muted">
@@ -22,13 +24,19 @@ export function InvestmentHoldings({ items }: InvestmentHoldingsProps) {
   return (
     <ul className="space-y-3" aria-label="Posições importadas de investimento">
       {items.map((holding) => (
-        <InvestmentHoldingCard key={holding.id} holding={holding} />
+        <InvestmentHoldingCard key={holding.id} holding={holding} onChanged={onChanged} />
       ))}
     </ul>
   )
 }
 
-function InvestmentHoldingCard({ holding }: { readonly holding: InvestmentHolding }) {
+function InvestmentHoldingCard({
+  holding,
+  onChanged,
+}: {
+  readonly holding: InvestmentHolding
+  readonly onChanged: () => void
+}) {
   const currency = holding.currency || 'BRL'
   const closed = holding.status === 'CLOSED'
   const unavailable = holding.unavailableAt != null
@@ -81,11 +89,27 @@ function InvestmentHoldingCard({ holding }: { readonly holding: InvestmentHoldin
         <Value label="Quantidade" value={formatQuantity(holding.quantity)} />
         <Value label="Preço unitário" value={formatUnitPrice(holding.unitValue, currency)} />
         <Value
-          label="Resultado informado"
+          label="Resultado do provedor"
           value={
             holding.amountProfit == null
               ? 'Não informado'
               : formatMoney(holding.amountProfit, currency)
+          }
+        />
+        <Value
+          label="Resultado estimado"
+          value={
+            holding.estimatedProfit == null
+              ? 'Informe o custo'
+              : formatMoney(holding.estimatedProfit, currency)
+          }
+        />
+        <Value
+          label="Rentabilidade estimada"
+          value={
+            holding.estimatedReturnPercentage == null
+              ? 'Não calculável'
+              : `${holding.estimatedReturnPercentage}%`
           }
         />
         <Value label="Referência" value={formatReferenceDate(holding.referenceDate)} />
@@ -98,6 +122,24 @@ function InvestmentHoldingCard({ holding }: { readonly holding: InvestmentHoldin
         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <Value label="Valor bruto" value={formatMoney(holding.amount, currency)} />
           <Value label="Custo original" value={formatMoney(holding.amountOriginal, currency)} />
+          <Value
+            label="Custo usado"
+            value={
+              holding.costBasis == null
+                ? 'Não informado'
+                : `${formatMoney(holding.costBasis, currency)} · ${
+                    holding.costBasisSource === 'MANUAL'
+                      ? 'informado por você'
+                      : holding.costBasisSource === 'PROVIDER'
+                        ? 'provedor'
+                        : 'sem custo'
+                  }`
+            }
+          />
+          <Value
+            label="Proventos considerados"
+            value={formatMoney(holding.incomeTotal, currency)}
+          />
           <Value
             label="Disponível para saque"
             value={formatMoney(holding.amountWithdrawal, currency)}
@@ -137,9 +179,11 @@ function InvestmentHoldingCard({ holding }: { readonly holding: InvestmentHoldin
           ) : null}
         </dl>
         <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-          “Não informado” significa que o provedor não enviou o campo. O sistema não estima
-          rentabilidade a partir de histórico incompleto.
+          “Não informado” significa que o provedor não enviou o campo. O resultado estimado só é
+          calculado quando há custo conhecido; ele soma proventos e resgates e não é cotação em
+          tempo real.
         </p>
+        <HoldingSettingsForm holding={holding} onChanged={onChanged} />
       </details>
     </li>
   )

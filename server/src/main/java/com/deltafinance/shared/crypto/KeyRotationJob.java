@@ -102,6 +102,8 @@ public class KeyRotationJob {
           new Field("provider_investment_transaction", "description"),
           new Field("provider_investment_transaction", "brokerage_number"),
           new Field("provider_investment_transaction", "expenses"),
+          new Field("investment_income", "amount"),
+          new Field("investment_income", "description"),
           new Field("invoice_item_correction", "old_value"),
           new Field("invoice_item_correction", "new_value"),
           new Field("invoice_item_correction", "reason"),

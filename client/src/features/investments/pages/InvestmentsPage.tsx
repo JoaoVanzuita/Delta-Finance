@@ -181,7 +181,7 @@ export function InvestmentsPage() {
               </p>
             ) : null}
             {!holdingsQuery.isLoading && !holdingsQuery.isError ? (
-              <InvestmentHoldings items={holdings} />
+              <InvestmentHoldings items={holdings} onChanged={invalidate} />
             ) : null}
           </section>
 
@@ -199,7 +199,14 @@ export function InvestmentsPage() {
                 Não foi possível carregar os proventos.
               </p>
             ) : null}
-            {incomeQuery.data ? <InvestmentIncomeSection income={incomeQuery.data} /> : null}
+            {incomeQuery.data ? (
+              <InvestmentIncomeSection
+                income={incomeQuery.data}
+                holdings={holdings}
+                positions={positions}
+                onChanged={invalidate}
+              />
+            ) : null}
           </section>
         </>
       ) : null}

@@ -16,14 +16,18 @@ public record InvestmentIncomeResponse(
   public record MonthResponse(String month, String amount, int count) {}
 
   public record ItemResponse(
+      UUID id,
+      String targetType,
       LocalDate date,
       UUID investmentId,
       String investmentName,
       String code,
       String type,
+      String incomeType,
       String amount,
       String description,
-      String source) {}
+      String source,
+      boolean editable) {}
 
   public static InvestmentIncomeResponse from(InvestmentIncomeView view) {
     return new InvestmentIncomeResponse(
@@ -38,14 +42,18 @@ public record InvestmentIncomeResponse(
             .map(
                 item ->
                     new ItemResponse(
+                        item.id(),
+                        item.targetType(),
                         item.date(),
                         item.investmentId(),
                         item.investmentName(),
                         item.code(),
                         item.type(),
+                        item.incomeType(),
                         item.amount(),
                         item.description(),
-                        item.source()))
+                        item.source(),
+                        item.editable()))
             .toList());
   }
 }

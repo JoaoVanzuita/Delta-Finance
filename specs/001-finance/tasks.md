@@ -472,7 +472,7 @@ investimentos sem afetar contas/transações.
 - [ ] T211 [US8] Incluir posições importadas ativas no patrimônio, com aviso de duplicidade e opção de excluir a manual do total.
 - [X] T212 [US8] Atualizar exportação, rotação de chaves, exclusão de conta, limpeza de testes e documentação de privacidade para as novas tabelas/campos.
 - [X] T213 [US8] Adicionar E2E e acessibilidade de investimentos importados em `client/e2e/investments.spec.ts` e `client/e2e/a11y.spec.ts`.
-- [ ] T214 [US8] Criar migração `V007__investment_income.sql` e implementar provento manual/custo informado na fase de proventos.
+- [X] T214 [US8] Criar migração `V007__investment_income.sql` e implementar provento manual, custo informado e classificação informada na fase de proventos.
 
 **Checkpoint**: importação de investimentos funcional, isolada por usuário e
 conexão, sem recomendação e sem bloquear o núcleo bancário.

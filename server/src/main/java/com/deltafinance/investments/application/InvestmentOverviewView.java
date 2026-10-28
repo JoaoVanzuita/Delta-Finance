@@ -19,6 +19,8 @@ public record InvestmentOverviewView(
     String incomeSource,
     String profitReported,
     int profitCoverageCount,
+    String estimatedProfit,
+    int estimatedProfitCoverageCount,
     Instant lastSyncedAt,
     boolean stale,
     List<Allocation> allocation,

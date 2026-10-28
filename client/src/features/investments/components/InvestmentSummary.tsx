@@ -59,9 +59,18 @@ export function InvestmentSummary({ overview }: InvestmentSummaryProps) {
           }
         />
         <SummaryTile
-          label="Resultado informado"
+          label="Resultado do provedor"
           value={formatMoney(overview.profitReported, 'BRL')}
           hint={profitHint}
+        />
+        <SummaryTile
+          label="Resultado estimado"
+          value={formatMoney(overview.estimatedProfit, 'BRL')}
+          hint={
+            overview.estimatedProfit == null
+              ? 'Informe o custo de uma posição para estimar o resultado.'
+              : `Calculado com custo e proventos para ${overview.estimatedProfitCoverageCount} de ${overview.activeCount} posição(ões) ativa(s).`
+          }
         />
         <SummaryTile
           label="Posições encerradas"

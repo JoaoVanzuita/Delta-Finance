@@ -38,7 +38,7 @@ describe('dashboard de investimentos', () => {
     const summary = await screen.findByRole('region', { name: 'Resumo' })
     expect(within(summary).getByText('R$ 1.875,00')).toBeInTheDocument()
     expect(within(summary).getByText('R$ 1.750,00')).toBeInTheDocument()
-    expect(within(summary).getByText('R$ 50,00')).toBeInTheDocument()
+    expect(within(summary).getAllByText('R$ 50,00').length).toBeGreaterThanOrEqual(2)
     expect(within(summary).getByText(/informado para 1 de 3 posições ativas/i)).toBeInTheDocument()
 
     const allocation = await region('Alocação')

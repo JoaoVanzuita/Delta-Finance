@@ -48,6 +48,7 @@ public class InvestmentQueryService {
   private final ProviderInvestmentTransactionRepository transactionRepository;
   private final ProviderInvestmentSyncRepository syncRepository;
   private final InvestmentPositionService positionService;
+  private final InvestmentIncomeService incomeService;
   private final CryptoService cryptoService;
   private final Clock clock;
 
@@ -56,12 +57,14 @@ public class InvestmentQueryService {
       ProviderInvestmentTransactionRepository transactionRepository,
       ProviderInvestmentSyncRepository syncRepository,
       InvestmentPositionService positionService,
+      InvestmentIncomeService incomeService,
       CryptoService cryptoService,
       Clock clock) {
     this.investmentRepository = investmentRepository;
     this.transactionRepository = transactionRepository;
     this.syncRepository = syncRepository;
     this.positionService = positionService;
+    this.incomeService = incomeService;
     this.cryptoService = cryptoService;
     this.clock = clock;
   }
@@ -86,11 +89,18 @@ public class InvestmentQueryService {
 
     BigDecimal profit = BigDecimal.ZERO;
     int profitCoverage = 0;
+    BigDecimal estimatedProfit = BigDecimal.ZERO;
+    int estimatedCoverage = 0;
     for (InvestmentHoldingView holding : active) {
       BigDecimal reported = decimal(holding.amountProfit());
       if (reported != null) {
         profit = profit.add(reported);
         profitCoverage++;
+      }
+      BigDecimal estimated = decimal(holding.estimatedProfit());
+      if (estimated != null) {
+        estimatedProfit = estimatedProfit.add(estimated);
+        estimatedCoverage++;
       }
     }
 
@@ -112,6 +122,8 @@ public class InvestmentQueryService {
         income.source(),
         profitCoverage == 0 ? null : format(profit),
         profitCoverage,
+        estimatedCoverage == 0 ? null : format(estimatedProfit),
+        estimatedCoverage,
         lastSyncedAt,
         stale,
         allocation(active, providerValue),
@@ -140,7 +152,10 @@ public class InvestmentQueryService {
         investmentRepository
             .findByIdAndUserId(holdingId, userId)
             .orElseThrow(NotFoundException::new);
-    return toView(userId, investment, clock.today());
+    Flow flow = flows(userId).getOrDefault(holdingId, new Flow());
+    BigDecimal manualIncome =
+        incomeService.byProviderInvestment(userId).getOrDefault(holdingId, BigDecimal.ZERO);
+    return toView(userId, investment, clock.today(), flow, manualIncome);
   }
 
   public List<InvestmentSourceView> sources(UUID userId) {
@@ -166,6 +181,9 @@ public class InvestmentQueryService {
     TreeMap<YearMonth, BigDecimal> byMonth = new TreeMap<>();
     Map<YearMonth, Integer> monthCounts = new HashMap<>();
     BigDecimal total = BigDecimal.ZERO;
+    boolean hasProvider = false;
+    boolean hasManual = false;
+
     for (ProviderInvestmentTransaction transaction :
         transactionRepository.findByUserIdAndTypeAndRemovedAtIsNull(userId, INTEREST)) {
       LocalDate date =
@@ -187,23 +205,30 @@ public class InvestmentQueryService {
         continue;
       }
       ProviderInvestment investment = investments.get(transaction.getProviderInvestmentId());
-      String name =
-          investment == null
-              ? null
-              : decrypt(
-                  userId, INVESTMENT_TABLE, "name", investment.getId(), investment.getNameEnc());
-      String code =
-          investment == null
-              ? null
-              : decrypt(
-                  userId, INVESTMENT_TABLE, "code", investment.getId(), investment.getCodeEnc());
       items.add(
           new InvestmentIncomeView.Item(
-              date,
+              null,
+              "PROVIDER",
               transaction.getProviderInvestmentId(),
-              name,
-              code,
+              investment == null
+                  ? null
+                  : decrypt(
+                      userId,
+                      INVESTMENT_TABLE,
+                      "name",
+                      investment.getId(),
+                      investment.getNameEnc()),
+              investment == null
+                  ? null
+                  : decrypt(
+                      userId,
+                      INVESTMENT_TABLE,
+                      "code",
+                      investment.getId(),
+                      investment.getCodeEnc()),
               investment == null ? null : investment.getType(),
+              "INTEREST",
+              date,
               format(amount),
               decrypt(
                   userId,
@@ -211,12 +236,43 @@ public class InvestmentQueryService {
                   "description",
                   transaction.getId(),
                   transaction.getDescriptionEnc()),
-              "PROVIDER"));
+              "PROVIDER",
+              false));
+      hasProvider = true;
       total = total.add(amount);
       YearMonth month = YearMonth.from(date);
       byMonth.merge(month, amount, BigDecimal::add);
       monthCounts.merge(month, 1, Integer::sum);
     }
+
+    for (InvestmentIncomeEntryView entry : incomeService.list(userId, start, end)) {
+      BigDecimal amount = decimal(entry.amount());
+      if (amount == null) {
+        continue;
+      }
+      ProviderInvestment target =
+          "PROVIDER".equals(entry.targetType()) ? investments.get(entry.targetId()) : null;
+      items.add(
+          new InvestmentIncomeView.Item(
+              entry.id(),
+              entry.targetType(),
+              entry.targetId(),
+              entry.targetName(),
+              entry.targetCode(),
+              target == null ? "MANUAL" : target.getType(),
+              entry.incomeType(),
+              entry.incomeDate(),
+              format(amount),
+              entry.description(),
+              "MANUAL",
+              true));
+      hasManual = true;
+      total = total.add(amount);
+      YearMonth month = YearMonth.from(entry.incomeDate());
+      byMonth.merge(month, amount, BigDecimal::add);
+      monthCounts.merge(month, 1, Integer::sum);
+    }
+
     items.sort(
         Comparator.comparing(InvestmentIncomeView.Item::date)
             .reversed()
@@ -230,18 +286,60 @@ public class InvestmentQueryService {
                         format(entry.getValue()),
                         monthCounts.getOrDefault(entry.getKey(), 0)))
             .toList();
-    return new InvestmentIncomeView(
-        start, end, format(total), items.isEmpty() ? "UNAVAILABLE" : "PROVIDER", months, items);
+    String source =
+        hasProvider && hasManual
+            ? "MIXED"
+            : hasProvider ? "PROVIDER" : hasManual ? "MANUAL" : "UNAVAILABLE";
+    return new InvestmentIncomeView(start, end, format(total), source, months, items);
   }
 
   private List<InvestmentHoldingView> holdingsAll(UUID userId, LocalDate today) {
+    Map<UUID, Flow> flows = flows(userId);
+    Map<UUID, BigDecimal> manualIncome = incomeService.byProviderInvestment(userId);
     return investmentRepository.findByUserIdOrderByStatusAscTypeAscIdAsc(userId).stream()
-        .map(investment -> toView(userId, investment, today))
+        .map(
+            investment ->
+                toView(
+                    userId,
+                    investment,
+                    today,
+                    flows.getOrDefault(investment.getId(), new Flow()),
+                    manualIncome.getOrDefault(investment.getId(), BigDecimal.ZERO)))
         .toList();
   }
 
+  private Map<UUID, Flow> flows(UUID userId) {
+    Map<UUID, Flow> flows = new HashMap<>();
+    for (ProviderInvestmentTransaction transaction :
+        transactionRepository.findByUserIdAndRemovedAtIsNull(userId)) {
+      BigDecimal amount =
+          decimal(
+              decrypt(
+                  userId,
+                  TRANSACTION_TABLE,
+                  "amount",
+                  transaction.getId(),
+                  transaction.getAmountEnc()));
+      if (amount == null) {
+        continue;
+      }
+      Flow flow = flows.computeIfAbsent(transaction.getProviderInvestmentId(), key -> new Flow());
+      String type = transaction.getType();
+      if (INTEREST.equals(type)) {
+        flow.income = flow.income.add(amount);
+      } else if ("SELL".equals(type) || "AMORTIZATION".equals(type)) {
+        flow.proceeds = flow.proceeds.add(amount);
+      }
+    }
+    return flows;
+  }
+
   private InvestmentHoldingView toView(
-      UUID userId, ProviderInvestment investment, LocalDate today) {
+      UUID userId,
+      ProviderInvestment investment,
+      LocalDate today,
+      Flow flow,
+      BigDecimal manualIncome) {
     UUID id = investment.getId();
     String name = decrypt(userId, INVESTMENT_TABLE, "name", id, investment.getNameEnc());
     String code = decrypt(userId, INVESTMENT_TABLE, "code", id, investment.getCodeEnc());
@@ -249,6 +347,36 @@ public class InvestmentQueryService {
         InvestmentClassification.classify(investment, code);
     String profit =
         decrypt(userId, INVESTMENT_TABLE, "amount_profit", id, investment.getAmountProfitEnc());
+    String manualCostBasis =
+        decrypt(
+            userId, INVESTMENT_TABLE, "manual_cost_basis", id, investment.getManualCostBasisEnc());
+    String amountOriginal =
+        decrypt(userId, INVESTMENT_TABLE, "amount_original", id, investment.getAmountOriginalEnc());
+    BigDecimal manualCost = decimal(manualCostBasis);
+    BigDecimal providerCost = decimal(amountOriginal);
+    BigDecimal costBasis = manualCost == null ? providerCost : manualCost;
+    String costBasisSource =
+        manualCost == null ? (providerCost == null ? "UNAVAILABLE" : "PROVIDER") : "MANUAL";
+    BigDecimal balance =
+        decimal(decrypt(userId, INVESTMENT_TABLE, "balance", id, investment.getBalanceEnc()));
+    BigDecimal incomeTotal = flow.income.add(manualIncome);
+    BigDecimal estimatedProfit = null;
+    String estimatedReturn = null;
+    if (costBasis != null && balance != null) {
+      estimatedProfit =
+          balance
+              .add(incomeTotal)
+              .add(flow.proceeds)
+              .subtract(costBasis)
+              .setScale(2, RoundingMode.HALF_EVEN);
+      if (costBasis.signum() > 0) {
+        estimatedReturn =
+            estimatedProfit
+                .multiply(BigDecimal.valueOf(100))
+                .divide(costBasis, 2, RoundingMode.HALF_EVEN)
+                .toPlainString();
+      }
+    }
     LocalDate referenceDate = investment.getReferenceDate();
     boolean stale = referenceDate != null && referenceDate.isBefore(today.minusDays(STALE_DAYS));
     return new InvestmentHoldingView(
@@ -267,7 +395,7 @@ public class InvestmentQueryService {
         decrypt(userId, INVESTMENT_TABLE, "unit_value", id, investment.getUnitValueEnc()),
         decrypt(userId, INVESTMENT_TABLE, "amount", id, investment.getAmountEnc()),
         decrypt(userId, INVESTMENT_TABLE, "balance", id, investment.getBalanceEnc()),
-        decrypt(userId, INVESTMENT_TABLE, "amount_original", id, investment.getAmountOriginalEnc()),
+        amountOriginal,
         profit,
         decrypt(
             userId, INVESTMENT_TABLE, "amount_withdrawal", id, investment.getAmountWithdrawalEnc()),
@@ -292,11 +420,20 @@ public class InvestmentQueryService {
         investment.getProviderUpdatedAt(),
         investment.getSyncedAt(),
         investment.getUnavailableAt(),
-        decrypt(
-            userId, INVESTMENT_TABLE, "manual_cost_basis", id, investment.getManualCostBasisEnc()),
+        manualCostBasis,
+        costBasis == null ? null : format(costBasis),
+        costBasisSource,
+        format(incomeTotal),
+        estimatedProfit == null ? null : format(estimatedProfit),
+        estimatedReturn,
         investment.getUserAssetClass(),
         profit == null ? "UNAVAILABLE" : "PROVIDER",
         stale);
+  }
+
+  private static final class Flow {
+    private BigDecimal income = BigDecimal.ZERO;
+    private BigDecimal proceeds = BigDecimal.ZERO;
   }
 
   private InvestmentSourceView toSource(ProviderInvestmentSync sync) {

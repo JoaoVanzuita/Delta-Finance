@@ -69,6 +69,7 @@ class ExportIT extends PostgresTestBase {
           "provider_investments",
           "provider_investment_transactions",
           "provider_investment_syncs",
+          "investment_incomes",
           "invoice_item_corrections",
           "transaction_corrections",
           "internal_matches",
