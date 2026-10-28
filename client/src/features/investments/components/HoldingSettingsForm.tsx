@@ -31,7 +31,7 @@ export function HoldingSettingsForm({ holding, onChanged }: HoldingSettingsFormP
   const costMutation = useMutation({
     mutationFn: () =>
       financeApi.updateInvestmentCostBasis(holding.id, {
-        costBasis: costBasis.trim() === '' ? null : costBasis.trim(),
+        costBasis: costBasis.trim() === '' ? null : costBasis.trim().replace(',', '.'),
       }),
     onSuccess: () => {
       setError(null)

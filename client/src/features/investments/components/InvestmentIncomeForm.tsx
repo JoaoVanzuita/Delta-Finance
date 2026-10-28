@@ -101,7 +101,7 @@ export function InvestmentIncomeForm({
       investmentPositionId: targetType === 'MANUAL' ? targetId : undefined,
       incomeType: incomeType as InvestmentIncomeInput['incomeType'],
       incomeDate,
-      amount: amount.trim(),
+      amount: amount.trim().replace(',', '.'),
       description: description.trim() || undefined,
     })
   }
