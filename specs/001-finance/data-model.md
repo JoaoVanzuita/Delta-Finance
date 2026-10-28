@@ -621,7 +621,8 @@ decimais.
 
 A posição manual é um complemento do usuário. Ela não é sobrescrita por dados do
 provedor. `exclude_from_wealth` permite mantê-la como referência sem contar duas
-vezes quando existir uma posição importada equivalente.
+vezes quando existir uma posição importada equivalente; a coluna foi adicionada
+na migração `V008__investment_position_wealth_flag.sql`.
 
 ### 7.2 `provider_investment` (posição importada)
 

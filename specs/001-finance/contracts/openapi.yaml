@@ -4021,6 +4021,7 @@ components:
       - total
       - referenceDate
       - origin
+      - excludeFromWealth
       properties:
         id:
           type: string
@@ -4052,6 +4053,9 @@ components:
           type: string
           enum:
           - MANUAL
+        excludeFromWealth:
+          type: boolean
+          description: Quando verdadeiro, a posição permanece visível mas não compõe o patrimônio.
     InvestmentPositionRequest:
       type: object
       required:
@@ -4092,6 +4096,9 @@ components:
         notes:
           type: string
           maxLength: 2000
+        excludeFromWealth:
+          type: boolean
+          description: Quando verdadeiro, a posição permanece visível mas não compõe o patrimônio.
     InvestmentPositionPage:
       type: object
       required:
@@ -4150,6 +4157,8 @@ components:
       - description
       - value
       - included
+      - origin
+      - duplicate
       - stale
       properties:
         sourceType:
@@ -4173,6 +4182,16 @@ components:
         exclusionReason:
           type: string
           description: Motivo quando o item não compõe os totais, por exemplo saldo ausente ou moeda não suportada.
+        origin:
+          type: string
+          enum:
+          - PROVIDER
+          - MANUAL
+          - IMPORTED
+          description: Origem do item; IMPORTED é usado por contas/cartões importados.
+        duplicate:
+          type: boolean
+          description: Possível duplicidade entre posição manual e importada com o mesmo código.
         referenceDate:
           type: string
           format: date

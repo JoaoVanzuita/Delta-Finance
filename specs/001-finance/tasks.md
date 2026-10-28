@@ -469,7 +469,7 @@ investimentos sem afetar contas/transações.
 - [X] T208 [US8] Integrar a importação ao `PluggySyncService` sem bloquear contas/transações; ajustar status de sincronização e registrar cobertura por conexão.
 - [X] T209 [US8] Implementar API de overview, holdings, cobertura e proventos do provedor.
 - [X] T210 [US8] Redesenhar `/investments` como dashboard, incluindo resumo, alocação, classificação por tipo/código, posições ativas/encerradas, proventos do provedor, cobertura e posições manuais.
-- [ ] T211 [US8] Incluir posições importadas ativas no patrimônio, com aviso de duplicidade e opção de excluir a manual do total.
+- [X] T211 [US8] Incluir posições importadas ativas no patrimônio, com aviso de duplicidade e opção de excluir a manual do total.
 - [X] T212 [US8] Atualizar exportação, rotação de chaves, exclusão de conta, limpeza de testes e documentação de privacidade para as novas tabelas/campos.
 - [X] T213 [US8] Adicionar E2E e acessibilidade de investimentos importados em `client/e2e/investments.spec.ts` e `client/e2e/a11y.spec.ts`.
 - [X] T214 [US8] Criar migração `V007__investment_income.sql` e implementar provento manual, custo informado e classificação informada na fase de proventos.

@@ -13,7 +13,13 @@ import {
 } from '@/features/integration/api'
 
 import { ManualItemForm } from '../components/ManualItemForm'
-import { COMPLETENESS_LABELS, SOURCE_LABELS, formatDate, formatMoney } from '../format'
+import {
+  COMPLETENESS_LABELS,
+  ORIGIN_LABELS,
+  SOURCE_LABELS,
+  formatDate,
+  formatMoney,
+} from '../format'
 
 const OVERVIEW_KEY = ['wealth', 'overview'] as const
 const MANUAL_KEY = ['wealth', 'manual-items'] as const
@@ -214,6 +220,12 @@ function OverviewSections({ overview }: { readonly overview: WealthOverview }) {
             Há valores de referência com mais de 30 dias; a visão é estimada.
           </p>
         ) : null}
+        {overview.items.some((item) => item.duplicate) ? (
+          <p className="rounded-card border border-warning/40 bg-warning/5 p-3 text-sm leading-relaxed text-ink">
+            Há possível duplicidade entre posição manual e importada com o mesmo código. Edite a
+            posição manual e marque “Não contar no patrimônio”, ou exclua o registro duplicado.
+          </p>
+        ) : null}
         <p className="text-xs leading-relaxed text-ink-muted">
           Cada valor é uma referência informada por você e não é cotação de mercado. Saldos de
           cartão entram como passivos e não são contados novamente como despesa.
@@ -248,8 +260,14 @@ function CompositionRow({ item }: { readonly item: WealthItem }) {
         <p className="font-medium text-ink">
           {item.description}
           <span className="ml-2 text-xs font-normal text-ink-muted">
-            {SOURCE_LABELS[item.sourceType] ?? item.sourceType}
+            {SOURCE_LABELS[item.sourceType] ?? item.sourceType} ·{' '}
+            {ORIGIN_LABELS[item.origin] ?? item.origin}
           </span>
+          {item.duplicate ? (
+            <span className="ml-2 rounded-card border border-warning/40 bg-warning/5 px-2 py-0.5 text-xs font-medium text-warning">
+              Possível duplicidade
+            </span>
+          ) : null}
         </p>
         <p className="text-sm text-ink-muted">
           Data de referência: {formatDate(item.referenceDate)}

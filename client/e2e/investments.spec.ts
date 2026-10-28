@@ -254,6 +254,7 @@ interface Position {
   referenceDate: string
   notes?: string
   origin: 'MANUAL'
+  excludeFromWealth?: boolean
 }
 
 interface State {
@@ -300,6 +301,7 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
         total: '125.00',
         referenceDate: '2026-10-20',
         origin: 'MANUAL',
+        excludeFromWealth: false,
       },
     ],
   }
@@ -501,6 +503,7 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
         referenceDate: body.referenceDate ?? '2026-10-22',
         notes: body.notes,
         origin: 'MANUAL',
+        excludeFromWealth: Boolean(body.excludeFromWealth),
       }
       state.positions = [created, ...state.positions]
       return route.fulfill({
@@ -523,6 +526,7 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
         referenceDate: body.referenceDate ?? '2026-10-23',
         notes: body.notes,
         origin: 'MANUAL',
+        excludeFromWealth: Boolean(body.excludeFromWealth),
       }
       state.positions = state.positions.map((item) => (item.id === updated.id ? updated : item))
       return route.fulfill({

@@ -61,8 +61,9 @@ compose.yaml            stack self-hosted completa
   dividendos/rentabilidade; nesse caso o painel mostra "não informado" e aceita
   complemento manual. Não há recomendação de compra, venda ou alocação, nem
   histórico de valor de portfólio.
-- **Patrimônio (pós-MVP)**: ativos, passivos e patrimônio líquido atual, sem
-  dupla contagem e sem snapshots históricos nem inferência de saldos passados.
+- **Patrimônio (pós-MVP)**: ativos, passivos e patrimônio líquido atual, incluindo
+  investimentos importados, com aviso de duplicidade e opção de excluir a posição
+  manual do total; sem snapshots históricos nem inferência de saldos passados.
 - **Metas (pós-MVP)**: progresso por alocações explícitas, patrimônio líquido ou
   redução de dívida, com histórico datado (um snapshot por meta/dia, gravado sob
   demanda). Metas não movimentam dinheiro, não criam ordens e não executam ações

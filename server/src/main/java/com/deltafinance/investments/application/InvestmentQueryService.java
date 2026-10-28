@@ -82,6 +82,7 @@ public class InvestmentQueryService {
     List<InvestmentPositionView> manual = positionService.listAll(userId);
     BigDecimal manualValue =
         manual.stream()
+            .filter(position -> !position.excludeFromWealth())
             .map(InvestmentPositionView::total)
             .map(InvestmentQueryService::decimal)
             .reduce(BigDecimal.ZERO, BigDecimal::add);

@@ -279,6 +279,7 @@ export const POSITIONS: InvestmentPosition[] = [
     total: '125.00',
     referenceDate: '2026-10-20',
     origin: 'MANUAL',
+    excludeFromWealth: false,
   },
 ]
 
@@ -449,6 +450,7 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
         referenceDate: body.referenceDate ?? '2026-10-22',
         notes: body.notes,
         origin: 'MANUAL',
+        excludeFromWealth: Boolean(body.excludeFromWealth),
       }
       positions = [created, ...positions]
       return jsonResponse(created, 201)
@@ -467,6 +469,7 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
         referenceDate: body.referenceDate ?? '2026-10-23',
         notes: body.notes,
         origin: 'MANUAL',
+        excludeFromWealth: Boolean(body.excludeFromWealth),
       }
       positions = positions.map((item) => (item.id === id ? updated : item))
       return jsonResponse(updated)

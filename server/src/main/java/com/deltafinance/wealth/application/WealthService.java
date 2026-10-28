@@ -2,8 +2,10 @@ package com.deltafinance.wealth.application;
 
 import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
+import com.deltafinance.investments.application.InvestmentHoldingView;
 import com.deltafinance.investments.application.InvestmentPositionService;
 import com.deltafinance.investments.application.InvestmentPositionView;
+import com.deltafinance.investments.application.InvestmentQueryService;
 import com.deltafinance.invoices.application.InvoiceQueryService;
 import com.deltafinance.invoices.application.InvoiceReportingService;
 import com.deltafinance.shared.audit.AuditEventType;
@@ -58,6 +60,7 @@ public class WealthService {
   private final InvoiceQueryService invoiceQueryService;
   private final InvoiceReportingService invoiceReportingService;
   private final InvestmentPositionService investmentPositionService;
+  private final InvestmentQueryService investmentQueryService;
   private final CryptoService cryptoService;
   private final AuditService auditService;
   private final Clock clock;
@@ -68,6 +71,7 @@ public class WealthService {
       InvoiceQueryService invoiceQueryService,
       InvoiceReportingService invoiceReportingService,
       InvestmentPositionService investmentPositionService,
+      InvestmentQueryService investmentQueryService,
       CryptoService cryptoService,
       AuditService auditService,
       Clock clock) {
@@ -76,6 +80,7 @@ public class WealthService {
     this.invoiceQueryService = invoiceQueryService;
     this.invoiceReportingService = invoiceReportingService;
     this.investmentPositionService = investmentPositionService;
+    this.investmentQueryService = investmentQueryService;
     this.cryptoService = cryptoService;
     this.auditService = auditService;
     this.clock = clock;
@@ -110,8 +115,29 @@ public class WealthService {
       }
     }
 
-    for (InvestmentPositionView position : investmentPositionService.listAll(userId)) {
-      addInvestment(accumulator, position, today);
+    List<InvestmentHoldingView> providerHoldings =
+        investmentQueryService.holdings(userId, "ACTIVE", null);
+    List<InvestmentPositionView> manualPositions = investmentPositionService.listAll(userId);
+    Set<String> providerCodes =
+        providerHoldings.stream()
+            .map(InvestmentHoldingView::code)
+            .map(WealthService::normalizeCode)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+    Set<String> manualCodes =
+        manualPositions.stream()
+            .map(InvestmentPositionView::ticker)
+            .map(WealthService::normalizeCode)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+
+    for (InvestmentHoldingView holding : providerHoldings) {
+      addProviderInvestment(
+          accumulator, holding, today, manualCodes.contains(normalizeCode(holding.code())));
+    }
+    for (InvestmentPositionView position : manualPositions) {
+      addInvestment(
+          accumulator, position, today, providerCodes.contains(normalizeCode(position.ticker())));
     }
 
     for (ManualAssetLiability item :
@@ -195,6 +221,8 @@ public class WealthService {
               displayedValue,
               false,
               "Conta inativa, encerrada ou indisponível não compõe o patrimônio atual.",
+              account.origin(),
+              false,
               null,
               false));
       return;
@@ -208,6 +236,8 @@ public class WealthService {
               displayedValue,
               false,
               "Moeda diferente de BRL não compõe o patrimônio consolidado.",
+              account.origin(),
+              false,
               null,
               false));
       return;
@@ -221,6 +251,8 @@ public class WealthService {
               "0.00",
               false,
               "Saldo não informado.",
+              account.origin(),
+              false,
               null,
               false));
       return;
@@ -238,6 +270,8 @@ public class WealthService {
             displayedValue,
             true,
             null,
+            account.origin(),
+            false,
             referenceDate,
             stale),
         false);
@@ -258,6 +292,8 @@ public class WealthService {
               "0.00",
               false,
               "Sem fatura ou saldo devedor conhecido.",
+              account.origin(),
+              false,
               today,
               false));
       return;
@@ -272,6 +308,8 @@ public class WealthService {
               "0.00",
               false,
               "Cartão inativo sem saldo devedor.",
+              account.origin(),
+              false,
               today,
               false));
       return;
@@ -284,19 +322,81 @@ public class WealthService {
             format(value),
             true,
             null,
+            account.origin(),
+            false,
             today,
             false),
         true);
   }
 
+  private void addProviderInvestment(
+      Accumulator accumulator, InvestmentHoldingView holding, LocalDate today, boolean duplicate) {
+    String name =
+        holding.name() == null || holding.name().isBlank()
+            ? "Posição de investimento importada"
+            : holding.name();
+    String description =
+        holding.code() == null || holding.code().isBlank()
+            ? name
+            : name + " (" + holding.code() + ")";
+    boolean stale = holding.stale();
+    if (holding.balance() == null || holding.balance().isBlank()) {
+      accumulator.gap(
+          item(
+              WealthSourceType.INVESTMENT,
+              holding.id(),
+              description,
+              "0.00",
+              false,
+              "Valor atual não informado pelo provedor.",
+              "PROVIDER",
+              duplicate,
+              holding.referenceDate(),
+              stale));
+      return;
+    }
+    accumulator.include(
+        item(
+            WealthSourceType.INVESTMENT,
+            holding.id(),
+            description,
+            format(new BigDecimal(holding.balance())),
+            true,
+            null,
+            "PROVIDER",
+            duplicate,
+            holding.referenceDate(),
+            stale),
+        false);
+  }
+
   private void addInvestment(
-      Accumulator accumulator, InvestmentPositionView position, LocalDate today) {
+      Accumulator accumulator,
+      InvestmentPositionView position,
+      LocalDate today,
+      boolean duplicate) {
     String description =
         position.ticker() == null || position.ticker().isBlank()
             ? position.assetName()
             : position.assetName() + " (" + position.ticker() + ")";
     if (description == null || description.isBlank()) {
       description = "Posição de investimento";
+    }
+    boolean stale = isStale(position.referenceDate(), today);
+    if (position.excludeFromWealth()) {
+      accumulator.exclude(
+          item(
+              WealthSourceType.INVESTMENT,
+              position.id(),
+              description,
+              position.total() == null ? "0.00" : format(new BigDecimal(position.total())),
+              false,
+              "Posição manual marcada para não contar no patrimônio.",
+              "MANUAL",
+              duplicate,
+              position.referenceDate(),
+              stale));
+      return;
     }
     if (position.total() == null) {
       accumulator.gap(
@@ -307,11 +407,12 @@ public class WealthService {
               "0.00",
               false,
               "Valor da posição não disponível.",
+              "MANUAL",
+              duplicate,
               position.referenceDate(),
-              false));
+              stale));
       return;
     }
-    boolean stale = isStale(position.referenceDate(), today);
     accumulator.include(
         item(
             WealthSourceType.INVESTMENT,
@@ -320,6 +421,8 @@ public class WealthService {
             format(new BigDecimal(position.total())),
             true,
             null,
+            "MANUAL",
+            duplicate,
             position.referenceDate(),
             stale),
         false);
@@ -439,6 +542,30 @@ public class WealthService {
       String exclusionReason,
       LocalDate referenceDate,
       boolean stale) {
+    return item(
+        sourceType,
+        sourceId,
+        description,
+        value,
+        included,
+        exclusionReason,
+        originFor(sourceType),
+        false,
+        referenceDate,
+        stale);
+  }
+
+  private static WealthItemView item(
+      WealthSourceType sourceType,
+      UUID sourceId,
+      String description,
+      String value,
+      boolean included,
+      String exclusionReason,
+      String origin,
+      boolean duplicate,
+      LocalDate referenceDate,
+      boolean stale) {
     return new WealthItemView(
         sourceType.name(),
         sourceId,
@@ -446,8 +573,24 @@ public class WealthService {
         value,
         included,
         exclusionReason,
+        origin,
+        duplicate,
         referenceDate,
         stale);
+  }
+
+  private static String originFor(WealthSourceType sourceType) {
+    return switch (sourceType) {
+      case MANUAL_ASSET, MANUAL_LIABILITY, INVESTMENT -> "MANUAL";
+      default -> "PROVIDER";
+    };
+  }
+
+  private static String normalizeCode(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    return value.trim().toUpperCase(java.util.Locale.ROOT);
   }
 
   private boolean isStale(LocalDate referenceDate, LocalDate today) {

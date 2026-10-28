@@ -42,3 +42,9 @@ export const SOURCE_LABELS: Record<string, string> = {
   MANUAL_ASSET: 'Ativo manual',
   MANUAL_LIABILITY: 'Passivo manual',
 }
+
+export const ORIGIN_LABELS: Record<string, string> = {
+  PROVIDER: 'Importado',
+  IMPORTED: 'Importado',
+  MANUAL: 'Manual',
+}

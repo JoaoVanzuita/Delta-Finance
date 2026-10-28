@@ -27,6 +27,8 @@ const OVERVIEW = {
       description: 'Conta Alfa',
       value: '1000.00',
       included: true,
+      origin: 'IMPORTED',
+      duplicate: false,
       referenceDate: '2026-10-24',
       stale: false,
     },
@@ -37,6 +39,8 @@ const OVERVIEW = {
       value: '0.00',
       included: false,
       exclusionReason: 'Saldo não informado.',
+      origin: 'IMPORTED',
+      duplicate: false,
       stale: false,
     },
     {
@@ -45,6 +49,8 @@ const OVERVIEW = {
       description: 'Cartão Alfa',
       value: '100.00',
       included: true,
+      origin: 'IMPORTED',
+      duplicate: false,
       referenceDate: '2026-10-24',
       stale: false,
     },
@@ -54,6 +60,8 @@ const OVERVIEW = {
       description: 'Fundo imobiliário (HGLG11)',
       value: '100.00',
       included: true,
+      origin: 'MANUAL',
+      duplicate: true,
       referenceDate: '2026-10-24',
       stale: false,
     },
@@ -63,6 +71,8 @@ const OVERVIEW = {
       description: 'Tesouro reserva',
       value: '500.00',
       included: true,
+      origin: 'MANUAL',
+      duplicate: false,
       referenceDate: '2026-10-23',
       stale: false,
     },
@@ -72,6 +82,8 @@ const OVERVIEW = {
       description: 'Empréstimo',
       value: '200.00',
       included: true,
+      origin: 'MANUAL',
+      duplicate: false,
       referenceDate: '2026-10-23',
       stale: false,
     },
@@ -184,6 +196,7 @@ describe('visão patrimonial', () => {
     expect(within(composition).getByText('Empréstimo')).toBeInTheDocument()
     expect(within(composition).getByText(/Saldo não informado/)).toBeInTheDocument()
     expect(within(composition).getByText('Conta sem saldo')).toBeInTheDocument()
+    expect(within(composition).getAllByText(/possível duplicidade/i).length).toBeGreaterThan(0)
   })
 
   it('cria item manual como ativo com valor e data de referência', async () => {

@@ -14,4 +14,5 @@ public record InvestmentPositionView(
     String total,
     LocalDate referenceDate,
     String notes,
-    String origin) {}
+    String origin,
+    boolean excludeFromWealth) {}

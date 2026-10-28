@@ -15,7 +15,8 @@ public record InvestmentPositionResponse(
     String total,
     LocalDate referenceDate,
     String notes,
-    String origin) {
+    String origin,
+    boolean excludeFromWealth) {
 
   public static InvestmentPositionResponse from(InvestmentPositionView view) {
     return new InvestmentPositionResponse(
@@ -28,6 +29,7 @@ public record InvestmentPositionResponse(
         view.total(),
         view.referenceDate(),
         view.notes(),
-        view.origin());
+        view.origin(),
+        view.excludeFromWealth());
   }
 }

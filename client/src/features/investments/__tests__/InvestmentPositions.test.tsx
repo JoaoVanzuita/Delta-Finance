@@ -20,6 +20,7 @@ function position(overrides: Partial<InvestmentPosition> = {}): InvestmentPositi
     total: '125.00',
     referenceDate: '2026-10-20',
     origin: 'MANUAL',
+    excludeFromWealth: false,
     ...overrides,
   }
 }
@@ -100,6 +101,7 @@ describe('posições manuais de investimento', () => {
     fireEvent.change(within(manual).getByLabelText('Data de referência'), {
       target: { value: '2026-10-22' },
     })
+    await user.click(within(manual).getByRole('checkbox', { name: /não contar no patrimônio/i }))
     await user.click(within(manual).getByRole('button', { name: 'Adicionar posição' }))
 
     await waitFor(() => {
@@ -114,6 +116,7 @@ describe('posições manuais de investimento', () => {
         quantity: '3',
         totalValue: '100.00',
         referenceDate: '2026-10-22',
+        excludeFromWealth: true,
       })
     })
 
@@ -193,6 +196,7 @@ describe('posições manuais de investimento', () => {
     fireEvent.change(within(manual).getByLabelText('Data de referência'), {
       target: { value: '2026-10-22' },
     })
+    await user.click(within(manual).getByRole('checkbox', { name: /não contar no patrimônio/i }))
     await user.click(within(manual).getByRole('button', { name: 'Adicionar posição' }))
 
     expect(await within(manual).findByRole('alert')).toHaveTextContent(/Informe a quantidade/i)

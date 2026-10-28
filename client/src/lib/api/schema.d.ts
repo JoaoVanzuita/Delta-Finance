@@ -1837,6 +1837,8 @@ export interface components {
             notes?: string;
             /** @enum {string} */
             origin: "MANUAL";
+            /** @description Quando verdadeiro, a posição permanece visível mas não compõe o patrimônio. */
+            excludeFromWealth: boolean;
         };
         InvestmentPositionRequest: {
             /** @enum {string} */
@@ -1852,6 +1854,8 @@ export interface components {
             /** Format: date */
             referenceDate: string;
             notes?: string;
+            /** @description Quando verdadeiro, a posição permanece visível mas não compõe o patrimônio. */
+            excludeFromWealth?: boolean;
         } & (unknown | unknown);
         InvestmentPositionPage: {
             items: components["schemas"]["InvestmentPosition"][];
@@ -1884,6 +1888,13 @@ export interface components {
             included: boolean;
             /** @description Motivo quando o item não compõe os totais, por exemplo saldo ausente ou moeda não suportada. */
             exclusionReason?: string;
+            /**
+             * @description Origem do item; IMPORTED é usado por contas/cartões importados.
+             * @enum {string}
+             */
+            origin: "PROVIDER" | "MANUAL" | "IMPORTED";
+            /** @description Possível duplicidade entre posição manual e importada com o mesmo código. */
+            duplicate: boolean;
             /** Format: date */
             referenceDate?: string;
             /** @description Indica referência com mais de 30 dias em relação à data da visão. */

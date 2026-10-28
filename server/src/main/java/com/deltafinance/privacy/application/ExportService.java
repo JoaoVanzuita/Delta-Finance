@@ -249,11 +249,13 @@ public class ExportService {
                 "referenceDate",
                 "notes",
                 "origin",
+                "excludeFromWealth",
                 "createdAt",
                 "updatedAt"),
             "select id, user_id, broker, asset_name_enc, ticker_enc, quantity_enc,"
-                + " reference_price_enc, reference_date, notes_enc, origin, created_at, updated_at"
-                + " from investment_position where user_id = ? order by reference_date desc, id",
+                + " reference_price_enc, reference_date, notes_enc, origin, exclude_from_wealth,"
+                + " created_at, updated_at from investment_position where user_id = ?"
+                + " order by reference_date desc, id",
             rs -> {
               UUID id = uuid(rs, "id");
               UUID userId = rs.getObject("user_id", UUID.class);
@@ -288,6 +290,7 @@ public class ExportService {
                   "notes",
                   decrypt(userId, "investment_position", "notes", id, rs.getBytes("notes_enc")));
               row.put("origin", rs.getString("origin"));
+              row.put("excludeFromWealth", rs.getBoolean("exclude_from_wealth"));
               row.put("createdAt", instant(rs, "created_at"));
               row.put("updatedAt", instant(rs, "updated_at"));
               return row;

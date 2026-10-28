@@ -199,6 +199,11 @@ function PositionRow({
             Data de referência: {formatReferenceDate(position.referenceDate)}
           </p>
           {position.notes ? <p className="text-sm text-ink">{position.notes}</p> : null}
+          {position.excludeFromWealth ? (
+            <p className="rounded-card border border-line bg-surface-muted p-2 text-xs leading-relaxed text-ink-muted">
+              Esta posição não conta no patrimônio.
+            </p>
+          ) : null}
           {duplicate ? (
             <p className="rounded-card border border-warning/40 bg-warning/5 p-2 text-xs leading-relaxed text-ink">
               Já existe uma posição importada com este código. As duas podem entrar no total;

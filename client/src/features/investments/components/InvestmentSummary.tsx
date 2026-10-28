@@ -47,7 +47,7 @@ export function InvestmentSummary({ overview }: InvestmentSummaryProps) {
         <SummaryTile
           label="Manual"
           value={formatMoney(overview.manualValue, 'BRL')}
-          hint={`${overview.manualCount} posição(ões) informada(s) por você; não é cotação de mercado.`}
+          hint={`${overview.manualCount} posição(ões) informada(s) por você; as marcadas para não contar no patrimônio não são somadas.`}
         />
         <SummaryTile
           label="Proventos (12 meses)"

@@ -129,7 +129,8 @@ public class InvestmentPositionService {
         encrypt(userId, id, "quantity", amounts.quantity()),
         encrypt(userId, id, "reference_price", amounts.referencePrice()),
         requireReferenceDate(request.referenceDate()),
-        encryptOptional(userId, id, "notes", optionalText(request.notes(), "notes", 2000)));
+        encryptOptional(userId, id, "notes", optionalText(request.notes(), "notes", 2000)),
+        Boolean.TRUE.equals(request.excludeFromWealth()));
   }
 
   private InvestmentPosition requirePosition(UUID userId, UUID positionId) {
@@ -268,7 +269,8 @@ public class InvestmentPositionService {
         total,
         position.getReferenceDate(),
         decrypt(position, position.getNotesEnc(), "notes"),
-        position.getOrigin().name());
+        position.getOrigin().name(),
+        position.isExcludeFromWealth());
   }
 
   private String decrypt(InvestmentPosition position, byte[] ciphertext, String column) {

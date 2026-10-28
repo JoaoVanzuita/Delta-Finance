@@ -19,4 +19,5 @@ public record InvestmentPositionRequest(
     String referencePrice,
     String totalValue,
     @NotNull(message = "Informe a data de referência.") LocalDate referenceDate,
-    @Size(max = 2000, message = "As observações devem ter no máximo 2000 caracteres.") String notes) {}
+    @Size(max = 2000, message = "As observações devem ter no máximo 2000 caracteres.") String notes,
+    Boolean excludeFromWealth) {}

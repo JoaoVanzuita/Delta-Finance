@@ -12,6 +12,7 @@ import com.deltafinance.support.PostgresTestBase;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -147,6 +148,98 @@ class WealthIT extends PostgresTestBase {
     assertThat(assetSum.toPlainString()).isEqualTo("1600.00");
     assertThat(liabilitySum.toPlainString()).isEqualTo("300.00");
     assertThat(items.toString()).doesNotContain("1100.00");
+  }
+
+  @Test
+  void incluiInvestimentosImportadosEDestacaDuplicidadeSemContarManualExcluida() throws Exception {
+    PLUGGY.addItem("item-invest", "MeuPluggy", "UPDATED");
+    PLUGGY.setInvestmentResources(
+        "item-invest",
+        List.of(Map.of("resourceId", "r-1", "type", "VARIABLE_INCOME", "status", "AVAILABLE")));
+    PLUGGY.addInvestment(
+        "item-invest", investment("inv-open", "FII Aberto", "HGLG11", "ACTIVE", "200.00"));
+    PLUGGY.addInvestment(
+        "item-invest", investment("inv-closed", "FII Fechado", "CCCC11", "TOTAL_WITHDRAWAL", "0"));
+    alice
+        .post("/api/v1/connections", Map.of("itemId", "item-invest"))
+        .andExpect(status().isCreated());
+    String excluded = createInvestment("Posição excluída", "EXCL11", "50.00", true);
+
+    JsonNode overview = overview(alice);
+    assertThat(overview.path("grossAssets").asString()).isEqualTo("1300.00");
+    assertThat(overview.path("liabilities").asString()).isEqualTo("100.00");
+
+    int duplicateInvestments = 0;
+    boolean providerFound = false;
+    boolean closedFound = false;
+    boolean excludedFound = false;
+    for (JsonNode item : overview.path("items")) {
+      String description = item.path("description").asString();
+      if ("FII Fechado (CCCC11)".equals(description)) {
+        closedFound = true;
+      }
+      if ("FII Aberto (HGLG11)".equals(description)) {
+        providerFound = true;
+        assertThat(item.path("origin").asString()).isEqualTo("PROVIDER");
+        assertThat(item.path("value").asString()).isEqualTo("200.00");
+        assertThat(item.path("duplicate").asBoolean()).isTrue();
+      }
+      if ("Fundo imobiliário (HGLG11)".equals(description)) {
+        assertThat(item.path("origin").asString()).isEqualTo("MANUAL");
+        assertThat(item.path("duplicate").asBoolean()).isTrue();
+      }
+      if (item.path("duplicate").asBoolean()) {
+        duplicateInvestments++;
+      }
+      if (item.path("sourceId").asString().equals(excluded)) {
+        excludedFound = true;
+        assertThat(item.path("included").asBoolean()).isFalse();
+        assertThat(item.path("exclusionReason").asString()).contains("não contar no patrimônio");
+      }
+    }
+    assertThat(providerFound).isTrue();
+    assertThat(closedFound).isFalse();
+    assertThat(excludedFound).isTrue();
+    assertThat(duplicateInvestments).isGreaterThanOrEqualTo(2);
+  }
+
+  private String createInvestment(
+      String name, String ticker, String total, boolean excludeFromWealth) throws Exception {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("broker", "XP");
+    body.put("assetName", name);
+    body.put("ticker", ticker);
+    body.put("quantity", "1");
+    body.put("totalValue", total);
+    body.put("referenceDate", today().toString());
+    body.put("excludeFromWealth", excludeFromWealth);
+    return json(alice
+            .post("/api/v1/investments/positions", body)
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString())
+        .path("id")
+        .asString();
+  }
+
+  private static Map<String, Object> investment(
+      String id, String name, String code, String status, String balance) {
+    Map<String, Object> value = new LinkedHashMap<>();
+    value.put("id", id);
+    value.put("name", name);
+    value.put("code", code);
+    value.put("type", "EQUITY");
+    value.put("subtype", "STOCK");
+    value.put("status", status);
+    value.put("currencyCode", "BRL");
+    value.put("balance", balance);
+    value.put("quantity", "2");
+    value.put("value", "100.00");
+    value.put("amount", balance);
+    value.put("date", today().toString());
+    value.put("updatedAt", "2026-10-27T12:00:00Z");
+    return value;
   }
 
   @Test

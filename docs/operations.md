@@ -237,10 +237,12 @@ tem acesso.
 - Proventos manuais usam `investment_income` e apontam para exatamente uma
   posição; a origem é sempre `MANUAL`. Proventos do provedor continuam vindo de
   `provider_investment_transaction` com `type=INTEREST`.
-- Posições importadas ativas entram uma única vez no patrimônio; encerradas,
-  indisponíveis e fora de BRL ficam de fora com motivo. Duplicidade entre posição
-  manual e importada é sinalizada, sem exclusão automática; a posição manual pode
-  ser marcada para não contar no patrimônio.
+- Posições importadas ativas entram no patrimônio pelo `balance`; encerradas,
+  indisponíveis e fora de BRL ficam de fora com motivo. A composição distingue
+  `origin=PROVIDER`/`IMPORTED`/`MANUAL`. Duplicidade entre posição manual e
+  importada é sinalizada, sem exclusão automática; a posição manual pode ser
+  marcada com `excludeFromWealth=true` para permanecer visível sem contar no
+  total.
 - Falha de investimento não interrompe contas, cartões e transações; os dados
   anteriores são preservados e a falha aparece como aviso não bloqueante.
 - Não há recomendação de compra, venda ou alocação, nem snapshots históricos de
@@ -306,7 +308,8 @@ tem acesso.
   investimentos, patrimônio e metas, mais as tabelas de sessão do Spring e o
   histórico do Flyway. Webhooks, snapshots patrimoniais e dívida inicial não
   fazem parte da baseline; Bills estão em migração própria (`V003`) e os
-  investimentos importados em `V006` e proventos manuais em `V007`.
+  investimentos importados em `V006`, proventos manuais em `V007` e a flag de
+  patrimônio da posição manual em `V008`.
 - Acesso administrativo local:
 
 ```bash

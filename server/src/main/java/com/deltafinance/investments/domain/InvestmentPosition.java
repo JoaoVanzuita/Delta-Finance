@@ -50,6 +50,9 @@ public class InvestmentPosition extends BaseEntity {
   @Column(name = "origin", nullable = false, length = 16)
   private InvestmentOrigin origin;
 
+  @Column(name = "exclude_from_wealth", nullable = false)
+  private boolean excludeFromWealth;
+
   protected InvestmentPosition() {
     // Hibernate
   }
@@ -63,6 +66,7 @@ public class InvestmentPosition extends BaseEntity {
     this.userId = Objects.requireNonNull(userId, "userId");
     this.broker = Objects.requireNonNull(broker, "broker");
     this.origin = InvestmentOrigin.MANUAL;
+    this.excludeFromWealth = false;
   }
 
   public UUID getUserId() {
@@ -101,6 +105,10 @@ public class InvestmentPosition extends BaseEntity {
     return origin;
   }
 
+  public boolean isExcludeFromWealth() {
+    return excludeFromWealth;
+  }
+
   /** Atualiza todos os campos editáveis, mantendo a origem manual e o identificador. */
   public void apply(
       InvestmentBroker broker,
@@ -109,7 +117,8 @@ public class InvestmentPosition extends BaseEntity {
       byte[] quantityEnc,
       byte[] referencePriceEnc,
       LocalDate referenceDate,
-      byte[] notesEnc) {
+      byte[] notesEnc,
+      boolean excludeFromWealth) {
     this.broker = Objects.requireNonNull(broker, "broker");
     this.assetNameEnc = Objects.requireNonNull(assetNameEnc, "assetNameEnc");
     this.tickerEnc = tickerEnc;
@@ -117,5 +126,6 @@ public class InvestmentPosition extends BaseEntity {
     this.referencePriceEnc = Objects.requireNonNull(referencePriceEnc, "referencePriceEnc");
     this.referenceDate = Objects.requireNonNull(referenceDate, "referenceDate");
     this.notesEnc = notesEnc;
+    this.excludeFromWealth = excludeFromWealth;
   }
 }

@@ -51,6 +51,7 @@ export function PositionForm({
   const [totalValue, setTotalValue] = useState('')
   const [referenceDate, setReferenceDate] = useState(initial?.referenceDate ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [excludeFromWealth, setExcludeFromWealth] = useState(initial?.excludeFromWealth ?? false)
   const [error, setError] = useState<string | null>(null)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -89,6 +90,7 @@ export function PositionForm({
         : { totalValue: normalizeDecimal(totalValue) }),
       ...(ticker.trim() ? { ticker: ticker.trim() } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
+      excludeFromWealth,
     }
     onSubmit(input)
   }
@@ -211,6 +213,22 @@ export function PositionForm({
           />
         </label>
       </div>
+
+      <label className="flex items-start gap-3 rounded-card border border-line bg-surface-muted p-3 text-sm">
+        <input
+          type="checkbox"
+          checked={excludeFromWealth}
+          onChange={(event) => setExcludeFromWealth(event.target.checked)}
+          className="mt-1 size-4"
+        />
+        <span>
+          <span className="block font-medium text-ink">Não contar no patrimônio</span>
+          <span className="mt-1 block text-xs leading-relaxed text-ink-muted">
+            A posição continua visível, mas não entra no total patrimonial. Use quando ela já
+            estiver representada por uma posição importada.
+          </span>
+        </span>
+      </label>
 
       <label className="block text-sm" htmlFor={`${baseId}-notes`}>
         <span className="font-medium text-ink">Observações</span>
