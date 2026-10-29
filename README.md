@@ -8,8 +8,8 @@ Meu Pluggy, sem compartilhamento de credenciais.
 > **Estado**: escopo funcional de `specs/001-finance` implementado até a fase
 > posterior. O MVP bancário cobre identidade, contas e cartões manuais ou via Meu
 > Pluggy, transações, categorias, faturas, reconciliação, dashboard, relatórios,
-> privacidade e exportação. Investimentos importados e manuais, patrimônio e
-> metas estão disponíveis como módulos secundário e posteriores. Nenhum módulo
+> privacidade e exportação. Investimentos importados, patrimônio e metas estão
+> disponíveis como módulos secundário e posteriores. Nenhum módulo
 > movimenta dinheiro, cria ordens ou oferece recomendação de investimento; a
 > validação de release segue [`docs/release-checklist.md`](docs/release-checklist.md).
 
@@ -54,16 +54,17 @@ compose.yaml            stack self-hosted completa
 - **Dashboard e relatórios**: resultado do período, saldo, categorias, série
   temporal, drill-down paginado e exportação dos próprios dados na área de
   privacidade.
-- **Investimentos (fase secundária)**: importação de posições de itens Meu
-  Pluggy com recursos de investimento, dashboard de alocação, posições
-  encerradas, cobertura por conexão, proventos do provedor e manuais, custo
-  informado e resultado estimado. O provedor pode não enviar
+- **Investimentos (fase secundária)**: importação automática de posições de
+  itens Meu Pluggy com recursos de investimento, dashboard de alocação, posições
+  encerradas, proventos do provedor e manuais, custo informado e resultado
+  estimado. Não há cadastro manual de posições: o módulo usa apenas dados
+  importados. O provedor pode não enviar
   dividendos/rentabilidade; nesse caso o painel mostra "não informado" e aceita
   complemento manual. Não há recomendação de compra, venda ou alocação, nem
   histórico de valor de portfólio.
 - **Patrimônio (pós-MVP)**: ativos, passivos e patrimônio líquido atual, incluindo
-  investimentos importados, com aviso de duplicidade e opção de excluir a posição
-  manual do total; sem snapshots históricos nem inferência de saldos passados.
+  investimentos importados; sem snapshots históricos nem inferência de saldos
+  passados.
 - **Metas (pós-MVP)**: progresso por alocações explícitas, patrimônio líquido ou
   redução de dívida, com histórico datado (um snapshot por meta/dia, gravado sob
   demanda). Metas não movimentam dinheiro, não criam ordens e não executam ações
@@ -184,6 +185,9 @@ snapshot/restore para testar migrações. A baseline atual é
   sessão, retenção e exportação.
 - [`docs/accessibility.md`](docs/accessibility.md): rotas cobertas e critérios de
   acessibilidade.
+- [`docs/plan-nomes-personalizados.md`](docs/plan-nomes-personalizados.md):
+  plano para renomear contas, cartões e itens do Pluggy preservando o nome
+  original.
 - [`docs/release-checklist.md`](docs/release-checklist.md): versões fixadas e
   gates de release.
 - [`docs/runbooks/README.md`](docs/runbooks/README.md): índice de runbooks.

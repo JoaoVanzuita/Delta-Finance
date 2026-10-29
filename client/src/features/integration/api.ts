@@ -38,9 +38,6 @@ export type CardProfileInput = components['schemas']['CardProfileRequest']
 export type CardProfile = components['schemas']['CardProfile']
 export type CardOverview = components['schemas']['CardOverview']
 export type CardOverviewItem = components['schemas']['CardOverviewItem']
-export type InvestmentPosition = components['schemas']['InvestmentPosition']
-export type InvestmentPositionPage = components['schemas']['InvestmentPositionPage']
-export type InvestmentPositionInput = components['schemas']['InvestmentPositionRequest']
 export type InvestmentOverview = components['schemas']['InvestmentOverview']
 export type InvestmentAllocation = components['schemas']['InvestmentAllocation']
 export type InvestmentHolding = components['schemas']['InvestmentHolding']
@@ -178,18 +175,6 @@ export const financeApi = {
     api.patch<void>(`/investments/holdings/${id}/cost-basis`, input),
   updateInvestmentAssetClass: (id: string, input: InvestmentAssetClassInput) =>
     api.patch<void>(`/investments/holdings/${id}/asset-class`, input),
-
-  positions: (cursor?: string, limit = 50) => {
-    const params = new URLSearchParams({ limit: String(limit) })
-    if (cursor) params.set('cursor', cursor)
-    return api.get<InvestmentPositionPage>(`/investments/positions?${params.toString()}`)
-  },
-  position: (id: string) => api.get<InvestmentPosition>(`/investments/positions/${id}`),
-  createPosition: (input: InvestmentPositionInput) =>
-    api.post<InvestmentPosition>('/investments/positions', input),
-  updatePosition: (id: string, input: InvestmentPositionInput) =>
-    api.patch<InvestmentPosition>(`/investments/positions/${id}`, input),
-  deletePosition: (id: string) => api.delete<void>(`/investments/positions/${id}`),
 
   wealthOverview: () => api.get<WealthOverview>('/wealth/overview'),
   wealthManualItems: () => api.get<WealthManualItemList>('/wealth/manual-items'),

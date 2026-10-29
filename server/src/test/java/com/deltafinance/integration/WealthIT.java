@@ -106,8 +106,6 @@ class WealthIT extends PostgresTestBase {
         .andExpect(status().isOk());
     createCardTransaction("-100.00", "2026-10-03");
     alice.get("/api/v1/cards/" + cardId + "/invoices").andExpect(status().isOk());
-
-    createInvestment(2, "50.00");
   }
 
   @Test
@@ -116,18 +114,17 @@ class WealthIT extends PostgresTestBase {
     createManualItem("LIABILITY", "LOAN", "Empréstimo", "200.00", freshDate(), null);
 
     JsonNode overview = overview(alice);
-    assertThat(overview.path("grossAssets").asString()).isEqualTo("1600.00");
+    assertThat(overview.path("grossAssets").asString()).isEqualTo("1500.00");
     assertThat(overview.path("liabilities").asString()).isEqualTo("300.00");
-    assertThat(overview.path("netWorth").asString()).isEqualTo("1300.00");
+    assertThat(overview.path("netWorth").asString()).isEqualTo("1200.00");
     assertThat(overview.path("hasData").asBoolean()).isTrue();
     assertThat(overview.path("completeness").asString()).isEqualTo("COMPLETE");
     assertThat(overview.path("referenceDate").asString()).isEqualTo(today().toString());
 
     JsonNode items = overview.path("items");
-    assertThat(items).hasSize(5);
+    assertThat(items).hasSize(4);
     assertThat(find(items, "ACCOUNT", bankId).path("value").asString()).isEqualTo("1000.00");
     assertThat(find(items, "CARD", cardId).path("value").asString()).isEqualTo("100.00");
-    assertThat(find(items, "INVESTMENT", null).path("value").asString()).isEqualTo("100.00");
     assertThat(find(items, "MANUAL_ASSET", null).path("value").asString()).isEqualTo("500.00");
     assertThat(find(items, "MANUAL_LIABILITY", null).path("value").asString()).isEqualTo("200.00");
 
@@ -145,13 +142,13 @@ class WealthIT extends PostgresTestBase {
         assetSum = assetSum.add(value);
       }
     }
-    assertThat(assetSum.toPlainString()).isEqualTo("1600.00");
+    assertThat(assetSum.toPlainString()).isEqualTo("1500.00");
     assertThat(liabilitySum.toPlainString()).isEqualTo("300.00");
     assertThat(items.toString()).doesNotContain("1100.00");
   }
 
   @Test
-  void incluiInvestimentosImportadosEDestacaDuplicidadeSemContarManualExcluida() throws Exception {
+  void incluiInvestimentosImportadosAtivosNoPatrimonio() throws Exception {
     PLUGGY.addItem("item-invest", "MeuPluggy", "UPDATED");
     PLUGGY.setInvestmentResources(
         "item-invest",
@@ -163,16 +160,14 @@ class WealthIT extends PostgresTestBase {
     alice
         .post("/api/v1/connections", Map.of("itemId", "item-invest"))
         .andExpect(status().isCreated());
-    String excluded = createInvestment("Posição excluída", "EXCL11", "50.00", true);
 
     JsonNode overview = overview(alice);
-    assertThat(overview.path("grossAssets").asString()).isEqualTo("1300.00");
+    assertThat(overview.path("grossAssets").asString()).isEqualTo("1200.00");
     assertThat(overview.path("liabilities").asString()).isEqualTo("100.00");
+    assertThat(overview.path("netWorth").asString()).isEqualTo("1100.00");
 
-    int duplicateInvestments = 0;
     boolean providerFound = false;
     boolean closedFound = false;
-    boolean excludedFound = false;
     for (JsonNode item : overview.path("items")) {
       String description = item.path("description").asString();
       if ("FII Fechado (CCCC11)".equals(description)) {
@@ -182,45 +177,11 @@ class WealthIT extends PostgresTestBase {
         providerFound = true;
         assertThat(item.path("origin").asString()).isEqualTo("PROVIDER");
         assertThat(item.path("value").asString()).isEqualTo("200.00");
-        assertThat(item.path("duplicate").asBoolean()).isTrue();
-      }
-      if ("Fundo imobiliário (HGLG11)".equals(description)) {
-        assertThat(item.path("origin").asString()).isEqualTo("MANUAL");
-        assertThat(item.path("duplicate").asBoolean()).isTrue();
-      }
-      if (item.path("duplicate").asBoolean()) {
-        duplicateInvestments++;
-      }
-      if (item.path("sourceId").asString().equals(excluded)) {
-        excludedFound = true;
-        assertThat(item.path("included").asBoolean()).isFalse();
-        assertThat(item.path("exclusionReason").asString()).contains("não contar no patrimônio");
+        assertThat(item.path("included").asBoolean()).isTrue();
       }
     }
     assertThat(providerFound).isTrue();
     assertThat(closedFound).isFalse();
-    assertThat(excludedFound).isTrue();
-    assertThat(duplicateInvestments).isGreaterThanOrEqualTo(2);
-  }
-
-  private String createInvestment(
-      String name, String ticker, String total, boolean excludeFromWealth) throws Exception {
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("broker", "XP");
-    body.put("assetName", name);
-    body.put("ticker", ticker);
-    body.put("quantity", "1");
-    body.put("totalValue", total);
-    body.put("referenceDate", today().toString());
-    body.put("excludeFromWealth", excludeFromWealth);
-    return json(alice
-            .post("/api/v1/investments/positions", body)
-            .andExpect(status().isCreated())
-            .andReturn()
-            .getResponse()
-            .getContentAsString())
-        .path("id")
-        .asString();
   }
 
   private static Map<String, Object> investment(
@@ -271,7 +232,7 @@ class WealthIT extends PostgresTestBase {
     }
     assertThat(gapFound).isTrue();
     assertThat(staleFound).isTrue();
-    assertThat(overview.path("grossAssets").asString()).isEqualTo("1600.00");
+    assertThat(overview.path("grossAssets").asString()).isEqualTo("1500.00");
   }
 
   @Test
@@ -363,26 +324,6 @@ class WealthIT extends PostgresTestBase {
             "/api/v1/wealth/manual-items", manualRequest("ASSET", "OTHER", "X", "1.00", null, null))
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.errors[0].field").value("referenceDate"));
-  }
-
-  private void createInvestment(int quantity, String price) throws Exception {
-    alice
-        .post(
-            "/api/v1/investments/positions",
-            Map.of(
-                "broker",
-                "XP",
-                "assetName",
-                "Fundo imobiliário",
-                "ticker",
-                "HGLG11",
-                "quantity",
-                String.valueOf(quantity),
-                "referencePrice",
-                price,
-                "referenceDate",
-                today().toString()))
-        .andExpect(status().isCreated());
   }
 
   private void createCardTransaction(String amount, String postedOn) throws Exception {

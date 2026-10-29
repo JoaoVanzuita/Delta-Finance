@@ -66,7 +66,7 @@ describe('api client', () => {
     await api.post('/accounts', {})
     await api.post('/connections', {})
     await api.patch('/goals/goal-1', {})
-    await api.delete('/investments/positions/pos-1')
+    await api.delete('/investments/income/income-1')
 
     for (const [, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
       expect(new Headers(init.headers).get('Idempotency-Key')).toBeNull()

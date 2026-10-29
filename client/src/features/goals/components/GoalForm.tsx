@@ -46,7 +46,7 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
   const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
   const investmentsQuery = useQuery({
     queryKey: ['investments', 'goal-sources'],
-    queryFn: () => financeApi.positions(undefined, 100),
+    queryFn: () => financeApi.investmentHoldings('ACTIVE'),
   })
   const wealthQuery = useQuery({
     queryKey: ['wealth', 'manual', 'goal-sources'],
@@ -97,9 +97,11 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
         }))
     }
     if (sourceType === 'INVESTMENT') {
-      return (investmentsQuery.data?.items ?? []).map((position) => ({
-        id: position.id,
-        label: position.ticker ? `${position.ticker} · ${position.assetName}` : position.assetName,
+      return (investmentsQuery.data?.items ?? []).map((holding) => ({
+        id: holding.id,
+        label: holding.code
+          ? `${holding.code} · ${holding.name ?? 'Posição importada'}`
+          : (holding.name ?? 'Posição importada'),
       }))
     }
     if (sourceType === 'MANUAL_ASSET') {

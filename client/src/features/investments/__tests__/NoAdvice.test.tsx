@@ -27,7 +27,7 @@ describe('investimentos sem aconselhamento', () => {
     document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
   })
 
-  it('explica importação, cobertura e posições manuais sem prometer cotação', async () => {
+  it('explica a importação automática sem prometer cotação', async () => {
     renderPage()
 
     expect(
@@ -35,9 +35,9 @@ describe('investimentos sem aconselhamento', () => {
     ).toBeInTheDocument()
     expect(screen.getByText(/posições importadas do Meu Pluggy/i)).toBeInTheDocument()
     expect(
-      await screen.findByRole('heading', { name: 'Cobertura das conexões' }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Posições manuais' })).toBeInTheDocument()
+      screen.queryByRole('heading', { name: 'Cobertura das conexões' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Posições manuais' })).not.toBeInTheDocument()
     expect(screen.getByText(/não calcula cotação em tempo real/i)).toBeInTheDocument()
   })
 

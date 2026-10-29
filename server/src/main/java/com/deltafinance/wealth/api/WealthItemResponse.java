@@ -13,7 +13,6 @@ public record WealthItemResponse(
     boolean included,
     String exclusionReason,
     String origin,
-    boolean duplicate,
     LocalDate referenceDate,
     boolean stale) {
 
@@ -26,7 +25,6 @@ public record WealthItemResponse(
         view.included(),
         view.exclusionReason(),
         view.origin(),
-        view.duplicate(),
         view.referenceDate(),
         view.stale());
   }

@@ -24,8 +24,7 @@ class IdempotencyFilterTest {
     assertThat(IdempotencyFilter.isProtected("POST", "/api/v1/connections")).isFalse();
     assertThat(IdempotencyFilter.isProtected("POST", "/api/v1/connections/abc/sync")).isFalse();
     assertThat(IdempotencyFilter.isProtected("PATCH", "/api/v1/goals/abc")).isFalse();
-    assertThat(IdempotencyFilter.isProtected("DELETE", "/api/v1/investments/positions/abc"))
-        .isFalse();
+    assertThat(IdempotencyFilter.isProtected("DELETE", "/api/v1/investments/income/abc")).isFalse();
     assertThat(IdempotencyFilter.isProtected("POST", "/api/v1/categories")).isFalse();
     assertThat(IdempotencyFilter.isProtected("GET", "/api/v1/transactions")).isFalse();
   }

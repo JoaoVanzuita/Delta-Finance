@@ -54,7 +54,6 @@ class ExportIT extends PostgresTestBase {
           "profile",
           "accounts",
           "card_profiles",
-          "investment_positions",
           "manual_asset_liabilities",
           "financial_goals",
           "goal_allocations",
@@ -139,12 +138,10 @@ class ExportIT extends PostgresTestBase {
 
     createManualAccount(alice, "Carteira Alice", "100.00");
     createManualTransaction(alice, "Salário Alice", "2026-10-02");
-    createInvestment(alice, "Tesouro Alice");
     createManualWealthItem(alice, "Apartamento Alice");
     createGoal(alice, "Meta Alice");
     createManualAccount(bob, "Carteira Bob", "50.00");
     createManualTransaction(bob, "Salário Bob", "2026-10-02");
-    createInvestment(bob, "Tesouro Bob");
     createManualWealthItem(bob, "Apartamento Bob");
     createGoal(bob, "Meta Bob");
   }
@@ -196,7 +193,6 @@ class ExportIT extends PostgresTestBase {
     assertThat(manifest.path("recordCount").asInt()).isEqualTo(recordCount);
     assertThat(manifest.path("files").path("accounts.jsonl").asInt()).isGreaterThanOrEqualTo(2);
     assertThat(manifest.path("files").path("transactions.jsonl").asInt()).isGreaterThanOrEqualTo(2);
-    assertThat(manifest.path("files").path("investment_positions.jsonl").asInt()).isEqualTo(1);
     assertThat(manifest.path("files").path("manual_asset_liabilities.jsonl").asInt()).isEqualTo(1);
     assertThat(manifest.path("files").path("financial_goals.jsonl").asInt()).isEqualTo(1);
     assertThat(manifest.path("files").path("goal_allocations.jsonl").asInt()).isEqualTo(1);
@@ -210,9 +206,6 @@ class ExportIT extends PostgresTestBase {
     assertThat(files.get("transactions.jsonl"))
         .contains("Salário Alice", "Mercado Alice")
         .doesNotContain("Salário Bob");
-    assertThat(files.get("investment_positions.jsonl"))
-        .contains("Tesouro Alice")
-        .doesNotContain("Tesouro Bob");
     assertThat(files.get("manual_asset_liabilities.jsonl"))
         .contains("Apartamento Alice")
         .doesNotContain("Apartamento Bob");
@@ -238,7 +231,7 @@ class ExportIT extends PostgresTestBase {
         .doesNotContainIgnoringCase("client_secret")
         .doesNotContainIgnoringCase("apiKey")
         .doesNotContainIgnoringCase("password_hash")
-        .doesNotContain("Salário Bob", "Tesouro Bob", "Apartamento Bob", "Meta Bob");
+        .doesNotContain("Salário Bob", "Apartamento Bob", "Meta Bob");
 
     String metadata =
         jdbcTemplate.queryForObject(
@@ -250,19 +243,6 @@ class ExportIT extends PostgresTestBase {
                 "select count(*) from audit_event where event_type = 'EXPORT_REQUESTED'",
                 Integer.class))
         .isEqualTo(1);
-  }
-
-  private void createInvestment(AuthTestClient client, String assetName) throws Exception {
-    client
-        .post(
-            "/api/v1/investments/positions",
-            Map.of(
-                "broker", "XP",
-                "assetName", assetName,
-                "quantity", "1",
-                "totalValue", "500.00",
-                "referenceDate", "2026-10-01"))
-        .andExpect(status().isCreated());
   }
 
   private void createManualWealthItem(AuthTestClient client, String description) throws Exception {

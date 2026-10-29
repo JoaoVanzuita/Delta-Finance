@@ -204,7 +204,6 @@ class AccountLifecycleIT extends PostgresTestBase {
     assertThat(count("pluggy_connection")).isZero();
     assertThat(count("sync_job")).isZero();
     assertThat(count("sync_run")).isZero();
-    assertThat(count("investment_position")).isZero();
     assertThat(count("manual_asset_liability")).isZero();
     assertThat(count("financial_goal")).isZero();
     assertThat(count("goal_allocation")).isZero();
@@ -235,16 +234,6 @@ class AccountLifecycleIT extends PostgresTestBase {
   private void createSecondaryModuleData() throws Exception {
     alice
         .post(
-            "/api/v1/investments/positions",
-            Map.of(
-                "broker", "XP",
-                "assetName", "Tesouro Alice",
-                "quantity", "1",
-                "totalValue", "500.00",
-                "referenceDate", "2026-10-01"))
-        .andExpect(status().isCreated());
-    alice
-        .post(
             "/api/v1/wealth/manual-items",
             Map.of(
                 "kind", "ASSET",
@@ -268,7 +257,6 @@ class AccountLifecycleIT extends PostgresTestBase {
             "allocations", java.util.List.of(allocation));
     alice.post("/api/v1/goals", goal).andExpect(status().isCreated());
 
-    assertThat(count("investment_position")).isEqualTo(1);
     assertThat(count("manual_asset_liability")).isEqualTo(1);
     assertThat(count("financial_goal")).isEqualTo(1);
     assertThat(count("goal_allocation")).isEqualTo(1);

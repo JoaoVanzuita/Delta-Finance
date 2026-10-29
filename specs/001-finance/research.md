@@ -161,7 +161,7 @@ no mesmo repositório, servida pelo próprio stack Docker Compose.
 | `reconciliation` | sugestões de transferência interna, pagamento de fatura e confirmação do usuário. |
 | `reporting` | dashboard, agregações, filtros e drill-down. |
 | `privacy` | exportação, exclusão de conta e desconexão. |
-| `investments` | posições importadas, posições manuais, proventos, custo informado, dashboard e cobertura por conexão. |
+| `investments` | posições importadas, proventos, custo informado, dashboard e cobertura por conexão. |
 | `wealth` | ativos, passivos, snapshots e patrimônio líquido, fase posterior. |
 | `goals` | metas, alocações e progresso, fase posterior. |
 | `shared` | dinheiro, tempo, erros, paginação, auditoria e utilidades. |
@@ -348,7 +348,7 @@ do dashboard com dados sintéticos.
   rejeição.
 - Dashboard: resumo, categorias, série temporal e drill-down.
 - Privacidade: exportação, exclusão e desconexão.
-- Investimentos: posições manuais.
+- Investimentos: posições importadas; cadastro manual removido.
 - Futuro: patrimônio e metas.
 
 ## 8. Frontend

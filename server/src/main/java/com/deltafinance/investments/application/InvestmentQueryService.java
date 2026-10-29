@@ -20,12 +20,10 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -33,8 +31,8 @@ import org.springframework.stereotype.Service;
 /**
  * Leitura das posições importadas, cobertura e proventos do provedor.
  *
- * <p>Não estima valores ausentes e não mistura posições manuais na alocação importada. Posições
- * encerradas ou indisponíveis permanecem visíveis, mas não compõem o valor atual.
+ * <p>Não estima valores ausentes. Posições encerradas ou indisponíveis permanecem visíveis, mas não
+ * compõem o valor atual.
  */
 @Service
 public class InvestmentQueryService {
@@ -47,7 +45,6 @@ public class InvestmentQueryService {
   private final ProviderInvestmentRepository investmentRepository;
   private final ProviderInvestmentTransactionRepository transactionRepository;
   private final ProviderInvestmentSyncRepository syncRepository;
-  private final InvestmentPositionService positionService;
   private final InvestmentIncomeService incomeService;
   private final CryptoService cryptoService;
   private final Clock clock;
@@ -56,14 +53,12 @@ public class InvestmentQueryService {
       ProviderInvestmentRepository investmentRepository,
       ProviderInvestmentTransactionRepository transactionRepository,
       ProviderInvestmentSyncRepository syncRepository,
-      InvestmentPositionService positionService,
       InvestmentIncomeService incomeService,
       CryptoService cryptoService,
       Clock clock) {
     this.investmentRepository = investmentRepository;
     this.transactionRepository = transactionRepository;
     this.syncRepository = syncRepository;
-    this.positionService = positionService;
     this.incomeService = incomeService;
     this.cryptoService = cryptoService;
     this.clock = clock;
@@ -79,14 +74,7 @@ public class InvestmentQueryService {
         active.stream()
             .map(InvestmentQueryService::balance)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
-    List<InvestmentPositionView> manual = positionService.listAll(userId);
-    BigDecimal manualValue =
-        manual.stream()
-            .filter(position -> !position.excludeFromWealth())
-            .map(InvestmentPositionView::total)
-            .map(InvestmentQueryService::decimal)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal totalValue = providerValue.add(manualValue);
+    BigDecimal totalValue = providerValue;
 
     BigDecimal profit = BigDecimal.ZERO;
     int profitCoverage = 0;
@@ -113,12 +101,10 @@ public class InvestmentQueryService {
     return new InvestmentOverviewView(
         today,
         format(providerValue),
-        format(manualValue),
         format(totalValue),
         active.size(),
         (int) views.stream().filter(InvestmentQueryService::isClosed).count(),
         (int) views.stream().filter(holding -> holding.unavailableAt() != null).count(),
-        manual.size(),
         income.total(),
         income.source(),
         profitCoverage == 0 ? null : format(profit),
@@ -128,8 +114,7 @@ public class InvestmentQueryService {
         lastSyncedAt,
         stale,
         allocation(active, providerValue),
-        coverage,
-        duplicates(views, manual));
+        coverage);
   }
 
   public List<InvestmentHoldingView> holdings(UUID userId, String status, String assetClass) {
@@ -209,7 +194,6 @@ public class InvestmentQueryService {
       items.add(
           new InvestmentIncomeView.Item(
               null,
-              "PROVIDER",
               transaction.getProviderInvestmentId(),
               investment == null
                   ? null
@@ -251,16 +235,14 @@ public class InvestmentQueryService {
       if (amount == null) {
         continue;
       }
-      ProviderInvestment target =
-          "PROVIDER".equals(entry.targetType()) ? investments.get(entry.targetId()) : null;
+      ProviderInvestment target = investments.get(entry.targetId());
       items.add(
           new InvestmentIncomeView.Item(
               entry.id(),
-              entry.targetType(),
               entry.targetId(),
               entry.targetName(),
               entry.targetCode(),
-              target == null ? "MANUAL" : target.getType(),
+              target == null ? null : target.getType(),
               entry.incomeType(),
               entry.incomeDate(),
               format(amount),
@@ -471,31 +453,6 @@ public class InvestmentQueryService {
         .toList();
   }
 
-  private List<InvestmentOverviewView.Duplicate> duplicates(
-      List<InvestmentHoldingView> provider, List<InvestmentPositionView> manual) {
-    Map<String, UUID> providerByCode = new HashMap<>();
-    for (InvestmentHoldingView holding : provider) {
-      if (holding.code() != null && !holding.code().isBlank()) {
-        providerByCode.putIfAbsent(normalizeCode(holding.code()), holding.id());
-      }
-    }
-    List<InvestmentOverviewView.Duplicate> duplicates = new ArrayList<>();
-    Set<String> seen = new HashSet<>();
-    for (InvestmentPositionView position : manual) {
-      String ticker = normalizeCode(position.ticker());
-      if (ticker == null || seen.contains(ticker)) {
-        continue;
-      }
-      UUID providerId = providerByCode.get(ticker);
-      if (providerId != null) {
-        duplicates.add(
-            new InvestmentOverviewView.Duplicate(position.id(), position.ticker(), providerId));
-        seen.add(ticker);
-      }
-    }
-    return duplicates;
-  }
-
   private Instant lastSyncedAt(
       List<InvestmentSourceView> coverage, List<InvestmentHoldingView> holdings) {
     Instant latest = null;
@@ -588,13 +545,6 @@ public class InvestmentQueryService {
   }
 
   private static String normalize(String value) {
-    if (value == null || value.isBlank()) {
-      return null;
-    }
-    return value.trim().toUpperCase(Locale.ROOT);
-  }
-
-  private static String normalizeCode(String value) {
     if (value == null || value.isBlank()) {
       return null;
     }

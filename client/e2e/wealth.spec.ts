@@ -36,7 +36,6 @@ function overview(state: State) {
       sourceId: 'acc-bank',
       description: 'Conta Alfa',
       origin: 'IMPORTED',
-      duplicate: false,
       value: '1000.00',
       included: true,
       referenceDate: TODAY,
@@ -50,7 +49,6 @@ function overview(state: State) {
       included: false,
       exclusionReason: 'Saldo não informado.',
       origin: 'IMPORTED',
-      duplicate: false,
       stale: false,
     },
     {
@@ -58,18 +56,6 @@ function overview(state: State) {
       sourceId: 'card-1',
       description: 'Cartão Alfa',
       origin: 'IMPORTED',
-      duplicate: false,
-      value: '100.00',
-      included: true,
-      referenceDate: TODAY,
-      stale: false,
-    },
-    {
-      sourceType: 'INVESTMENT',
-      sourceId: 'pos-1',
-      description: 'Fundo imobiliário (HGLG11)',
-      origin: 'MANUAL',
-      duplicate: false,
       value: '100.00',
       included: true,
       referenceDate: TODAY,
@@ -83,7 +69,6 @@ function overview(state: State) {
     value: item.referenceValue,
     included: true,
     origin: 'MANUAL',
-    duplicate: false,
     referenceDate: item.referenceDate,
     stale: false,
   }))
@@ -199,9 +184,9 @@ test('consolida patrimônio e cria item manual sem inferir passado', async ({ pa
 
   await expect(page.getByRole('heading', { level: 1, name: 'Patrimônio' })).toBeVisible()
   const summary = page.getByRole('region', { name: 'Resumo patrimonial' })
-  await expect(summary.getByText(/R\$\s*1\.600,00/)).toBeVisible()
+  await expect(summary.getByText(/R\$\s*1\.500,00/)).toBeVisible()
   await expect(summary.getByText(/R\$\s*300,00/)).toBeVisible()
-  await expect(summary.getByText(/R\$\s*1\.300,00/)).toBeVisible()
+  await expect(summary.getByText(/R\$\s*1\.200,00/)).toBeVisible()
   await expect(summary.getByText('Parcial')).toBeVisible()
 
   const composition = page.getByRole('region', { name: 'Composição' })
@@ -219,14 +204,14 @@ test('consolida patrimônio e cria item manual sem inferir passado', async ({ pa
   await manual.getByRole('button', { name: 'Adicionar item manual' }).click()
 
   await expect(manual.getByText('Apartamento')).toBeVisible()
-  await expect(summary.getByText(/R\$\s*251\.600,00/)).toBeVisible()
-  await expect(summary.getByText(/R\$\s*251\.300,00/)).toBeVisible()
+  await expect(summary.getByText(/R\$\s*251\.500,00/)).toBeVisible()
+  await expect(summary.getByText(/R\$\s*251\.200,00/)).toBeVisible()
 
   const addedRow = manual.getByRole('listitem').filter({ hasText: 'Apartamento' })
   await addedRow.getByRole('button', { name: 'Excluir' }).click()
   await addedRow.getByRole('button', { name: 'Confirmar exclusão' }).click()
   await expect(manual.getByText('Apartamento')).toBeHidden()
-  await expect(summary.getByText(/R\$\s*1\.300,00/)).toBeVisible()
+  await expect(summary.getByText(/R\$\s*1\.200,00/)).toBeVisible()
 })
 
 test('não apresenta valor manual como cotação de mercado', async ({ page }) => {

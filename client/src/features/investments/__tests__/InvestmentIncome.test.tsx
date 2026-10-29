@@ -33,7 +33,7 @@ describe('proventos manuais e custo informado', () => {
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
     await user.click(await screen.findByText('Registrar provento manual', { selector: 'summary' }))
-    await user.selectOptions(screen.getByLabelText('Posição'), 'PROVIDER:holding-1')
+    await user.selectOptions(screen.getByLabelText('Posição'), 'holding-1')
     await user.type(screen.getByLabelText('Valor (BRL)'), '7.50')
     await user.type(screen.getByLabelText('Descrição (opcional)'), 'Dividendo manual')
     await user.click(screen.getByRole('button', { name: 'Registrar provento' }))

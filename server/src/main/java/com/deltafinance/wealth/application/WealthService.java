@@ -3,8 +3,6 @@ package com.deltafinance.wealth.application;
 import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
 import com.deltafinance.investments.application.InvestmentHoldingView;
-import com.deltafinance.investments.application.InvestmentPositionService;
-import com.deltafinance.investments.application.InvestmentPositionView;
 import com.deltafinance.investments.application.InvestmentQueryService;
 import com.deltafinance.invoices.application.InvoiceQueryService;
 import com.deltafinance.invoices.application.InvoiceReportingService;
@@ -44,7 +42,7 @@ import org.springframework.stereotype.Service;
  *   <li>contas {@code BANK}/{@code CASH}/{@code WALLET} ativas em BRL são ativos;
  *   <li>cartões são passivos pelo saldo devedor das faturas, nunca pela compra ou fatura
  *       individual, evitando dupla contagem;
- *   <li>posições de investimento e itens manuais entram uma única vez;
+ *   <li>posições de investimento importadas e itens manuais entram uma única vez;
  *   <li>valores ausentes e moeda não suportada viram lacunas explícitas; referências com mais de 30
  *       dias tornam a visão estimada.
  * </ul>
@@ -59,7 +57,6 @@ public class WealthService {
   private final AccountQueryService accountQueryService;
   private final InvoiceQueryService invoiceQueryService;
   private final InvoiceReportingService invoiceReportingService;
-  private final InvestmentPositionService investmentPositionService;
   private final InvestmentQueryService investmentQueryService;
   private final CryptoService cryptoService;
   private final AuditService auditService;
@@ -70,7 +67,6 @@ public class WealthService {
       AccountQueryService accountQueryService,
       InvoiceQueryService invoiceQueryService,
       InvoiceReportingService invoiceReportingService,
-      InvestmentPositionService investmentPositionService,
       InvestmentQueryService investmentQueryService,
       CryptoService cryptoService,
       AuditService auditService,
@@ -79,7 +75,6 @@ public class WealthService {
     this.accountQueryService = accountQueryService;
     this.invoiceQueryService = invoiceQueryService;
     this.invoiceReportingService = invoiceReportingService;
-    this.investmentPositionService = investmentPositionService;
     this.investmentQueryService = investmentQueryService;
     this.cryptoService = cryptoService;
     this.auditService = auditService;
@@ -115,29 +110,8 @@ public class WealthService {
       }
     }
 
-    List<InvestmentHoldingView> providerHoldings =
-        investmentQueryService.holdings(userId, "ACTIVE", null);
-    List<InvestmentPositionView> manualPositions = investmentPositionService.listAll(userId);
-    Set<String> providerCodes =
-        providerHoldings.stream()
-            .map(InvestmentHoldingView::code)
-            .map(WealthService::normalizeCode)
-            .filter(java.util.Objects::nonNull)
-            .collect(java.util.stream.Collectors.toSet());
-    Set<String> manualCodes =
-        manualPositions.stream()
-            .map(InvestmentPositionView::ticker)
-            .map(WealthService::normalizeCode)
-            .filter(java.util.Objects::nonNull)
-            .collect(java.util.stream.Collectors.toSet());
-
-    for (InvestmentHoldingView holding : providerHoldings) {
-      addProviderInvestment(
-          accumulator, holding, today, manualCodes.contains(normalizeCode(holding.code())));
-    }
-    for (InvestmentPositionView position : manualPositions) {
-      addInvestment(
-          accumulator, position, today, providerCodes.contains(normalizeCode(position.ticker())));
+    for (InvestmentHoldingView holding : investmentQueryService.holdings(userId, "ACTIVE", null)) {
+      addProviderInvestment(accumulator, holding, today);
     }
 
     for (ManualAssetLiability item :
@@ -222,7 +196,6 @@ public class WealthService {
               false,
               "Conta inativa, encerrada ou indisponível não compõe o patrimônio atual.",
               account.origin(),
-              false,
               null,
               false));
       return;
@@ -237,7 +210,6 @@ public class WealthService {
               false,
               "Moeda diferente de BRL não compõe o patrimônio consolidado.",
               account.origin(),
-              false,
               null,
               false));
       return;
@@ -252,7 +224,6 @@ public class WealthService {
               false,
               "Saldo não informado.",
               account.origin(),
-              false,
               null,
               false));
       return;
@@ -271,7 +242,6 @@ public class WealthService {
             true,
             null,
             account.origin(),
-            false,
             referenceDate,
             stale),
         false);
@@ -293,7 +263,6 @@ public class WealthService {
               false,
               "Sem fatura ou saldo devedor conhecido.",
               account.origin(),
-              false,
               today,
               false));
       return;
@@ -309,7 +278,6 @@ public class WealthService {
               false,
               "Cartão inativo sem saldo devedor.",
               account.origin(),
-              false,
               today,
               false));
       return;
@@ -323,14 +291,13 @@ public class WealthService {
             true,
             null,
             account.origin(),
-            false,
             today,
             false),
         true);
   }
 
   private void addProviderInvestment(
-      Accumulator accumulator, InvestmentHoldingView holding, LocalDate today, boolean duplicate) {
+      Accumulator accumulator, InvestmentHoldingView holding, LocalDate today) {
     String name =
         holding.name() == null || holding.name().isBlank()
             ? "Posição de investimento importada"
@@ -350,7 +317,6 @@ public class WealthService {
               false,
               "Valor atual não informado pelo provedor.",
               "PROVIDER",
-              duplicate,
               holding.referenceDate(),
               stale));
       return;
@@ -364,66 +330,7 @@ public class WealthService {
             true,
             null,
             "PROVIDER",
-            duplicate,
             holding.referenceDate(),
-            stale),
-        false);
-  }
-
-  private void addInvestment(
-      Accumulator accumulator,
-      InvestmentPositionView position,
-      LocalDate today,
-      boolean duplicate) {
-    String description =
-        position.ticker() == null || position.ticker().isBlank()
-            ? position.assetName()
-            : position.assetName() + " (" + position.ticker() + ")";
-    if (description == null || description.isBlank()) {
-      description = "Posição de investimento";
-    }
-    boolean stale = isStale(position.referenceDate(), today);
-    if (position.excludeFromWealth()) {
-      accumulator.exclude(
-          item(
-              WealthSourceType.INVESTMENT,
-              position.id(),
-              description,
-              position.total() == null ? "0.00" : format(new BigDecimal(position.total())),
-              false,
-              "Posição manual marcada para não contar no patrimônio.",
-              "MANUAL",
-              duplicate,
-              position.referenceDate(),
-              stale));
-      return;
-    }
-    if (position.total() == null) {
-      accumulator.gap(
-          item(
-              WealthSourceType.INVESTMENT,
-              position.id(),
-              description,
-              "0.00",
-              false,
-              "Valor da posição não disponível.",
-              "MANUAL",
-              duplicate,
-              position.referenceDate(),
-              stale));
-      return;
-    }
-    accumulator.include(
-        item(
-            WealthSourceType.INVESTMENT,
-            position.id(),
-            description,
-            format(new BigDecimal(position.total())),
-            true,
-            null,
-            "MANUAL",
-            duplicate,
-            position.referenceDate(),
             stale),
         false);
   }
@@ -550,7 +457,6 @@ public class WealthService {
         included,
         exclusionReason,
         originFor(sourceType),
-        false,
         referenceDate,
         stale);
   }
@@ -563,7 +469,6 @@ public class WealthService {
       boolean included,
       String exclusionReason,
       String origin,
-      boolean duplicate,
       LocalDate referenceDate,
       boolean stale) {
     return new WealthItemView(
@@ -574,23 +479,15 @@ public class WealthService {
         included,
         exclusionReason,
         origin,
-        duplicate,
         referenceDate,
         stale);
   }
 
   private static String originFor(WealthSourceType sourceType) {
     return switch (sourceType) {
-      case MANUAL_ASSET, MANUAL_LIABILITY, INVESTMENT -> "MANUAL";
+      case MANUAL_ASSET, MANUAL_LIABILITY -> "MANUAL";
       default -> "PROVIDER";
     };
-  }
-
-  private static String normalizeCode(String value) {
-    if (value == null || value.isBlank()) {
-      return null;
-    }
-    return value.trim().toUpperCase(java.util.Locale.ROOT);
   }
 
   private boolean isStale(LocalDate referenceDate, LocalDate today) {

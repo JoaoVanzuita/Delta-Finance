@@ -27,8 +27,8 @@ import org.springframework.stereotype.Service;
 /**
  * Proventos manuais de investimento.
  *
- * <p>O provento é sempre complementar ao provedor e precisa apontar para uma posição importada ou
- * manual do próprio usuário. Valores e descrições são cifrados; a origem permanece {@code MANUAL}.
+ * <p>O provento é sempre complementar ao provedor e precisa apontar para uma posição importada do
+ * próprio usuário. Valores e descrições são cifrados; a origem permanece {@code MANUAL}.
  */
 @Service
 public class InvestmentIncomeService {
@@ -39,7 +39,6 @@ public class InvestmentIncomeService {
 
   private final InvestmentIncomeRepository incomeRepository;
   private final ProviderInvestmentRepository investmentRepository;
-  private final InvestmentPositionService positionService;
   private final CryptoService cryptoService;
   private final AuditService auditService;
   private final Clock clock;
@@ -47,13 +46,11 @@ public class InvestmentIncomeService {
   public InvestmentIncomeService(
       InvestmentIncomeRepository incomeRepository,
       ProviderInvestmentRepository investmentRepository,
-      InvestmentPositionService positionService,
       CryptoService cryptoService,
       AuditService auditService,
       Clock clock) {
     this.incomeRepository = incomeRepository;
     this.investmentRepository = investmentRepository;
-    this.positionService = positionService;
     this.cryptoService = cryptoService;
     this.auditService = auditService;
     this.clock = clock;
@@ -91,16 +88,16 @@ public class InvestmentIncomeService {
   }
 
   public InvestmentIncomeEntryView create(UUID userId, InvestmentIncomeRequest request) {
-    Target target = validateTarget(userId, request);
+    ProviderInvestment investment = validateTarget(userId, request);
     InvestmentIncome entry = new InvestmentIncome(userId);
-    apply(userId, entry, target, request);
+    apply(userId, entry, investment.getId(), request);
     incomeRepository.save(entry);
     auditService.record(
         userId,
         AuditEventType.INVESTMENT_INCOME_CREATED,
         TABLE,
         entry.getId(),
-        Map.of("targetType", target.type(), "incomeType", entry.getIncomeType()));
+        Map.of("incomeType", entry.getIncomeType()));
     return toView(userId, entry);
   }
 
@@ -108,15 +105,15 @@ public class InvestmentIncomeService {
       UUID userId, UUID incomeId, InvestmentIncomeRequest request) {
     InvestmentIncome entry =
         incomeRepository.findByIdAndUserId(incomeId, userId).orElseThrow(NotFoundException::new);
-    Target target = validateTarget(userId, request);
-    apply(userId, entry, target, request);
+    ProviderInvestment investment = validateTarget(userId, request);
+    apply(userId, entry, investment.getId(), request);
     incomeRepository.save(entry);
     auditService.record(
         userId,
         AuditEventType.INVESTMENT_INCOME_UPDATED,
         TABLE,
         entry.getId(),
-        Map.of("targetType", target.type(), "incomeType", entry.getIncomeType()));
+        Map.of("incomeType", entry.getIncomeType()));
     return toView(userId, entry);
   }
 
@@ -128,7 +125,10 @@ public class InvestmentIncomeService {
   }
 
   private void apply(
-      UUID userId, InvestmentIncome entry, Target target, InvestmentIncomeRequest request) {
+      UUID userId,
+      InvestmentIncome entry,
+      UUID providerInvestmentId,
+      InvestmentIncomeRequest request) {
     String type = parseType(request.incomeType());
     LocalDate date = request.incomeDate();
     if (date == null) {
@@ -140,8 +140,7 @@ public class InvestmentIncomeService {
     BigDecimal amount = parseAmount(request.amount());
     String description = optionalText(request.description(), "description", 500);
     entry.apply(
-        target.providerInvestmentId(),
-        target.investmentPositionId(),
+        providerInvestmentId,
         type,
         date,
         cryptoService.encrypt(
@@ -152,50 +151,27 @@ public class InvestmentIncomeService {
                 description, new CryptoContext(userId, TABLE, "description", entry.getId())));
   }
 
-  private Target validateTarget(UUID userId, InvestmentIncomeRequest request) {
-    boolean provider = request.providerInvestmentId() != null;
-    boolean manual = request.investmentPositionId() != null;
-    if (provider == manual) {
+  private ProviderInvestment validateTarget(UUID userId, InvestmentIncomeRequest request) {
+    if (request.providerInvestmentId() == null) {
       throw new ValidationException(
-          "providerInvestmentId",
-          "Informe exatamente uma posição importada ou manual para o provento.");
+          "providerInvestmentId", "Informe a posição importada do provento.");
     }
-    if (provider) {
-      ProviderInvestment investment =
-          investmentRepository
-              .findByIdAndUserId(request.providerInvestmentId(), userId)
-              .orElseThrow(NotFoundException::new);
-      return new Target("PROVIDER", investment.getId(), null);
-    }
-    InvestmentPositionView position = positionService.get(userId, request.investmentPositionId());
-    return new Target("MANUAL", null, position.id());
+    return investmentRepository
+        .findByIdAndUserId(request.providerInvestmentId(), userId)
+        .orElseThrow(NotFoundException::new);
   }
 
   private InvestmentIncomeEntryView toView(UUID userId, InvestmentIncome entry) {
-    String targetType;
-    UUID targetId;
-    String targetName;
-    String targetCode;
-    if (entry.getProviderInvestmentId() != null) {
-      targetType = "PROVIDER";
-      targetId = entry.getProviderInvestmentId();
-      ProviderInvestment investment =
-          investmentRepository.findByIdAndUserId(targetId, userId).orElse(null);
-      targetName =
-          investment == null
-              ? "Posição importada"
-              : decrypt(userId, investment, "name", "Posição importada");
-      targetCode = investment == null ? null : decrypt(userId, investment, "code", null);
-    } else {
-      targetType = "MANUAL";
-      targetId = entry.getInvestmentPositionId();
-      InvestmentPositionView position = positionService.get(userId, targetId);
-      targetName = position.assetName();
-      targetCode = position.ticker();
-    }
+    UUID targetId = entry.getProviderInvestmentId();
+    ProviderInvestment investment =
+        investmentRepository.findByIdAndUserId(targetId, userId).orElse(null);
+    String targetName =
+        investment == null
+            ? "Posição importada"
+            : decrypt(userId, investment, "name", "Posição importada");
+    String targetCode = investment == null ? null : decrypt(userId, investment, "code", null);
     return new InvestmentIncomeEntryView(
         entry.getId(),
-        targetType,
         targetId,
         targetName,
         targetCode,
@@ -284,6 +260,4 @@ public class InvestmentIncomeService {
       return null;
     }
   }
-
-  private record Target(String type, UUID providerInvestmentId, UUID investmentPositionId) {}
 }

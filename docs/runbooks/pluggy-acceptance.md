@@ -80,8 +80,8 @@ teste **não** contam como aceitação real.
       Phase 11A.**
 - [ ] Falha de investimento não interrompe contas, cartões e transações.
       **Pendente da Phase 11A.**
-- [x] Nenhuma tela anuncia patrimônio ou metas como disponível; posições manuais
-      são identificadas como registro do usuário, sem cotação ou recomendação.
+- [x] Nenhuma tela anuncia patrimônio ou metas como disponível; investimentos
+      exibem apenas posições importadas, sem cotação ou recomendação.
 - [x] Nenhum módulo oferece recomendação de compra, venda ou alocação.
 
 ## 5. Registro

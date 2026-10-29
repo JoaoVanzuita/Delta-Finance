@@ -33,7 +33,6 @@ class KeyRotationIT extends PostgresTestBase {
   private TestUser user;
   private UUID categoryId;
   private UUID accountId;
-  private UUID investmentId;
   private UUID manualItemId;
   private UUID goalId;
   private UUID allocationId;
@@ -79,7 +78,6 @@ class KeyRotationIT extends PostgresTestBase {
             new CryptoContext(user.id(), "financial_account", "alias", accountId)),
         now,
         now);
-    investmentId = UUID.randomUUID();
     manualItemId = UUID.randomUUID();
     goalId = UUID.randomUUID();
     allocationId = UUID.randomUUID();
@@ -95,22 +93,6 @@ class KeyRotationIT extends PostgresTestBase {
   }
 
   private void insertPostMvpRows(Timestamp now) {
-    jdbcTemplate.update(
-        """
-        insert into investment_position
-          (id, user_id, broker, asset_name_enc, ticker_enc, quantity_enc, reference_price_enc,
-           reference_date, notes_enc, origin, created_at, updated_at, version)
-        values (?, ?, 'XP', ?, ?, ?, ?, '2026-10-01', ?, 'MANUAL', ?, ?, 0)
-        """,
-        investmentId,
-        user.id(),
-        encrypt(investmentId, "investment_position", "asset_name", "Posição rotacionada"),
-        encrypt(investmentId, "investment_position", "ticker", "TESOURO"),
-        encrypt(investmentId, "investment_position", "quantity", "1"),
-        encrypt(investmentId, "investment_position", "reference_price", "500.00"),
-        encrypt(investmentId, "investment_position", "notes", "Nota"),
-        now,
-        now);
     jdbcTemplate.update(
         """
         insert into manual_asset_liability
@@ -348,14 +330,6 @@ class KeyRotationIT extends PostgresTestBase {
                 accountBytes,
                 new CryptoContext(user.id(), "financial_account", "alias", accountId)))
         .isEqualTo("Carteira rotacionada");
-    assertRotated(
-        investmentId,
-        "investment_position",
-        "asset_name",
-        "ticker",
-        "quantity",
-        "reference_price",
-        "notes");
     assertRotated(
         manualItemId, "manual_asset_liability", "description", "reference_value", "notes");
     assertRotated(goalId, "financial_goal", "name", "description", "notes", "target_amount");

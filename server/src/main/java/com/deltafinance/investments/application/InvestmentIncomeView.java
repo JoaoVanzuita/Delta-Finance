@@ -17,7 +17,6 @@ public record InvestmentIncomeView(
 
   public record Item(
       UUID id,
-      String targetType,
       UUID investmentId,
       String investmentName,
       String code,

@@ -49,7 +49,6 @@ class InvestmentIncomeIT extends PostgresTestBase {
 
   private AuthTestClient alice;
   private String holdingId;
-  private String manualPositionId;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -89,40 +88,20 @@ class InvestmentIncomeIT extends PostgresTestBase {
                 .getResponse()
                 .getContentAsString());
     holdingId = holdings.path("items").get(0).path("id").asString();
-
-    JsonNode created =
-        json(
-            alice
-                .post(
-                    "/api/v1/investments/positions",
-                    Map.of(
-                        "broker", "XP",
-                        "assetName", "Posição manual",
-                        "ticker", "MANU11",
-                        "quantity", "1",
-                        "referencePrice", "100.00",
-                        "referenceDate", LocalDate.now().toString()))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString());
-    manualPositionId = created.path("id").asString();
   }
 
   @Test
   void criaProventosManuaisECombinaComProvedorNoResumo() throws Exception {
-    String providerIncome =
-        createIncome("PROVIDER", holdingId, "DIVIDEND", "7.50", "Dividendo manual");
-    String manualIncome =
-        createIncome("MANUAL", manualPositionId, "RENT", "5.00", "Aluguel manual");
+    String providerIncome = createIncome(holdingId, "DIVIDEND", "7.50", "Dividendo manual");
 
     JsonNode income = income();
-    assertThat(income.path("total").asString()).isEqualTo("25.00");
+    assertThat(income.path("total").asString()).isEqualTo("20.00");
     assertThat(income.path("source").asString()).isEqualTo("MIXED");
-    assertThat(income.path("items")).hasSize(3);
+    assertThat(income.path("items")).hasSize(2);
     assertThat(manualItem(income, providerIncome).path("editable").asBoolean()).isTrue();
     assertThat(manualItem(income, providerIncome).path("source").asString()).isEqualTo("MANUAL");
-    assertThat(manualItem(income, manualIncome).path("targetType").asString()).isEqualTo("MANUAL");
+    assertThat(manualItem(income, providerIncome).path("investmentId").asString())
+        .isEqualTo(holdingId);
 
     JsonNode overview =
         json(
@@ -132,7 +111,7 @@ class InvestmentIncomeIT extends PostgresTestBase {
                 .andReturn()
                 .getResponse()
                 .getContentAsString());
-    assertThat(overview.path("incomeLast12Months").asString()).isEqualTo("25.00");
+    assertThat(overview.path("incomeLast12Months").asString()).isEqualTo("20.00");
     assertThat(overview.path("incomeSource").asString()).isEqualTo("MIXED");
     assertThat(overview.path("estimatedProfit").asString()).isEqualTo("220.00");
     assertThat(overview.path("estimatedProfitCoverageCount").asInt()).isEqualTo(1);
@@ -191,7 +170,7 @@ class InvestmentIncomeIT extends PostgresTestBase {
 
   @Test
   void editaEExcluiProventoManual() throws Exception {
-    String id = createIncome("PROVIDER", holdingId, "DIVIDEND", "7.50", "Dividendo");
+    String id = createIncome(holdingId, "DIVIDEND", "7.50", "Dividendo");
     alice
         .patch(
             "/api/v1/investments/income/" + id,
@@ -217,10 +196,6 @@ class InvestmentIncomeIT extends PostgresTestBase {
         .post(
             "/api/v1/investments/income",
             Map.of(
-                "providerInvestmentId",
-                holdingId,
-                "investmentPositionId",
-                manualPositionId,
                 "incomeType",
                 "DIVIDEND",
                 "incomeDate",
@@ -255,7 +230,7 @@ class InvestmentIncomeIT extends PostgresTestBase {
                 "0"))
         .andExpect(status().isUnprocessableEntity());
 
-    String id = createIncome("PROVIDER", holdingId, "DIVIDEND", "1.00", null);
+    String id = createIncome(holdingId, "DIVIDEND", "1.00", null);
     AuthTestClient bob = new AuthTestClient(mockMvc, jsonMapper).csrf();
     bob.register(BOB, PASSWORD).login(BOB, PASSWORD);
     bob.delete("/api/v1/investments/income/" + id).andExpect(status().isNotFound());
@@ -265,15 +240,10 @@ class InvestmentIncomeIT extends PostgresTestBase {
         .andExpect(status().isNotFound());
   }
 
-  private String createIncome(
-      String targetType, String targetId, String type, String amount, String description)
+  private String createIncome(String targetId, String type, String amount, String description)
       throws Exception {
     Map<String, Object> body = new LinkedHashMap<>();
-    if ("PROVIDER".equals(targetType)) {
-      body.put("providerInvestmentId", targetId);
-    } else {
-      body.put("investmentPositionId", targetId);
-    }
+    body.put("providerInvestmentId", targetId);
     body.put("incomeType", type);
     body.put("incomeDate", LocalDate.now().minusDays(1).toString());
     body.put("amount", amount);

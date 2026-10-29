@@ -111,9 +111,9 @@ function stubApi(initialGoals: GoalFixture[]) {
         ],
       })
     }
-    if (url.includes('/investments/positions')) {
+    if (url.includes('/investments/holdings')) {
       return jsonResponse({
-        items: [{ id: 'pos-1', assetName: 'Fundo imobiliário', ticker: 'HGLG11' }],
+        items: [{ id: 'holding-1', name: 'Fundo imobiliário', code: 'HGLG11' }],
       })
     }
     if (url.endsWith('/wealth/manual-items')) {

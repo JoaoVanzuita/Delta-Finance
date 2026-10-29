@@ -12,6 +12,5 @@ public record WealthItemView(
     boolean included,
     String exclusionReason,
     String origin,
-    boolean duplicate,
     LocalDate referenceDate,
     boolean stale) {}

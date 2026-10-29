@@ -415,8 +415,8 @@ segurança, performance e acessibilidade; fases secundárias separadas.
 
 ## Phase 11: User Story 8 - Acompanhar investimentos (base manual) (Priority: P3 - fase secundária)
 
-**Goal**: posições manuais de ações/FIIs, base histórica do módulo. A importação
-automática foi adicionada na Phase 11A após validação real.
+**Goal**: base histórica do módulo. As posições manuais foram removidas em
+2026-10-28; o módulo passou a usar apenas a importação automática da Phase 11A.
 
 **Independent Test**: cadastrar, editar e excluir posições, conferir totais e
 data de referência e verificar que nenhuma recomendação é exibida.
@@ -473,6 +473,7 @@ investimentos sem afetar contas/transações.
 - [X] T212 [US8] Atualizar exportação, rotação de chaves, exclusão de conta, limpeza de testes e documentação de privacidade para as novas tabelas/campos.
 - [X] T213 [US8] Adicionar E2E e acessibilidade de investimentos importados em `client/e2e/investments.spec.ts` e `client/e2e/a11y.spec.ts`.
 - [X] T214 [US8] Criar migração `V007__investment_income.sql` e implementar provento manual, custo informado e classificação informada na fase de proventos.
+- [X] T215 [US8] Remover a seção de cobertura da tela de investimentos e eliminar o cadastro, API, patrimônio e alocação de metas baseados em posições manuais; manter apenas posições importadas. Migração `V009__remove_manual_investment_positions.sql`.
 
 **Checkpoint**: importação de investimentos funcional, isolada por usuário e
 conexão, sem recomendação e sem bloquear o núcleo bancário.

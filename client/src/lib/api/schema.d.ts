@@ -808,45 +808,6 @@ export interface paths {
         patch: operations["patchInvestmentsHoldingsIdAssetClass"];
         trace?: never;
     };
-    "/investments/positions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Lista posições manuais de investimento */
-        get: operations["getInvestmentsPositions"];
-        put?: never;
-        /** Cria posição manual */
-        post: operations["postInvestmentsPositions"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/investments/positions/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["PathId"];
-            };
-            cookie?: never;
-        };
-        /** Consulta posição manual */
-        get: operations["getInvestmentsPositionsId"];
-        put?: never;
-        post?: never;
-        /** Exclui posição manual */
-        delete: operations["deleteInvestmentsPositionsId"];
-        options?: never;
-        head?: never;
-        /** Edita posição manual */
-        patch: operations["patchInvestmentsPositionsId"];
-        trace?: never;
-    };
     "/wealth/overview": {
         parameters: {
             query?: never;
@@ -1602,14 +1563,9 @@ export interface components {
         InvestmentIncomeRequest: {
             /**
              * Format: uuid
-             * @description Posição importada; informe exatamente um destino.
+             * @description Posição importada que recebeu o provento.
              */
-            providerInvestmentId?: string;
-            /**
-             * Format: uuid
-             * @description Posição manual; informe exatamente um destino.
-             */
-            investmentPositionId?: string;
+            providerInvestmentId: string;
             /** @enum {string} */
             incomeType: "DIVIDEND" | "INTEREST" | "JCP" | "RENT" | "COUPON" | "OTHER";
             /**
@@ -1624,9 +1580,10 @@ export interface components {
         InvestmentIncomeEntry: {
             /** Format: uuid */
             id: string;
-            /** @enum {string} */
-            targetType: "PROVIDER" | "MANUAL";
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Posição importada associada.
+             */
             targetId: string;
             targetName?: string | null;
             targetCode?: string | null;
@@ -1657,13 +1614,11 @@ export interface components {
             referenceDate: string;
             /** @description Soma do balance das posições importadas ativas em BRL. */
             providerValue: string;
-            /** @description Soma das posições manuais; não é cotação de mercado. */
-            manualValue: string;
+            /** @description Igual ao valor importado; não há posições manuais. */
             totalValue: string;
             activeCount: number;
             closedCount: number;
             unavailableCount: number;
-            manualCount: number;
             incomeLast12Months: string;
             /** @enum {string} */
             incomeSource: "PROVIDER" | "MANUAL" | "MIXED" | "UNAVAILABLE";
@@ -1679,7 +1634,6 @@ export interface components {
             stale: boolean;
             allocation: components["schemas"]["InvestmentAllocation"][];
             coverage: components["schemas"]["InvestmentSource"][];
-            duplicates: components["schemas"]["InvestmentDuplicate"][];
         };
         InvestmentAllocation: {
             /** @enum {string} */
@@ -1705,13 +1659,6 @@ export interface components {
         };
         InvestmentSourceList: {
             items: components["schemas"]["InvestmentSource"][];
-        };
-        InvestmentDuplicate: {
-            /** Format: uuid */
-            manualPositionId: string;
-            code: string;
-            /** Format: uuid */
-            providerInvestmentId: string;
         };
         InvestmentHolding: {
             /** Format: uuid */
@@ -1800,13 +1747,11 @@ export interface components {
              * @description Identificador do provento manual; nulo para INTEREST do provedor.
              */
             id?: string | null;
-            /** @enum {string} */
-            targetType: "PROVIDER" | "MANUAL";
             /** Format: date */
             date: string;
             /**
              * Format: uuid
-             * @description Posição importada ou manual associada.
+             * @description Posição importada associada.
              */
             investmentId: string;
             investmentName?: string | null;
@@ -1819,48 +1764,6 @@ export interface components {
             /** @enum {string} */
             source: "PROVIDER" | "MANUAL";
             editable: boolean;
-        };
-        InvestmentPosition: {
-            /** Format: uuid */
-            id: string;
-            /** @enum {string} */
-            broker: "XP" | "SANTANDER" | "OTHER";
-            assetName: string;
-            ticker?: string;
-            quantity: string;
-            /** @description Preço unitário de referência; o total é quantity × referencePrice. */
-            referencePrice: string;
-            /** @description quantity × referencePrice, arredondado para 2 casas decimais. */
-            total: string;
-            /** Format: date */
-            referenceDate: string;
-            notes?: string;
-            /** @enum {string} */
-            origin: "MANUAL";
-            /** @description Quando verdadeiro, a posição permanece visível mas não compõe o patrimônio. */
-            excludeFromWealth: boolean;
-        };
-        InvestmentPositionRequest: {
-            /** @enum {string} */
-            broker: "XP" | "SANTANDER" | "OTHER";
-            assetName: string;
-            ticker?: string;
-            /** @description Quantidade positiva, com até 8 casas decimais. */
-            quantity: string;
-            /** @description Preço unitário de referência; o total é quantity × referencePrice. */
-            referencePrice?: string;
-            /** @description Valor total informado pelo usuário; o preço unitário é derivado por total ÷ quantity, arredondado para 8 casas decimais. */
-            totalValue?: string;
-            /** Format: date */
-            referenceDate: string;
-            notes?: string;
-            /** @description Quando verdadeiro, a posição permanece visível mas não compõe o patrimônio. */
-            excludeFromWealth?: boolean;
-        } & (unknown | unknown);
-        InvestmentPositionPage: {
-            items: components["schemas"]["InvestmentPosition"][];
-            nextCursor?: string;
-            hasMore: boolean;
         };
         WealthOverview: {
             /** Format: date */
@@ -1893,8 +1796,6 @@ export interface components {
              * @enum {string}
              */
             origin: "PROVIDER" | "MANUAL" | "IMPORTED";
-            /** @description Possível duplicidade entre posição manual e importada com o mesmo código. */
-            duplicate: boolean;
             /** Format: date */
             referenceDate?: string;
             /** @description Indica referência com mais de 30 dias em relação à data da visão. */
@@ -3754,163 +3655,6 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    getInvestmentsPositions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Posições. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InvestmentPositionPage"];
-                };
-            };
-            /** @description Erro do cliente. */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    postInvestmentsPositions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InvestmentPositionRequest"];
-            };
-        };
-        responses: {
-            /** @description Posição criada. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InvestmentPosition"];
-                };
-            };
-            /** @description Erro do cliente. */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    getInvestmentsPositionsId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["PathId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Posição. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InvestmentPosition"];
-                };
-            };
-            /** @description Erro do cliente. */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    deleteInvestmentsPositionsId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["PathId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Posição excluída. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Erro do cliente. */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    patchInvestmentsPositionsId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["PathId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InvestmentPositionRequest"];
-            };
-        };
-        responses: {
-            /** @description Posição atualizada. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InvestmentPosition"];
-                };
-            };
-            /** @description Erro do cliente. */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
         };
     };
     getWealthOverview: {

@@ -238,64 +238,6 @@ public class ExportService {
               return row;
             }),
         new Dataset(
-            "investment_positions",
-            List.of(
-                "id",
-                "broker",
-                "assetName",
-                "ticker",
-                "quantity",
-                "referencePrice",
-                "referenceDate",
-                "notes",
-                "origin",
-                "excludeFromWealth",
-                "createdAt",
-                "updatedAt"),
-            "select id, user_id, broker, asset_name_enc, ticker_enc, quantity_enc,"
-                + " reference_price_enc, reference_date, notes_enc, origin, exclude_from_wealth,"
-                + " created_at, updated_at from investment_position where user_id = ?"
-                + " order by reference_date desc, id",
-            rs -> {
-              UUID id = uuid(rs, "id");
-              UUID userId = rs.getObject("user_id", UUID.class);
-              Map<String, Object> row = new LinkedHashMap<>();
-              row.put("id", id);
-              row.put("broker", rs.getString("broker"));
-              row.put(
-                  "assetName",
-                  decrypt(
-                      userId,
-                      "investment_position",
-                      "asset_name",
-                      id,
-                      rs.getBytes("asset_name_enc")));
-              row.put(
-                  "ticker",
-                  decrypt(userId, "investment_position", "ticker", id, rs.getBytes("ticker_enc")));
-              row.put(
-                  "quantity",
-                  decrypt(
-                      userId, "investment_position", "quantity", id, rs.getBytes("quantity_enc")));
-              row.put(
-                  "referencePrice",
-                  decrypt(
-                      userId,
-                      "investment_position",
-                      "reference_price",
-                      id,
-                      rs.getBytes("reference_price_enc")));
-              row.put("referenceDate", date(rs, "reference_date"));
-              row.put(
-                  "notes",
-                  decrypt(userId, "investment_position", "notes", id, rs.getBytes("notes_enc")));
-              row.put("origin", rs.getString("origin"));
-              row.put("excludeFromWealth", rs.getBoolean("exclude_from_wealth"));
-              row.put("createdAt", instant(rs, "created_at"));
-              row.put("updatedAt", instant(rs, "updated_at"));
-              return row;
-            }),
-        new Dataset(
             "manual_asset_liabilities",
             List.of(
                 "id",
@@ -1169,7 +1111,6 @@ public class ExportService {
             List.of(
                 "id",
                 "providerInvestmentId",
-                "investmentPositionId",
                 "incomeType",
                 "incomeDate",
                 "amount",
@@ -1177,7 +1118,7 @@ public class ExportService {
                 "source",
                 "createdAt",
                 "updatedAt"),
-            "select id, user_id, provider_investment_id, investment_position_id, income_type,"
+            "select id, user_id, provider_investment_id, income_type,"
                 + " income_date, amount_enc, description_enc, source, created_at, updated_at"
                 + " from investment_income where user_id = ? order by income_date desc, id",
             rs -> {
@@ -1186,7 +1127,6 @@ public class ExportService {
               Map<String, Object> row = new LinkedHashMap<>();
               row.put("id", id);
               row.put("providerInvestmentId", uuid(rs, "provider_investment_id"));
-              row.put("investmentPositionId", uuid(rs, "investment_position_id"));
               row.put("incomeType", rs.getString("income_type"));
               row.put("incomeDate", date(rs, "income_date"));
               row.put(

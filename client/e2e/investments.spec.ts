@@ -153,12 +153,10 @@ const HOLDINGS = [
 const OVERVIEW: Record<string, unknown> = {
   referenceDate: TODAY,
   providerValue: '1500.00',
-  manualValue: '125.00',
-  totalValue: '1625.00',
+  totalValue: '1500.00',
   activeCount: 2,
   closedCount: 1,
   unavailableCount: 0,
-  manualCount: 1,
   incomeLast12Months: '12.50',
   incomeSource: 'PROVIDER',
   profitReported: '50.00',
@@ -192,7 +190,6 @@ const OVERVIEW: Record<string, unknown> = {
       errorCode: null,
     },
   ],
-  duplicates: [],
 }
 
 const INCOME = {
@@ -204,7 +201,6 @@ const INCOME = {
   items: [
     {
       id: null,
-      targetType: 'PROVIDER',
       date: '2026-10-26',
       investmentId: 'holding-1',
       investmentName: 'FII Alfa',
@@ -217,48 +213,6 @@ const INCOME = {
       editable: false,
     },
   ],
-}
-
-const CONNECTIONS = {
-  items: [
-    {
-      id: 'connection-1',
-      itemIdMasked: 'item-…-1',
-      institutionName: 'XP Investimentos',
-      status: 'SYNCED',
-      consentExpiresAt: '2027-10-27T12:00:00Z',
-      lastSyncAt: '2026-10-27T12:00:00Z',
-      accountCount: 2,
-    },
-    {
-      id: 'connection-2',
-      itemIdMasked: 'item-…-2',
-      institutionName: 'Banco Beta',
-      status: 'SYNCED',
-      consentExpiresAt: '2027-10-27T12:00:00Z',
-      lastSyncAt: '2026-10-27T12:00:00Z',
-      accountCount: 1,
-    },
-  ],
-  hasMore: false,
-}
-
-interface Position {
-  id: string
-  broker: 'XP' | 'SANTANDER' | 'OTHER'
-  assetName: string
-  ticker?: string
-  quantity: string
-  referencePrice: string
-  total: string
-  referenceDate: string
-  notes?: string
-  origin: 'MANUAL'
-  excludeFromWealth?: boolean
-}
-
-interface State {
-  positions: Position[]
 }
 
 interface Holding {
@@ -288,23 +242,7 @@ interface Overrides {
   readonly income?: typeof INCOME
 }
 
-async function installStub(page: Page, overrides: Overrides = {}): Promise<State> {
-  const state: State = {
-    positions: [
-      {
-        id: 'pos-1',
-        broker: 'XP',
-        assetName: 'Petrobras PN',
-        ticker: 'PETR4',
-        quantity: '10',
-        referencePrice: '12.5',
-        total: '125.00',
-        referenceDate: '2026-10-20',
-        origin: 'MANUAL',
-        excludeFromWealth: false,
-      },
-    ],
-  }
+async function installStub(page: Page, overrides: Overrides = {}): Promise<void> {
   const overview = overrides.overview ?? OVERVIEW
   let holdings: Holding[] = (overrides.holdings ?? HOLDINGS).map((holding) => ({
     ...holding,
@@ -353,22 +291,10 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
       const holding = holdings.find((item) => item.id === body.providerInvestmentId)
       if (!holding) return null
       return {
-        targetType: 'PROVIDER',
         targetId: holding.id,
         targetName: holding.name ?? 'Posição importada',
         targetCode: holding.code ?? null,
         type: holding.type,
-      }
-    }
-    if (body.investmentPositionId) {
-      const position = state.positions.find((item) => item.id === body.investmentPositionId)
-      if (!position) return null
-      return {
-        targetType: 'MANUAL',
-        targetId: position.id,
-        targetName: position.assetName,
-        targetCode: position.ticker ?? null,
-        type: 'MANUAL',
       }
     }
     return null
@@ -392,13 +318,6 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
         body: JSON.stringify(USER),
       })
     }
-    if (path === '/connections') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(CONNECTIONS),
-      })
-    }
     if (path === '/investments/overview') {
       return route.fulfill({
         status: 200,
@@ -419,7 +338,6 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
       if (!target) return route.fulfill({ status: 422, body: '{}' })
       const created = {
         id: `income-${manualIncomes.length + 1}`,
-        targetType: target.targetType,
         date: body.incomeDate ?? '2026-10-27',
         investmentId: target.targetId,
         investmentName: target.targetName,
@@ -446,7 +364,6 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
       if (!target || !existing) return route.fulfill({ status: 404, body: '{}' })
       const updated = {
         ...existing,
-        targetType: target.targetType,
         investmentId: target.targetId,
         investmentName: target.targetName,
         code: target.targetCode,
@@ -482,63 +399,6 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
         contentType: 'application/json',
         body: JSON.stringify({ items: filtered }),
       })
-    }
-    if (path === '/investments/positions' && method === 'GET') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: state.positions, hasMore: false }),
-      })
-    }
-    if (path === '/investments/positions' && method === 'POST') {
-      const body = request.postDataJSON() as Record<string, string>
-      const created: Position = {
-        id: `pos-${state.positions.length + 1}`,
-        broker: body.broker as Position['broker'],
-        assetName: body.assetName ?? '',
-        ticker: body.ticker,
-        quantity: body.quantity ?? '0',
-        referencePrice: body.referencePrice ?? '33.33333333',
-        total: body.totalValue ?? '100.00',
-        referenceDate: body.referenceDate ?? '2026-10-22',
-        notes: body.notes,
-        origin: 'MANUAL',
-        excludeFromWealth: Boolean(body.excludeFromWealth),
-      }
-      state.positions = [created, ...state.positions]
-      return route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify(created),
-      })
-    }
-    if (path.startsWith('/investments/positions/') && method === 'PATCH') {
-      const id = path.split('/').pop()
-      const body = request.postDataJSON() as Record<string, string>
-      const updated: Position = {
-        id: id ?? 'pos-1',
-        broker: body.broker as Position['broker'],
-        assetName: body.assetName ?? '',
-        ticker: body.ticker,
-        quantity: body.quantity ?? '0',
-        referencePrice: body.referencePrice ?? '0',
-        total: '200.00',
-        referenceDate: body.referenceDate ?? '2026-10-23',
-        notes: body.notes,
-        origin: 'MANUAL',
-        excludeFromWealth: Boolean(body.excludeFromWealth),
-      }
-      state.positions = state.positions.map((item) => (item.id === updated.id ? updated : item))
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(updated),
-      })
-    }
-    if (path.startsWith('/investments/positions/') && method === 'DELETE') {
-      const id = path.split('/').pop()
-      state.positions = state.positions.filter((item) => item.id !== id)
-      return route.fulfill({ status: 204 })
     }
     if (
       path.startsWith('/investments/holdings/') &&
@@ -589,22 +449,15 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<State
     }
     return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' })
   })
-
-  return state
 }
 
-test('mostra resumo, cobertura, filtros e proventos sem recomendação', async ({ page }) => {
+test('mostra resumo, filtros e proventos sem recomendação', async ({ page }) => {
   await installStub(page)
   await page.goto('/investments')
 
   await expect(page.getByRole('heading', { level: 1, name: 'Investimentos' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Cobertura das conexões' })).toBeVisible()
-  await expect(page.getByText('R$ 1.625,00').first()).toBeVisible()
-  const coverage = page.getByRole('region', { name: 'Cobertura das conexões' })
-  await expect(coverage.getByText('XP Investimentos', { exact: true })).toBeVisible()
-  await expect(coverage.getByText('Banco Beta', { exact: true })).toBeVisible()
-  await expect(coverage.getByText('Compartilha investimentos', { exact: true })).toBeVisible()
-  await expect(coverage.getByText('Não compartilha investimentos', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cobertura das conexões' })).toHaveCount(0)
+  await expect(page.getByText('R$ 1.500,00').first()).toBeVisible()
 
   const holdings = page.getByRole('region', { name: 'Posições importadas' })
   await expect(holdings.getByText('FII Alfa')).toBeVisible()
@@ -617,41 +470,6 @@ test('mostra resumo, cobertura, filtros e proventos sem recomendação', async (
   await expect(page.getByRole('button', { name: /comprar|vender|investir agora/i })).toHaveCount(0)
 })
 
-test('registra, edita e exclui posição manual no dashboard', async ({ page }) => {
-  const state = await installStub(page)
-  await page.goto('/investments')
-
-  await expect(page.getByRole('heading', { level: 1, name: 'Investimentos' })).toBeVisible()
-  const manual = page.getByRole('region', { name: 'Posições manuais' })
-  await expect(manual.getByText('Petrobras PN')).toBeVisible()
-  await expect(manual.getByText(/R\$\s*125,00/)).toBeVisible()
-
-  await manual.getByLabel('Corretora').selectOption('SANTANDER')
-  await manual.getByLabel('Ativo').fill('Fundo imobiliário')
-  await manual.getByLabel('Ticker').fill('HGLG11')
-  await manual.getByLabel('Quantidade').fill('3')
-  await manual.getByLabel('Valor total').check()
-  await manual.getByLabel('Valor total informado').fill('100.00')
-  await manual.getByLabel('Data de referência').fill('2026-10-22')
-  await manual.getByRole('button', { name: 'Adicionar posição' }).click()
-
-  await expect(manual.getByText('Fundo imobiliário')).toBeVisible()
-  await expect(manual.getByText('Posição manual adicionada.')).toBeVisible()
-  expect(state.positions).toHaveLength(2)
-
-  const newRow = manual.getByRole('listitem').filter({ hasText: 'Fundo imobiliário' })
-  await expect(newRow.getByText(/R\$\s*100,00/)).toBeVisible()
-  await newRow.getByRole('button', { name: 'Editar' }).click()
-  await newRow.getByLabel('Ativo').fill('Fundo imobiliário atualizado')
-  await newRow.getByRole('button', { name: 'Salvar posição' }).click()
-  await expect(manual.getByText('Fundo imobiliário atualizado')).toBeVisible()
-
-  const editedRow = manual.getByRole('listitem').filter({ hasText: 'Fundo imobiliário atualizado' })
-  await editedRow.getByRole('button', { name: 'Excluir' }).click()
-  await editedRow.getByRole('button', { name: 'Confirmar exclusão' }).click()
-  await expect(manual.getByText('Fundo imobiliário atualizado')).toHaveCount(0)
-})
-
 test('registra provento manual e custo informado', async ({ page }) => {
   await installStub(page)
   await page.goto('/investments')
@@ -659,7 +477,7 @@ test('registra provento manual e custo informado', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Investimentos' })).toBeVisible()
   const income = page.getByRole('region', { name: 'Proventos' })
   await page.locator('summary').filter({ hasText: 'Registrar provento manual' }).click()
-  await income.getByLabel('Posição').selectOption({ label: 'FII Alfa (AAAA11) · importado' })
+  await income.getByLabel('Posição').selectOption({ label: 'FII Alfa (AAAA11)' })
   await income.getByLabel('Valor (BRL)').fill('7.50')
   await income.getByLabel('Descrição (opcional)').fill('Dividendo manual')
   await income.getByRole('button', { name: 'Registrar provento' }).click()
@@ -675,16 +493,14 @@ test('registra provento manual e custo informado', async ({ page }) => {
   await expect(card.getByText('R$ 112,50')).toBeVisible()
 })
 
-test('explica ausência de cobertura e de proventos sem inventar dados', async ({ page }) => {
+test('explica ausência de proventos sem inventar dados', async ({ page }) => {
   await installStub(page, {
     overview: {
       ...OVERVIEW,
       providerValue: '0.00',
-      manualValue: '0.00',
       totalValue: '0.00',
       activeCount: 0,
       closedCount: 0,
-      manualCount: 0,
       incomeLast12Months: '0.00',
       incomeSource: 'UNAVAILABLE',
       profitReported: null,
@@ -701,18 +517,10 @@ test('explica ausência de cobertura e de proventos sem inventar dados', async (
       items: [],
     },
   })
-  await page.route('**/api/v1/investments/positions?**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ items: [], hasMore: false }),
-    })
-  })
-
   await page.goto('/investments')
 
-  await expect(page.getByText('Nenhuma conexão verificada ainda')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cobertura das conexões' })).toHaveCount(0)
   await expect(page.getByText(/nenhum provento informado pelo provedor/i)).toBeVisible()
-  await expect(page.getByText('Nenhuma posição manual')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Posições manuais' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /importar/i })).toHaveCount(0)
 })

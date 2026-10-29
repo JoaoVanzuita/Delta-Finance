@@ -1,12 +1,10 @@
 import { vi } from 'vitest'
 
 import type {
-  ConnectionPage,
   InvestmentHolding,
   InvestmentIncome,
   InvestmentIncomeItem,
   InvestmentOverview,
-  InvestmentPosition,
 } from '@/features/integration/api'
 
 export const USER = {
@@ -199,12 +197,10 @@ export const HOLDINGS: InvestmentHolding[] = [
 export const OVERVIEW: InvestmentOverview = {
   referenceDate: TODAY,
   providerValue: '1750.00',
-  manualValue: '125.00',
-  totalValue: '1875.00',
+  totalValue: '1750.00',
   activeCount: 3,
   closedCount: 1,
   unavailableCount: 0,
-  manualCount: 1,
   incomeLast12Months: '12.50',
   incomeSource: 'PROVIDER',
   profitReported: '50.00',
@@ -241,7 +237,6 @@ export const OVERVIEW: InvestmentOverview = {
       errorCode: null,
     },
   ],
-  duplicates: [],
 }
 
 export const INCOME: InvestmentIncome = {
@@ -253,7 +248,6 @@ export const INCOME: InvestmentIncome = {
   items: [
     {
       id: null,
-      targetType: 'PROVIDER',
       date: '2026-10-26',
       investmentId: 'holding-1',
       investmentName: 'FII Alfa',
@@ -268,51 +262,10 @@ export const INCOME: InvestmentIncome = {
   ],
 }
 
-export const POSITIONS: InvestmentPosition[] = [
-  {
-    id: 'pos-1',
-    broker: 'XP',
-    assetName: 'Petrobras PN',
-    ticker: 'PETR4',
-    quantity: '10',
-    referencePrice: '12.5',
-    total: '125.00',
-    referenceDate: '2026-10-20',
-    origin: 'MANUAL',
-    excludeFromWealth: false,
-  },
-]
-
-export const CONNECTIONS: ConnectionPage = {
-  items: [
-    {
-      id: 'connection-1',
-      itemIdMasked: 'item-…-1',
-      institutionName: 'XP Investimentos',
-      status: 'SYNCED',
-      consentExpiresAt: '2027-10-27T12:00:00Z',
-      lastSyncAt: '2026-10-27T12:00:00Z',
-      accountCount: 2,
-    },
-    {
-      id: 'connection-2',
-      itemIdMasked: 'item-…-2',
-      institutionName: 'Banco Beta',
-      status: 'SYNCED',
-      consentExpiresAt: '2027-10-27T12:00:00Z',
-      lastSyncAt: '2026-10-27T12:00:00Z',
-      accountCount: 1,
-    },
-  ],
-  hasMore: false,
-}
-
 interface StubOptions {
   readonly holdings?: InvestmentHolding[]
   readonly overview?: InvestmentOverview
   readonly income?: InvestmentIncome
-  readonly positions?: InvestmentPosition[]
-  readonly connections?: ConnectionPage
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -323,7 +276,6 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 export function stubInvestmentsApi(options: StubOptions = {}) {
-  let positions = [...(options.positions ?? POSITIONS)]
   let holdings = (options.holdings ?? HOLDINGS).map((holding) => ({ ...holding }))
   const overview = options.overview ?? OVERVIEW
   const baseItems = options.income?.items ?? INCOME.items
@@ -331,7 +283,6 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
   let manualIncomes: InvestmentIncomeItem[] = baseItems
     .filter((item) => item.editable)
     .map((item) => ({ ...item }))
-  const connections = options.connections ?? CONNECTIONS
 
   function incomeItems(): InvestmentIncomeItem[] {
     return [...providerItems, ...manualIncomes].sort((left, right) =>
@@ -374,35 +325,20 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
   }
 
   function targetFor(body: Record<string, string>): {
-    targetType: 'PROVIDER' | 'MANUAL'
     targetId: string
     targetName: string
     targetCode: string | null
     type: string | null
   } | null {
-    if (body.providerInvestmentId) {
-      const holding = holdings.find((item) => item.id === body.providerInvestmentId)
-      if (!holding) return null
-      return {
-        targetType: 'PROVIDER',
-        targetId: holding.id,
-        targetName: holding.name ?? 'Posição importada',
-        targetCode: holding.code ?? null,
-        type: holding.type,
-      }
+    if (!body.providerInvestmentId) return null
+    const holding = holdings.find((item) => item.id === body.providerInvestmentId)
+    if (!holding) return null
+    return {
+      targetId: holding.id,
+      targetName: holding.name ?? 'Posição importada',
+      targetCode: holding.code ?? null,
+      type: holding.type,
     }
-    if (body.investmentPositionId) {
-      const position = positions.find((item) => item.id === body.investmentPositionId)
-      if (!position) return null
-      return {
-        targetType: 'MANUAL',
-        targetId: position.id,
-        targetName: position.assetName,
-        targetCode: position.ticker ?? null,
-        type: 'MANUAL',
-      }
-    }
-    return null
   }
 
   const mock = vi.fn((input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -412,7 +348,6 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
 
     if (path === '/auth/me') return jsonResponse(USER)
     if (path === '/auth/csrf') return new Response(null, { status: 204 })
-    if (path === '/connections') return jsonResponse(connections)
     if (path === '/investments/overview') return jsonResponse(overview)
     if (path === '/investments/income' && method === 'GET') return jsonResponse(currentIncome())
     if (path === '/investments/holdings') {
@@ -434,58 +369,12 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
       const holding = holdings.find((item) => item.id === id)
       return holding ? jsonResponse(holding) : jsonResponse({}, 404)
     }
-    if (path === '/investments/positions' && method === 'GET') {
-      return jsonResponse({ items: positions, hasMore: false })
-    }
-    if (path === '/investments/positions' && method === 'POST') {
-      const body = JSON.parse(String(init.body)) as Record<string, string>
-      const created: InvestmentPosition = {
-        id: `pos-${positions.length + 1}`,
-        broker: body.broker as InvestmentPosition['broker'],
-        assetName: body.assetName ?? '',
-        ticker: body.ticker,
-        quantity: body.quantity ?? '0',
-        referencePrice: body.referencePrice ?? '33.33333333',
-        total: body.totalValue ?? '100.00',
-        referenceDate: body.referenceDate ?? '2026-10-22',
-        notes: body.notes,
-        origin: 'MANUAL',
-        excludeFromWealth: Boolean(body.excludeFromWealth),
-      }
-      positions = [created, ...positions]
-      return jsonResponse(created, 201)
-    }
-    if (path.startsWith('/investments/positions/') && method === 'PATCH') {
-      const id = path.split('/').pop() ?? ''
-      const body = JSON.parse(String(init.body)) as Record<string, string>
-      const updated: InvestmentPosition = {
-        id,
-        broker: body.broker as InvestmentPosition['broker'],
-        assetName: body.assetName ?? '',
-        ticker: body.ticker,
-        quantity: body.quantity ?? '0',
-        referencePrice: body.referencePrice ?? '0',
-        total: '200.00',
-        referenceDate: body.referenceDate ?? '2026-10-23',
-        notes: body.notes,
-        origin: 'MANUAL',
-        excludeFromWealth: Boolean(body.excludeFromWealth),
-      }
-      positions = positions.map((item) => (item.id === id ? updated : item))
-      return jsonResponse(updated)
-    }
-    if (path.startsWith('/investments/positions/') && method === 'DELETE') {
-      const id = path.split('/').pop() ?? ''
-      positions = positions.filter((item) => item.id !== id)
-      return new Response(null, { status: 204 })
-    }
     if (path === '/investments/income' && method === 'POST') {
       const body = JSON.parse(String(init.body)) as Record<string, string>
       const target = targetFor(body)
       if (!target) return jsonResponse({}, 422)
       const created: InvestmentIncomeItem = {
         id: `income-${manualIncomes.length + 1}`,
-        targetType: target.targetType,
         date: body.incomeDate ?? '2026-10-27',
         investmentId: target.targetId,
         investmentName: target.targetName,
@@ -509,7 +398,6 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
       if (!existing) return jsonResponse({}, 404)
       const updated: InvestmentIncomeItem = {
         ...existing,
-        targetType: target.targetType,
         investmentId: target.targetId,
         investmentName: target.targetName,
         code: target.targetCode,

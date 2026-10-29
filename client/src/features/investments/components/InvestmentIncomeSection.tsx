@@ -10,7 +10,6 @@ import {
   type InvestmentHolding,
   type InvestmentIncome,
   type InvestmentIncomeItem,
-  type InvestmentPosition,
 } from '@/features/integration/api'
 
 import { formatReferenceDate } from '../format'
@@ -32,7 +31,6 @@ function messageFrom(caught: unknown, fallback: string): string {
 interface InvestmentIncomeSectionProps {
   readonly income: InvestmentIncome
   readonly holdings: readonly InvestmentHolding[]
-  readonly positions: readonly InvestmentPosition[]
   readonly onChanged: () => void
 }
 
@@ -40,7 +38,6 @@ interface InvestmentIncomeSectionProps {
 export function InvestmentIncomeSection({
   income,
   holdings,
-  positions,
   onChanged,
 }: InvestmentIncomeSectionProps) {
   const [editing, setEditing] = useState<InvestmentIncomeItem | null>(null)
@@ -80,7 +77,6 @@ export function InvestmentIncomeSection({
       {editing ? (
         <InvestmentIncomeForm
           holdings={holdings}
-          positions={positions}
           initial={editing}
           onSaved={() => {
             setEditing(null)
@@ -94,7 +90,7 @@ export function InvestmentIncomeSection({
             Registrar provento manual
           </summary>
           <div className="border-t border-line p-3">
-            <InvestmentIncomeForm holdings={holdings} positions={positions} onSaved={onChanged} />
+            <InvestmentIncomeForm holdings={holdings} onSaved={onChanged} />
           </div>
         </details>
       )}
@@ -195,9 +191,6 @@ export function InvestmentIncomeSection({
                         {item.code ? (
                           <span className="ml-2 text-xs text-ink-muted">{item.code}</span>
                         ) : null}
-                      </span>
-                      <span className="text-xs text-ink-muted">
-                        {item.targetType === 'PROVIDER' ? 'Importado' : 'Manual'}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-ink">

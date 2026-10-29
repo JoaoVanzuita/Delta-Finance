@@ -11,9 +11,9 @@ import java.util.UUID;
 /**
  * Provento manual de investimento.
  *
- * <p>Aponta para uma posição importada ou manual, nunca para as duas. Proventos do provedor são
- * lidos de {@code provider_investment_transaction} com tipo {@code INTEREST}; esta entidade guarda
- * apenas o complemento informado pelo usuário.
+ * <p>Aponta para uma posição importada. Proventos do provedor são lidos de {@code
+ * provider_investment_transaction} com tipo {@code INTEREST}; esta entidade guarda apenas o
+ * complemento informado pelo usuário.
  */
 @Entity
 @Table(name = "investment_income")
@@ -22,11 +22,8 @@ public class InvestmentIncome extends BaseEntity {
   @Column(name = "user_id", nullable = false)
   private UUID userId;
 
-  @Column(name = "provider_investment_id")
+  @Column(name = "provider_investment_id", nullable = false)
   private UUID providerInvestmentId;
-
-  @Column(name = "investment_position_id")
-  private UUID investmentPositionId;
 
   @Column(name = "income_type", nullable = false, length = 16)
   private String incomeType;
@@ -54,16 +51,12 @@ public class InvestmentIncome extends BaseEntity {
 
   public void apply(
       UUID providerInvestmentId,
-      UUID investmentPositionId,
       String incomeType,
       LocalDate incomeDate,
       byte[] amountEnc,
       byte[] descriptionEnc) {
-    if ((providerInvestmentId == null) == (investmentPositionId == null)) {
-      throw new IllegalArgumentException("Exatamente um destino deve ser informado.");
-    }
-    this.providerInvestmentId = providerInvestmentId;
-    this.investmentPositionId = investmentPositionId;
+    this.providerInvestmentId =
+        Objects.requireNonNull(providerInvestmentId, "providerInvestmentId");
     this.incomeType = Objects.requireNonNull(incomeType, "incomeType");
     this.incomeDate = Objects.requireNonNull(incomeDate, "incomeDate");
     this.amountEnc = Objects.requireNonNull(amountEnc, "amountEnc");
@@ -77,10 +70,6 @@ public class InvestmentIncome extends BaseEntity {
 
   public UUID getProviderInvestmentId() {
     return providerInvestmentId;
-  }
-
-  public UUID getInvestmentPositionId() {
-    return investmentPositionId;
   }
 
   public String getIncomeType() {

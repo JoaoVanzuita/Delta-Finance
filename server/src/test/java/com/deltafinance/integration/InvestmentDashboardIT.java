@@ -94,22 +94,10 @@ class InvestmentDashboardIT extends PostgresTestBase {
                 .getResponse()
                 .getContentAsString());
     providerHoldingId = holdings.path("items").get(0).path("id").asString();
-
-    alice
-        .post(
-            "/api/v1/investments/positions",
-            Map.of(
-                "broker", "XP",
-                "assetName", "Posição manual AAAA",
-                "ticker", "AAAA11",
-                "quantity", "1",
-                "referencePrice", "100.00",
-                "referenceDate", LocalDate.now().toString()))
-        .andExpect(status().isCreated());
   }
 
   @Test
-  void resumePosicoesAlocacaoCoberturaEDuplicidade() throws Exception {
+  void resumePosicoesAlocacaoECobertura() throws Exception {
     JsonNode overview =
         json(
             alice
@@ -120,11 +108,9 @@ class InvestmentDashboardIT extends PostgresTestBase {
                 .getContentAsString());
 
     assertThat(overview.path("providerValue").asString()).isEqualTo("1500.00");
-    assertThat(overview.path("manualValue").asString()).isEqualTo("100.00");
-    assertThat(overview.path("totalValue").asString()).isEqualTo("1600.00");
+    assertThat(overview.path("totalValue").asString()).isEqualTo("1500.00");
     assertThat(overview.path("activeCount").asInt()).isEqualTo(2);
     assertThat(overview.path("closedCount").asInt()).isEqualTo(1);
-    assertThat(overview.path("manualCount").asInt()).isEqualTo(1);
     assertThat(overview.path("stale").asBoolean()).isFalse();
     assertThat(overview.path("profitReported").isNull()).isTrue();
     assertThat(overview.path("profitCoverageCount").asInt()).isZero();
@@ -140,10 +126,6 @@ class InvestmentDashboardIT extends PostgresTestBase {
     JsonNode coverage = overview.path("coverage");
     assertThat(coverage).hasSize(1);
     assertThat(coverage.get(0).path("scope").asString()).isEqualTo("AVAILABLE");
-
-    JsonNode duplicates = overview.path("duplicates");
-    assertThat(duplicates).hasSize(1);
-    assertThat(duplicates.get(0).path("code").asString()).isEqualTo("AAAA11");
   }
 
   @Test

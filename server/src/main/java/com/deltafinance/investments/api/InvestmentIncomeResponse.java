@@ -17,7 +17,6 @@ public record InvestmentIncomeResponse(
 
   public record ItemResponse(
       UUID id,
-      String targetType,
       LocalDate date,
       UUID investmentId,
       String investmentName,
@@ -43,7 +42,6 @@ public record InvestmentIncomeResponse(
                 item ->
                     new ItemResponse(
                         item.id(),
-                        item.targetType(),
                         item.date(),
                         item.investmentId(),
                         item.investmentName(),

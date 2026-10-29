@@ -195,8 +195,8 @@ tem acesso.
 
 ## Investimentos
 
-- Módulo da fase secundária (`/investments`). Importa posições de itens do
-  Meu Pluggy e mantém posições manuais complementares.
+- Módulo da fase secundária (`/investments`). Usa apenas posições importadas de
+  itens do Meu Pluggy; não há cadastro manual de posições.
 - **Estado atual**: a importação, o dashboard, os proventos manuais e o custo
   informado estão implementados (`V006` e `V007`). O sync persiste posições,
   movimentações e cobertura. A leitura usa `GET /api/v1/investments/overview`,
@@ -224,7 +224,7 @@ tem acesso.
   rentabilidade de histórico incompleto. `rate`/`rateType` são remuneração
   contratada, não desempenho.
 - O usuário pode registrar provento manual e custo informado para uma posição
-  importada ou manual. Esses dados aparecem como manuais/estimados, não
+  importada. Esses dados aparecem como manuais/estimados, não
   sobrescrevem o provedor e são auditados. O provento manual não é somado
   automaticamente às receitas do dashboard principal.
 - O resultado estimado de uma posição importada é
@@ -235,14 +235,12 @@ tem acesso.
 - A classificação manual do usuário sobrepõe `type/subtype` e a heurística por
   código; limpar a classificação volta à regra automática.
 - Proventos manuais usam `investment_income` e apontam para exatamente uma
-  posição; a origem é sempre `MANUAL`. Proventos do provedor continuam vindo de
+  posição importada; a origem é sempre `MANUAL`. Proventos do provedor continuam vindo de
   `provider_investment_transaction` com `type=INTEREST`.
 - Posições importadas ativas entram no patrimônio pelo `balance`; encerradas,
   indisponíveis e fora de BRL ficam de fora com motivo. A composição distingue
-  `origin=PROVIDER`/`IMPORTED`/`MANUAL`. Duplicidade entre posição manual e
-  importada é sinalizada, sem exclusão automática; a posição manual pode ser
-  marcada com `excludeFromWealth=true` para permanecer visível sem contar no
-  total.
+  `origin=PROVIDER`/`IMPORTED`/`MANUAL` (este último para ativos/passivos
+  manuais de patrimônio, não para investimentos).
 - Falha de investimento não interrompe contas, cartões e transações; os dados
   anteriores são preservados e a falha aparece como aviso não bloqueante.
 - Não há recomendação de compra, venda ou alocação, nem snapshots históricos de
@@ -250,16 +248,12 @@ tem acesso.
   2026-10-27; outras instituições dependem de validação por consentimento.
   Nessa validação, a conexão XP retornou 6 posições (3 ativas, 3 encerradas) e
   11 movimentações `BUY`, sem `INTEREST` ou rentabilidade informada.
-- Posições manuais continuam com total `quantidade × preço unitário`; quando
-  apenas o total é informado, o preço é `total ÷ quantidade`, com 8 casas
-  decimais. Elas entram na visão patrimonial e podem ser fonte de alocação de
-  metas.
 
 ## Patrimônio
 
 - Módulo pós-MVP (`/wealth`, `/api/v1/wealth/*`). A visão atual consolida contas,
-  cartões como passivos, posições de investimento importadas e manuais e
-  ativos/passivos manuais. Cada origem entra uma única vez; exclusões aparecem
+  cartões como passivos, posições de investimento importadas e ativos/passivos
+  manuais. Cada origem entra uma única vez; exclusões aparecem
   com o motivo explícito e não compõem o total.
 - Valores manuais e de referência são os informados pelo usuário, não cotação de
   mercado.
@@ -308,8 +302,8 @@ tem acesso.
   investimentos, patrimônio e metas, mais as tabelas de sessão do Spring e o
   histórico do Flyway. Webhooks, snapshots patrimoniais e dívida inicial não
   fazem parte da baseline; Bills estão em migração própria (`V003`) e os
-  investimentos importados em `V006`, proventos manuais em `V007` e a flag de
-  patrimônio da posição manual em `V008`.
+  investimentos importados em `V006`, proventos manuais em `V007` e a remoção
+  das posições manuais de investimento em `V009`.
 - Acesso administrativo local:
 
 ```bash

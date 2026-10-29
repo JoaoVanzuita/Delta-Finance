@@ -10,8 +10,8 @@ import com.deltafinance.goals.domain.GoalAllocation;
 import com.deltafinance.goals.domain.GoalAllocationRepository;
 import com.deltafinance.goals.domain.GoalProgressRule;
 import com.deltafinance.goals.domain.GoalStatus;
-import com.deltafinance.investments.application.InvestmentPositionService;
-import com.deltafinance.investments.application.InvestmentPositionView;
+import com.deltafinance.investments.application.InvestmentHoldingView;
+import com.deltafinance.investments.application.InvestmentQueryService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoException;
 import com.deltafinance.shared.crypto.CryptoService;
@@ -54,7 +54,7 @@ public class GoalProgressService {
   private final FinancialGoalRepository goalRepository;
   private final GoalAllocationRepository allocationRepository;
   private final AccountQueryService accountQueryService;
-  private final InvestmentPositionService investmentPositionService;
+  private final InvestmentQueryService investmentQueryService;
   private final WealthService wealthService;
   private final CryptoService cryptoService;
   private final Clock clock;
@@ -63,14 +63,14 @@ public class GoalProgressService {
       FinancialGoalRepository goalRepository,
       GoalAllocationRepository allocationRepository,
       AccountQueryService accountQueryService,
-      InvestmentPositionService investmentPositionService,
+      InvestmentQueryService investmentQueryService,
       WealthService wealthService,
       CryptoService cryptoService,
       Clock clock) {
     this.goalRepository = goalRepository;
     this.allocationRepository = allocationRepository;
     this.accountQueryService = accountQueryService;
-    this.investmentPositionService = investmentPositionService;
+    this.investmentQueryService = investmentQueryService;
     this.wealthService = wealthService;
     this.cryptoService = cryptoService;
     this.clock = clock;
@@ -322,11 +322,13 @@ public class GoalProgressService {
                   : account.id().toString();
         }
         case INVESTMENT -> {
-          InvestmentPositionView position =
-              investmentPositionService.get(userId, allocation.getSourceId());
-          yield position.ticker() == null || position.ticker().isBlank()
-              ? position.assetName()
-              : position.assetName() + " (" + position.ticker() + ")";
+          InvestmentHoldingView holding =
+              investmentQueryService.holding(userId, allocation.getSourceId());
+          String name =
+              holding.name() == null || holding.name().isBlank() ? "Investimento" : holding.name();
+          yield holding.code() == null || holding.code().isBlank()
+              ? name
+              : name + " (" + holding.code() + ")";
         }
         case MANUAL_ASSET ->
             wealthService.getManual(userId, allocation.getSourceId()).description();
@@ -352,11 +354,11 @@ public class GoalProgressService {
           yield parse(account.currentBalance());
         }
         case INVESTMENT -> {
-          InvestmentPositionView position = investmentPositionService.get(userId, key.sourceId());
-          if (position.total() == null) {
+          InvestmentHoldingView holding = investmentQueryService.holding(userId, key.sourceId());
+          if (holding.balance() == null || holding.balance().isBlank()) {
             throw new ValidationException("allocations", "Valor da fonte não disponível.");
           }
-          yield parse(position.total());
+          yield parse(holding.balance());
         }
         case MANUAL_ASSET -> {
           ManualItemView item = wealthService.getManual(userId, key.sourceId());

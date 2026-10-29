@@ -367,9 +367,9 @@ recomendação é exibida.
    é exibido, **Then** ela aparece como dividendo/provento; quando o provedor não
    envia `INTEREST`, o usuário pode registrar um provento manual identificado
    como tal.
-6. **Given** uma posição manual e uma importada com o mesmo código, **When** o
-   módulo é exibido, **Then** o sistema avisa sobre possível duplicidade e não
-   apaga nem mescla registros automaticamente.
+6. **Given** uma posição compartilhada pelo provedor, **When** o módulo é
+   exibido, **Then** ela é tratada como a única fonte de investimento e não há
+   cadastro manual concorrente.
 7. **Given** qualquer posição de investimento, **When** o usuário consulta o
    módulo, **Then** não recebe recomendação de compra, venda ou alocação.
 8. **Given** que o módulo secundário não está concluído, **When** o MVP bancário
@@ -955,15 +955,13 @@ ausência de movimentação financeira.
 
 #### Investimentos - fase secundária
 
-- **FR-116**: O sistema DEVE permitir cadastro manual de ativo, ticker ou
-  código, quantidade, preço unitário de referência, data de referência,
-  corretora e observações.
-- **FR-117**: O total de uma posição manual DEVE ser `quantidade × preço
-  unitário de referência`; quando o usuário informar apenas o valor total, o
-  preço unitário DEVE ser derivado por `total ÷ quantidade`, com arredondamento
-  explícito para 8 casas decimais. O total DEVE usar a data e o valor de
-  referência informados e ser apresentado como dado do usuário, não como cotação
-  de mercado.
+- **FR-116**: O sistema NÃO DEVE permitir cadastro manual de posições de
+  investimento. As posições exibidas DEVEM vir exclusivamente da importação do
+  provedor.
+- **FR-117**: O valor atual de uma posição importada DEVE ser o `balance`
+  informado pelo provedor, apresentado com a data de referência; o sistema NÃO
+  DEVE tratá-lo como cotação em tempo real nem permitir sobrescrevê-lo por um
+  valor manual.
 - **FR-118**: A importação automática de investimentos DEVE ocorrer somente para
   itens cujo `GET /items/{id}/resources` declare recursos de investimento
   (`BANK_FIXED_INCOME`, `CREDIT_FIXED_INCOME`, `VARIABLE_INCOME`,
@@ -1000,9 +998,9 @@ ausência de movimentação financeira.
   informado para posições importadas. Esses dados DEVEM ser identificados como
   manuais/estimados, não DEVEM sobrescrever valores do provedor e DEVEM ser
   auditados.
-- **FR-122F**: Duplicidade entre posição manual e importada DEVE ser sinalizada.
-  O sistema NÃO DEVE apagar, mesclar ou excluir automaticamente; o usuário pode
-  optar por não contar a posição manual no patrimônio.
+- **FR-122F**: O módulo NÃO DEVE oferecer posições manuais de investimento nem
+  sinalização de duplicidade entre posição manual e importada. A visão
+  patrimonial DEVE usar apenas as posições importadas ativas.
 - **FR-122G**: Falha na importação de investimentos NÃO DEVE interromper a
   sincronização de contas, cartões e transações. Dados anteriores DEVEM ser
   preservados e a falha DEVE aparecer como aviso não bloqueante.
@@ -1135,9 +1133,6 @@ ausência de movimentação financeira.
   pertencente a um usuário.
 - **Registro de sincronização**: tentativa de leitura de uma integração ou item,
   com início, fim, resultado, estado, totais processados e erro sanitizado.
-- **Posição de investimento manual**: registro informado pelo usuário com ativo,
-  ticker ou código, quantidade, preço unitário de referência, data, corretora e
-  observações.
 - **Posição de investimento importada**: posição compartilhada por um item do
   provedor, com tipo, subtipo, status, quantidade, valores, datas e origem
   externa; não é conta bancária.

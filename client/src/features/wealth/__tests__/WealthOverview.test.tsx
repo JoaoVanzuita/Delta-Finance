@@ -15,9 +15,9 @@ const USER = {
 
 const OVERVIEW = {
   referenceDate: '2026-10-24',
-  grossAssets: '1600.00',
+  grossAssets: '1500.00',
   liabilities: '300.00',
-  netWorth: '1300.00',
+  netWorth: '1200.00',
   completeness: 'PARTIAL',
   hasData: true,
   items: [
@@ -28,7 +28,6 @@ const OVERVIEW = {
       value: '1000.00',
       included: true,
       origin: 'IMPORTED',
-      duplicate: false,
       referenceDate: '2026-10-24',
       stale: false,
     },
@@ -40,7 +39,6 @@ const OVERVIEW = {
       included: false,
       exclusionReason: 'Saldo não informado.',
       origin: 'IMPORTED',
-      duplicate: false,
       stale: false,
     },
     {
@@ -50,18 +48,6 @@ const OVERVIEW = {
       value: '100.00',
       included: true,
       origin: 'IMPORTED',
-      duplicate: false,
-      referenceDate: '2026-10-24',
-      stale: false,
-    },
-    {
-      sourceType: 'INVESTMENT',
-      sourceId: 'pos-1',
-      description: 'Fundo imobiliário (HGLG11)',
-      value: '100.00',
-      included: true,
-      origin: 'MANUAL',
-      duplicate: true,
       referenceDate: '2026-10-24',
       stale: false,
     },
@@ -72,7 +58,6 @@ const OVERVIEW = {
       value: '500.00',
       included: true,
       origin: 'MANUAL',
-      duplicate: false,
       referenceDate: '2026-10-23',
       stale: false,
     },
@@ -83,7 +68,6 @@ const OVERVIEW = {
       value: '200.00',
       included: true,
       origin: 'MANUAL',
-      duplicate: false,
       referenceDate: '2026-10-23',
       stale: false,
     },
@@ -182,21 +166,19 @@ describe('visão patrimonial', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })).toBeInTheDocument()
     const summary = await screen.findByRole('region', { name: 'Resumo patrimonial' })
-    expect(within(summary).getByText(/R\$\s*1\.600,00/)).toBeInTheDocument()
+    expect(within(summary).getByText(/R\$\s*1\.500,00/)).toBeInTheDocument()
     expect(within(summary).getByText(/R\$\s*300,00/)).toBeInTheDocument()
-    expect(within(summary).getByText(/R\$\s*1\.300,00/)).toBeInTheDocument()
+    expect(within(summary).getByText(/R\$\s*1\.200,00/)).toBeInTheDocument()
     expect(within(summary).getByText('Parcial')).toBeInTheDocument()
     expect(within(summary).getByText(/não é cotação de mercado/i)).toBeInTheDocument()
 
     const composition = screen.getByRole('region', { name: 'Composição' })
     expect(within(composition).getByText('Conta Alfa')).toBeInTheDocument()
     expect(within(composition).getByText('Cartão Alfa')).toBeInTheDocument()
-    expect(within(composition).getByText('Fundo imobiliário (HGLG11)')).toBeInTheDocument()
     expect(within(composition).getByText('Tesouro reserva')).toBeInTheDocument()
     expect(within(composition).getByText('Empréstimo')).toBeInTheDocument()
     expect(within(composition).getByText(/Saldo não informado/)).toBeInTheDocument()
     expect(within(composition).getByText('Conta sem saldo')).toBeInTheDocument()
-    expect(within(composition).getAllByText(/possível duplicidade/i).length).toBeGreaterThan(0)
   })
 
   it('cria item manual como ativo com valor e data de referência', async () => {

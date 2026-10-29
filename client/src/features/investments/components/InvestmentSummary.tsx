@@ -37,17 +37,7 @@ export function InvestmentSummary({ overview }: InvestmentSummaryProps) {
         <SummaryTile
           label="Valor atual"
           value={formatMoney(overview.totalValue, 'BRL')}
-          hint="Posições importadas ativas em BRL mais posições manuais."
-        />
-        <SummaryTile
-          label="Importado"
-          value={formatMoney(overview.providerValue, 'BRL')}
-          hint={`${overview.activeCount} posição(ões) ativa(s) com balance do provedor.`}
-        />
-        <SummaryTile
-          label="Manual"
-          value={formatMoney(overview.manualValue, 'BRL')}
-          hint={`${overview.manualCount} posição(ões) informada(s) por você; as marcadas para não contar no patrimônio não são somadas.`}
+          hint={`${overview.activeCount} posição(ões) importada(s) ativa(s) em BRL.`}
         />
         <SummaryTile
           label="Proventos (12 meses)"

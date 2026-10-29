@@ -9,7 +9,6 @@ import {
   type InvestmentHolding,
   type InvestmentIncomeInput,
   type InvestmentIncomeItem,
-  type InvestmentPosition,
 } from '@/features/integration/api'
 
 const INCOME_TYPES = [
@@ -31,40 +30,30 @@ function today(): string {
 
 interface InvestmentIncomeFormProps {
   readonly holdings: readonly InvestmentHolding[]
-  readonly positions: readonly InvestmentPosition[]
   readonly initial?: InvestmentIncomeItem
   readonly onSaved: () => void
   readonly onCancel?: () => void
 }
 
-/** Formulário de provento manual vinculado a uma posição importada ou manual. */
+/** Formulário de provento manual vinculado a uma posição importada. */
 export function InvestmentIncomeForm({
   holdings,
-  positions,
   initial,
   onSaved,
   onCancel,
 }: InvestmentIncomeFormProps) {
   const baseId = useId()
-  const [targetKey, setTargetKey] = useState(
-    initial ? `${initial.targetType}:${initial.investmentId}` : '',
-  )
+  const [targetKey, setTargetKey] = useState(initial?.investmentId ?? '')
   const [incomeType, setIncomeType] = useState<string>(initial?.incomeType ?? 'DIVIDEND')
   const [incomeDate, setIncomeDate] = useState(initial?.date ?? today())
   const [amount, setAmount] = useState(initial?.amount ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [error, setError] = useState<string | null>(null)
 
-  const targets = [
-    ...holdings.map((holding) => ({
-      key: `PROVIDER:${holding.id}`,
-      label: `${holding.name ?? 'Posição importada'}${holding.code ? ` (${holding.code})` : ''} · importado`,
-    })),
-    ...positions.map((position) => ({
-      key: `MANUAL:${position.id}`,
-      label: `${position.assetName}${position.ticker ? ` (${position.ticker})` : ''} · manual`,
-    })),
-  ]
+  const targets = holdings.map((holding) => ({
+    key: holding.id,
+    label: `${holding.name ?? 'Posição importada'}${holding.code ? ` (${holding.code})` : ''}`,
+  }))
 
   const save = useMutation({
     mutationFn: (input: InvestmentIncomeInput) =>
@@ -89,16 +78,12 @@ export function InvestmentIncomeForm({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
-    const separator = targetKey.indexOf(':')
-    if (separator <= 0) {
+    if (!targetKey) {
       setError('Selecione a posição do provento.')
       return
     }
-    const targetType = targetKey.slice(0, separator)
-    const targetId = targetKey.slice(separator + 1)
     save.mutate({
-      providerInvestmentId: targetType === 'PROVIDER' ? targetId : undefined,
-      investmentPositionId: targetType === 'MANUAL' ? targetId : undefined,
+      providerInvestmentId: targetKey,
       incomeType: incomeType as InvestmentIncomeInput['incomeType'],
       incomeDate,
       amount: amount.trim().replace(',', '.'),
@@ -109,7 +94,7 @@ export function InvestmentIncomeForm({
   if (targets.length === 0) {
     return (
       <p className="rounded-card border border-line bg-surface-muted p-3 text-sm text-ink-muted">
-        Nenhuma posição disponível para receber provento. Importe ou cadastre uma posição primeiro.
+        Nenhuma posição importada disponível para receber provento. Sincronize o provedor primeiro.
       </p>
     )
   }

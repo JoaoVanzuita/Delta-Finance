@@ -42,7 +42,7 @@ tags:
 - name: Privacy
   description: Exportação, desconexão e exclusão de conta.
 - name: Investments
-  description: Posições manuais de investimentos (fase secundária pós-MVP).
+  description: Posições importadas de investimentos (fase secundária pós-MVP).
 - name: Wealth
   description: Patrimônio consolidado e ativos/passivos manuais.
 - name: Goals
@@ -1486,119 +1486,6 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
       operationId: patchInvestmentsHoldingsIdAssetClass
-  /investments/positions:
-    x-phase: post-mvp
-    get:
-      tags:
-      - Investments
-      summary: Lista posições manuais de investimento
-      responses:
-        '200':
-          description: Posições.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InvestmentPositionPage'
-        4XX:
-          description: Erro do cliente.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-      operationId: getInvestmentsPositions
-    post:
-      tags:
-      - Investments
-      summary: Cria posição manual
-      security:
-      - sessionCookie: []
-        csrfToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InvestmentPositionRequest'
-      responses:
-        '201':
-          description: Posição criada.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InvestmentPosition'
-        4XX:
-          description: Erro do cliente.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-      operationId: postInvestmentsPositions
-  /investments/positions/{id}:
-    x-phase: post-mvp
-    parameters:
-    - $ref: '#/components/parameters/PathId'
-    get:
-      tags:
-      - Investments
-      summary: Consulta posição manual
-      responses:
-        '200':
-          description: Posição.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InvestmentPosition'
-        4XX:
-          description: Erro do cliente.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-      operationId: getInvestmentsPositionsId
-    patch:
-      tags:
-      - Investments
-      summary: Edita posição manual
-      security:
-      - sessionCookie: []
-        csrfToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InvestmentPositionRequest'
-      responses:
-        '200':
-          description: Posição atualizada.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InvestmentPosition'
-        4XX:
-          description: Erro do cliente.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-      operationId: patchInvestmentsPositionsId
-    delete:
-      tags:
-      - Investments
-      summary: Exclui posição manual
-      security:
-      - sessionCookie: []
-        csrfToken: []
-      responses:
-        '204':
-          description: Posição excluída.
-        4XX:
-          description: Erro do cliente.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-      operationId: deleteInvestmentsPositionsId
   /wealth/overview:
     x-phase: post-mvp
     get:
@@ -3489,6 +3376,7 @@ components:
     InvestmentIncomeRequest:
       type: object
       required:
+      - providerInvestmentId
       - incomeType
       - incomeDate
       - amount
@@ -3496,11 +3384,7 @@ components:
         providerInvestmentId:
           type: string
           format: uuid
-          description: Posição importada; informe exatamente um destino.
-        investmentPositionId:
-          type: string
-          format: uuid
-          description: Posição manual; informe exatamente um destino.
+          description: Posição importada que recebeu o provento.
         incomeType:
           type: string
           enum:
@@ -3524,7 +3408,6 @@ components:
       type: object
       required:
       - id
-      - targetType
       - targetId
       - incomeType
       - incomeDate
@@ -3535,14 +3418,10 @@ components:
         id:
           type: string
           format: uuid
-        targetType:
-          type: string
-          enum:
-          - PROVIDER
-          - MANUAL
         targetId:
           type: string
           format: uuid
+          description: Posição importada associada.
         targetName:
           type: [string, 'null']
         targetCode:
@@ -3599,19 +3478,16 @@ components:
       required:
       - referenceDate
       - providerValue
-      - manualValue
       - totalValue
       - activeCount
       - closedCount
       - unavailableCount
-      - manualCount
       - incomeLast12Months
       - incomeSource
       - profitCoverageCount
       - stale
       - allocation
       - coverage
-      - duplicates
       properties:
         referenceDate:
           type: string
@@ -3619,11 +3495,9 @@ components:
         providerValue:
           type: string
           description: Soma do balance das posições importadas ativas em BRL.
-        manualValue:
-          type: string
-          description: Soma das posições manuais; não é cotação de mercado.
         totalValue:
           type: string
+          description: Igual ao valor importado; não há posições manuais.
         activeCount:
           type: integer
           minimum: 0
@@ -3631,9 +3505,6 @@ components:
           type: integer
           minimum: 0
         unavailableCount:
-          type: integer
-          minimum: 0
-        manualCount:
           type: integer
           minimum: 0
         incomeLast12Months:
@@ -3671,10 +3542,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InvestmentSource'
-        duplicates:
-          type: array
-          items:
-            $ref: '#/components/schemas/InvestmentDuplicate'
     InvestmentAllocation:
       type: object
       required:
@@ -3753,21 +3620,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InvestmentSource'
-    InvestmentDuplicate:
-      type: object
-      required:
-      - manualPositionId
-      - code
-      - providerInvestmentId
-      properties:
-        manualPositionId:
-          type: string
-          format: uuid
-        code:
-          type: string
-        providerInvestmentId:
-          type: string
-          format: uuid
     InvestmentHolding:
       type: object
       required:
@@ -3961,7 +3813,6 @@ components:
       type: object
       required:
       - date
-      - targetType
       - investmentId
       - incomeType
       - amount
@@ -3972,18 +3823,13 @@ components:
           type: [string, 'null']
           format: uuid
           description: Identificador do provento manual; nulo para INTEREST do provedor.
-        targetType:
-          type: string
-          enum:
-          - PROVIDER
-          - MANUAL
         date:
           type: string
           format: date
         investmentId:
           type: string
           format: uuid
-          description: Posição importada ou manual associada.
+          description: Posição importada associada.
         investmentName:
           type: [string, 'null']
         code:
@@ -4009,109 +3855,6 @@ components:
           - PROVIDER
           - MANUAL
         editable:
-          type: boolean
-    InvestmentPosition:
-      type: object
-      required:
-      - id
-      - broker
-      - assetName
-      - quantity
-      - referencePrice
-      - total
-      - referenceDate
-      - origin
-      - excludeFromWealth
-      properties:
-        id:
-          type: string
-          format: uuid
-        broker:
-          type: string
-          enum:
-          - XP
-          - SANTANDER
-          - OTHER
-        assetName:
-          type: string
-        ticker:
-          type: string
-        quantity:
-          type: string
-        referencePrice:
-          type: string
-          description: Preço unitário de referência; o total é quantity × referencePrice.
-        total:
-          type: string
-          description: quantity × referencePrice, arredondado para 2 casas decimais.
-        referenceDate:
-          type: string
-          format: date
-        notes:
-          type: string
-        origin:
-          type: string
-          enum:
-          - MANUAL
-        excludeFromWealth:
-          type: boolean
-          description: Quando verdadeiro, a posição permanece visível mas não compõe o patrimônio.
-    InvestmentPositionRequest:
-      type: object
-      required:
-      - broker
-      - assetName
-      - quantity
-      - referenceDate
-      oneOf:
-      - required:
-        - referencePrice
-      - required:
-        - totalValue
-      properties:
-        broker:
-          type: string
-          enum:
-          - XP
-          - SANTANDER
-          - OTHER
-        assetName:
-          type: string
-          maxLength: 120
-        ticker:
-          type: string
-          maxLength: 20
-        quantity:
-          type: string
-          description: Quantidade positiva, com até 8 casas decimais.
-        referencePrice:
-          type: string
-          description: Preço unitário de referência; o total é quantity × referencePrice.
-        totalValue:
-          type: string
-          description: Valor total informado pelo usuário; o preço unitário é derivado por total ÷ quantity, arredondado para 8 casas decimais.
-        referenceDate:
-          type: string
-          format: date
-        notes:
-          type: string
-          maxLength: 2000
-        excludeFromWealth:
-          type: boolean
-          description: Quando verdadeiro, a posição permanece visível mas não compõe o patrimônio.
-    InvestmentPositionPage:
-      type: object
-      required:
-      - items
-      - hasMore
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/InvestmentPosition'
-        nextCursor:
-          type: string
-        hasMore:
           type: boolean
     WealthOverview:
       type: object
@@ -4158,7 +3901,6 @@ components:
       - value
       - included
       - origin
-      - duplicate
       - stale
       properties:
         sourceType:
@@ -4189,9 +3931,6 @@ components:
           - MANUAL
           - IMPORTED
           description: Origem do item; IMPORTED é usado por contas/cartões importados.
-        duplicate:
-          type: boolean
-          description: Possível duplicidade entre posição manual e importada com o mesmo código.
         referenceDate:
           type: string
           format: date

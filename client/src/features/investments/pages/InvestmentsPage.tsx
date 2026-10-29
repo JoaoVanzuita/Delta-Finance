@@ -8,11 +8,9 @@ import { formatDateTime } from '@/features/accounts/format'
 import { financeApi } from '@/features/integration/api'
 
 import { InvestmentAllocation } from '../components/InvestmentAllocation'
-import { InvestmentCoverage } from '../components/InvestmentCoverage'
 import { InvestmentHoldings } from '../components/InvestmentHoldings'
 import { InvestmentIncomeSection } from '../components/InvestmentIncomeSection'
 import { InvestmentSummary } from '../components/InvestmentSummary'
-import { ManualPositionsSection } from '../components/ManualPositionsSection'
 import { ASSET_CLASS_LABELS } from '../labels'
 
 const STATUS_OPTIONS = [
@@ -26,9 +24,9 @@ const STATUS_OPTIONS = [
 /**
  * Dashboard de investimentos.
  *
- * <p>Combina posições importadas do provedor e posições manuais sem recomendar compra, venda ou
- * alocação. Valores ausentes são exibidos como "não informado"; não há cotação em tempo real nem
- * histórico de valor de portfólio.
+ * <p>Exibe apenas posições importadas do provedor, sem recomendar compra, venda ou alocação.
+ * Valores ausentes são exibidos como "não informado"; não há cotação em tempo real nem histórico de
+ * valor de portfólio.
  */
 export function InvestmentsPage() {
   const queryClient = useQueryClient()
@@ -47,26 +45,10 @@ export function InvestmentsPage() {
     queryKey: ['investments', 'income'],
     queryFn: () => financeApi.investmentIncome(),
   })
-  const positionsQuery = useQuery({
-    queryKey: ['investments', 'positions'],
-    queryFn: () => financeApi.positions(),
-  })
-  const connectionsQuery = useQuery({
-    queryKey: ['connections'],
-    queryFn: financeApi.connections,
-  })
 
   const overview = overviewQuery.data
   const holdings = holdingsQuery.data?.items ?? []
-  const positions = positionsQuery.data?.items ?? []
-  const connections = connectionsQuery.data?.items ?? []
-  const duplicates = new Set(overview?.duplicates.map((item) => item.manualPositionId) ?? [])
-  const queryError =
-    overviewQuery.error ??
-    holdingsQuery.error ??
-    incomeQuery.error ??
-    positionsQuery.error ??
-    connectionsQuery.error
+  const queryError = overviewQuery.error ?? holdingsQuery.error ?? incomeQuery.error
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['investments'] })
@@ -80,10 +62,9 @@ export function InvestmentsPage() {
         </p>
         <h1 className="text-2xl font-semibold tracking-tight text-ink">Investimentos</h1>
         <p className="max-w-3xl text-sm leading-relaxed text-ink-muted">
-          Posições importadas do Meu Pluggy e posições manuais complementares. O valor atual usa o
-          último dado do provedor; o sistema não calcula cotação em tempo real, não deriva
-          rentabilidade de histórico incompleto e não oferece recomendação de compra, venda ou
-          alocação.
+          Posições importadas do Meu Pluggy. O valor atual usa o último dado do provedor; o sistema
+          não calcula cotação em tempo real, não deriva rentabilidade de histórico incompleto e não
+          oferece recomendação de compra, venda ou alocação.
         </p>
       </header>
 
@@ -108,13 +89,6 @@ export function InvestmentsPage() {
         <>
           <InvestmentSummary overview={overview} />
 
-          <section aria-labelledby="investment-coverage-heading" className="space-y-3">
-            <h2 id="investment-coverage-heading" className="text-lg font-semibold text-ink">
-              Cobertura das conexões
-            </h2>
-            <InvestmentCoverage sources={overview.coverage} connections={connections} />
-          </section>
-
           <section aria-labelledby="investment-allocation-heading" className="space-y-3">
             <h2 id="investment-allocation-heading" className="text-lg font-semibold text-ink">
               Alocação
@@ -122,7 +96,6 @@ export function InvestmentsPage() {
             <InvestmentAllocation
               allocation={overview.allocation}
               providerValue={overview.providerValue}
-              manualValue={overview.manualValue}
               totalValue={overview.totalValue}
             />
           </section>
@@ -203,31 +176,12 @@ export function InvestmentsPage() {
               <InvestmentIncomeSection
                 income={incomeQuery.data}
                 holdings={holdings}
-                positions={positions}
                 onChanged={invalidate}
               />
             ) : null}
           </section>
         </>
       ) : null}
-
-      <section aria-labelledby="manual-positions-heading" className="space-y-3">
-        <div className="space-y-1">
-          <h2 id="manual-positions-heading" className="text-lg font-semibold text-ink">
-            Posições manuais
-          </h2>
-          <p className="text-sm text-ink-muted">
-            Complemento para ativos que o provedor não compartilha ou não informa.
-          </p>
-        </div>
-        <ManualPositionsSection
-          positions={positions}
-          loading={positionsQuery.isLoading}
-          error={positionsQuery.isError}
-          duplicateIds={duplicates}
-          onChanged={invalidate}
-        />
-      </section>
 
       <section
         aria-labelledby="investment-disclaimer-heading"
@@ -239,8 +193,7 @@ export function InvestmentsPage() {
         <ul className="mt-2 space-y-1 text-sm leading-relaxed text-ink-muted">
           <li>Não há recomendação de compra, venda, alocação ou ranking de ativos.</li>
           <li>
-            O valor atual é o último saldo informado pelo provedor ou o valor de referência manual;
-            não é cotação em tempo real.
+            O valor atual é o último saldo informado pelo provedor; não é cotação em tempo real.
           </li>
           <li>
             O sistema não mantém histórico de valor de portfólio. O histórico de proventos deriva de

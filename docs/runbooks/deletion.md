@@ -33,10 +33,10 @@ retenção ou verificação de que uma conta foi encerrada sem afetar outras.
   itens, pagamentos, correções, histórico de identidade externa e movimentos
   internos.
 - Tabelas dos módulos mantidos `goal_progress_snapshot`, `goal_allocation`,
-  `financial_goal`, `investment_position`, `provider_investment_transaction`,
-  `provider_investment`, `provider_investment_sync`, `investment_income` e
-  `manual_asset_liability` do titular, apagadas explicitamente porque o tombstone
-  de `app_user` não dispara o cascade.
+  `financial_goal`, `provider_investment_transaction`, `provider_investment`,
+  `provider_investment_sync`, `investment_income` e `manual_asset_liability` do
+  titular, apagadas explicitamente porque o tombstone de `app_user` não dispara
+  o cascade.
 - Categorias, integração Pluggy, conexões, jobs, execuções de sincronização e
   chaves de idempotência.
 - Tentativas de login indexadas pelo HMAC do nome normalizado.
@@ -62,7 +62,6 @@ select status, deleted_at from app_user where id = '<user-id>';
 -- Dados financeiros ativos do titular devem estar zerados.
 select 'financial_account' as tabela, count(*) from financial_account where user_id = '<user-id>'
 union all select 'transaction', count(*) from transaction where user_id = '<user-id>'
-union all select 'investment_position', count(*) from investment_position where user_id = '<user-id>'
 union all select 'provider_investment_transaction', count(*) from provider_investment_transaction where user_id = '<user-id>'
 union all select 'provider_investment', count(*) from provider_investment where user_id = '<user-id>'
 union all select 'provider_investment_sync', count(*) from provider_investment_sync where user_id = '<user-id>'

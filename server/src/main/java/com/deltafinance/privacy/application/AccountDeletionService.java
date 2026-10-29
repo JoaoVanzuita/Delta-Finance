@@ -93,7 +93,6 @@ public class AccountDeletionService {
     deleted += jdbcTemplate.update("delete from goal_progress_snapshot where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from goal_allocation where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from financial_goal where user_id = ?", userId);
-    deleted += jdbcTemplate.update("delete from investment_position where user_id = ?", userId);
     deleted += jdbcTemplate.update("delete from investment_income where user_id = ?", userId);
     deleted +=
         jdbcTemplate.update(

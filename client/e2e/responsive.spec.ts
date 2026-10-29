@@ -121,12 +121,10 @@ async function installStub(page: Page) {
         body: JSON.stringify({
           referenceDate: '2026-10-24',
           providerValue: '0.00',
-          manualValue: '0.00',
           totalValue: '0.00',
           activeCount: 0,
           closedCount: 0,
           unavailableCount: 0,
-          manualCount: 0,
           incomeLast12Months: '0.00',
           incomeSource: 'UNAVAILABLE',
           profitReported: null,
@@ -135,7 +133,6 @@ async function installStub(page: Page) {
           stale: false,
           allocation: [],
           coverage: [],
-          duplicates: [],
         }),
       })
     }

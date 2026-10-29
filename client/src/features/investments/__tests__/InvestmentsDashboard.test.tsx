@@ -4,7 +4,7 @@ import { Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { InvestmentsPage } from '@/features/investments/pages/InvestmentsPage'
-import { INCOME, OVERVIEW, stubInvestmentsApi } from '@/test/investmentsApiStub'
+import { INCOME, stubInvestmentsApi } from '@/test/investmentsApiStub'
 import { renderWithProviders } from '@/test/render'
 
 function renderPage() {
@@ -36,8 +36,8 @@ describe('dashboard de investimentos', () => {
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
     const summary = await screen.findByRole('region', { name: 'Resumo' })
-    expect(within(summary).getByText('R$ 1.875,00')).toBeInTheDocument()
     expect(within(summary).getByText('R$ 1.750,00')).toBeInTheDocument()
+    expect(within(summary).queryByText('Manual')).not.toBeInTheDocument()
     expect(within(summary).getAllByText('R$ 50,00').length).toBeGreaterThanOrEqual(2)
     expect(within(summary).getByText(/informado para 1 de 3 posições ativas/i)).toBeInTheDocument()
 
@@ -65,18 +65,6 @@ describe('dashboard de investimentos', () => {
     expect(
       within(await region('Posições importadas')).queryByText('FII Alfa'),
     ).not.toBeInTheDocument()
-  })
-
-  it('explica cobertura compartilhada e não compartilhada', async () => {
-    stubInvestmentsApi()
-    renderPage()
-
-    await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
-    const coverage = await region('Cobertura das conexões')
-    expect(within(coverage).getByText('XP Investimentos')).toBeInTheDocument()
-    expect(within(coverage).getByText('Banco Beta')).toBeInTheDocument()
-    expect(within(coverage).getByText('Compartilha investimentos')).toBeInTheDocument()
-    expect(within(coverage).getByText('Não compartilha investimentos')).toBeInTheDocument()
   })
 
   it('mostra proventos do provedor por mês e por ativo', async () => {
@@ -108,20 +96,12 @@ describe('dashboard de investimentos', () => {
     ).toBeInTheDocument()
   })
 
-  it('não mistura posição manual na alocação importada', async () => {
-    stubInvestmentsApi({
-      overview: {
-        ...OVERVIEW,
-        manualValue: '500.00',
-        totalValue: '2250.00',
-        manualCount: 1,
-      },
-    })
+  it('não exibe cobertura nem cadastro de posição manual', async () => {
+    stubInvestmentsApi()
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
-    const allocation = await region('Alocação')
-    expect(within(allocation).getAllByText('Posições manuais').length).toBeGreaterThan(0)
-    expect(within(allocation).getAllByText(/R\$\s*500,00/).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('region', { name: 'Cobertura das conexões' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Posições manuais' })).not.toBeInTheDocument()
   })
 })

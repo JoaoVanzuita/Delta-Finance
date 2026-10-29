@@ -610,21 +610,7 @@ Regras:
 
 ## 7. Entidades de fases posteriores
 
-### 7.1 `investment_position` (posição manual)
-
-`id`, `user_id`, `broker`, `asset_name_enc`, `ticker_enc`, `quantity_enc`,
-`reference_price_enc`, `reference_date`, `notes_enc`, `origin` (`MANUAL`),
-`exclude_from_wealth` (boolean, padrão `false`), `created_at`, `updated_at`,
-`version`. O total é `quantity × reference_price`; quando apenas o total for
-informado, `reference_price = total ÷ quantity`, arredondado para 8 casas
-decimais.
-
-A posição manual é um complemento do usuário. Ela não é sobrescrita por dados do
-provedor. `exclude_from_wealth` permite mantê-la como referência sem contar duas
-vezes quando existir uma posição importada equivalente; a coluna foi adicionada
-na migração `V008__investment_position_wealth_flag.sql`.
-
-### 7.2 `provider_investment` (posição importada)
+### 7.1 `provider_investment` (posição importada)
 
 Implementada na migração `V006__provider_investments.sql`.
 
@@ -666,7 +652,7 @@ Regras:
   distinguir FII de ação, o código pode ser usado como heurística com rótulo
   explícito; `user_asset_class` sobrepõe a classificação automática.
 
-### 7.3 `provider_investment_transaction`
+### 7.2 `provider_investment_transaction`
 
 | Campo | Tipo | Classificação | Regra |
 |---|---|---|---|
@@ -692,7 +678,7 @@ Regras:
 - Ausência em leitura completa marca `removed_at` e exclui dos agregados, sem
   apagar o registro.
 
-### 7.4 `provider_investment_sync`
+### 7.3 `provider_investment_sync`
 
 `id`, `user_id`, `connection_id`, `scope`, `resource_count`,
 `available_resource_count`, `pending_resource_count`,
@@ -710,35 +696,35 @@ Regras:
 `products` não substitui `scope`: um item pode listar `INVESTMENTS` e não
 compartilhar nenhuma posição.
 
-### 7.5 `investment_income` (provento manual)
+### 7.4 `investment_income` (provento manual)
 
 Implementada em migração própria (`V007__investment_income.sql`) na fase de
 proventos.
 
-`id`, `user_id`, `provider_investment_id` (nullable), `investment_position_id`
-(nullable), `income_type` (`DIVIDEND`, `INTEREST`, `JCP`, `RENT`, `COUPON`,
-`OTHER`), `income_date`, `amount_enc`, `description_enc`, `source` (`MANUAL`),
-`created_at`, `updated_at`, `version`.
+`id`, `user_id`, `provider_investment_id`, `income_type` (`DIVIDEND`,
+`INTEREST`, `JCP`, `RENT`, `COUPON`, `OTHER`), `income_date`, `amount_enc`,
+`description_enc`, `source` (`MANUAL`), `created_at`, `updated_at`, `version`.
 
-Exatamente um entre `provider_investment_id` e `investment_position_id` é
-preenchido. Proventos do provedor vêm de `provider_investment_transaction` com
-`type=INTEREST`; esta tabela guarda apenas o complemento manual. O provento
+`provider_investment_id` é obrigatório. Proventos do provedor vêm de
+`provider_investment_transaction` com `type=INTEREST`; esta tabela guarda apenas
+o complemento manual. A coluna `investment_position_id` foi removida na migração
+`V009__remove_manual_investment_positions.sql`. O provento
 manual é identificado como tal no painel e não é somado automaticamente às
 receitas do dashboard principal.
 
-### 7.6 `manual_asset_liability`
+### 7.5 `manual_asset_liability`
 
 `id`, `user_id`, `kind` (`ASSET`, `LIABILITY`), `type`, `description_enc`,
 `reference_value_enc`, `reference_date`, `notes_enc`, `created_at`,
 `updated_at`, `version`.
 
-### 7.7 Snapshots patrimoniais
+### 7.6 Snapshots patrimoniais
 
 Os snapshots patrimoniais foram removidos em 2026-10-26 (S-02). Não há tabelas
 `wealth_snapshot`/`wealth_snapshot_item` no schema ativo; a visão patrimonial é
 calculada a partir dos dados atuais e dos itens manuais.
 
-### 7.8 `financial_goal`
+### 7.7 `financial_goal`
 
 `id`, `user_id`, `name_enc`, `description_enc`, `notes_enc`, `type`,
 `target_amount_enc`, `target_date`, `status`, `progress_rule`, `changed_at`,
@@ -750,7 +736,7 @@ calculada a partir dos dados atuais e dos itens manuais.
 `notes_enc` guarda observações livres (até 2000 caracteres) e não participa do
 cálculo de progresso nem da detecção de alteração material.
 
-### 7.9 `goal_allocation`
+### 7.8 `goal_allocation`
 
 `id`, `user_id`, `goal_id`, `source_type`, `source_id`, `allocation_mode`
 (`FIXED_AMOUNT`, `PERCENTAGE`), `allocated_amount_enc`, `allocation_ratio`,
@@ -764,22 +750,18 @@ para metas mais antigas. Percentuais se limitam ao disponível; valores fixos n�
 são truncados e a API sinaliza `capacityExceeded=true`. Contas fora de BRL não
 podem ser fonte. O nome legível da fonte é derivado em tempo de leitura.
 
-### 7.10 `goal_progress_snapshot`
+### 7.9 `goal_progress_snapshot`
 
 `id`, `user_id`, `goal_id`, `reference_date`, `current_value_enc`,
 `percentage`, `remaining_enc`, `rule_version`, `created_at`. Único
 `(goal_id, reference_date)`.
 
-### 7.11 Regras de consolidação de investimentos
+### 7.10 Regras de consolidação de investimentos
 
 - Posições importadas `ACTIVE`, em BRL e sem `unavailable_at` entram uma única
   vez no patrimônio pelo `balance`.
 - Posições `CLOSED`, indisponíveis ou em outra moeda aparecem com motivo de
   exclusão e não compõem o total.
-- Posições manuais entram pelo total `quantity × reference_price`, salvo quando
-  `exclude_from_wealth=true`.
-- Duplicidade entre manual e importada é sinalizada; nenhum registro é apagado,
-  mesclado ou convertido automaticamente.
 - O histórico de proventos e movimentações é permitido. Não há snapshots
   patrimoniais nem série histórica de valor de portfólio.
 - Falha de investimento não altera o patrimônio anterior nem interrompe a

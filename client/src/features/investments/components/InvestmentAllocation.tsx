@@ -6,22 +6,18 @@ import { assetClassLabel } from '../labels'
 interface InvestmentAllocationProps {
   readonly allocation: readonly InvestmentAllocation[]
   readonly providerValue: string
-  readonly manualValue: string
   readonly totalValue: string
 }
 
-/** Alocação das posições importadas ativas, com posições manuais separadas. */
+/** Alocação das posições importadas ativas. */
 export function InvestmentAllocation({
   allocation,
   providerValue,
-  manualValue,
   totalValue,
 }: InvestmentAllocationProps) {
   const providerTotal = Number(providerValue) || 0
-  const manualTotal = Number(manualValue) || 0
-  const total = Number(totalValue) || 0
 
-  if (providerTotal === 0 && manualTotal === 0) {
+  if (providerTotal === 0) {
     return (
       <p className="rounded-card border border-line bg-surface-muted p-4 text-sm text-ink-muted">
         Nenhuma posição ativa para exibir alocação. Posições encerradas continuam no histórico.
@@ -34,7 +30,7 @@ export function InvestmentAllocation({
       <p className="text-sm text-ink-muted">
         Valor atual:{' '}
         <span className="numeric font-semibold text-ink">{formatMoney(totalValue, 'BRL')}</span>. A
-        alocação abaixo separa o que veio do provedor do que foi informado manualmente.
+        alocação abaixo considera apenas posições importadas ativas.
       </p>
 
       <ul className="space-y-3" aria-label="Alocação por classe de investimento">
@@ -64,29 +60,6 @@ export function InvestmentAllocation({
             </li>
           )
         })}
-        {manualTotal > 0 ? (
-          <li>
-            <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-              <span className="font-medium text-ink">Posições manuais</span>
-              <span className="numeric text-ink">
-                {formatMoney(manualValue, 'BRL')} ·{' '}
-                {total > 0 ? ((manualTotal / total) * 100).toFixed(2) : '0.00'}%
-              </span>
-            </div>
-            <span
-              aria-hidden="true"
-              className="mt-2 block h-2 overflow-hidden rounded-card bg-surface-muted"
-            >
-              <span
-                className="block h-full rounded-card bg-action"
-                style={{ width: `${total > 0 ? Math.min(100, (manualTotal / total) * 100) : 0}%` }}
-              />
-            </span>
-            <span className="mt-1 block text-xs text-ink-muted">
-              Valor de referência informado por você; não é cotação de mercado.
-            </span>
-          </li>
-        ) : null}
       </ul>
 
       <details className="rounded-card border border-line">
@@ -125,16 +98,6 @@ export function InvestmentAllocation({
                   </td>
                 </tr>
               ))}
-              {manualTotal > 0 ? (
-                <tr>
-                  <td className="px-3 py-2 text-ink">Posições manuais</td>
-                  <td className="numeric px-3 py-2 text-right text-ink">
-                    {formatMoney(manualValue, 'BRL')}
-                  </td>
-                  <td className="numeric px-3 py-2 text-right text-ink-muted">—</td>
-                  <td className="numeric px-3 py-2 text-right text-ink-muted">—</td>
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>

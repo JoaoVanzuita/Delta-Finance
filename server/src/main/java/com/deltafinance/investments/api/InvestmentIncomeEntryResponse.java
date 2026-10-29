@@ -7,7 +7,6 @@ import java.util.UUID;
 
 public record InvestmentIncomeEntryResponse(
     UUID id,
-    String targetType,
     UUID targetId,
     String targetName,
     String targetCode,
@@ -21,7 +20,6 @@ public record InvestmentIncomeEntryResponse(
   public static InvestmentIncomeEntryResponse from(InvestmentIncomeEntryView view) {
     return new InvestmentIncomeEntryResponse(
         view.id(),
-        view.targetType(),
         view.targetId(),
         view.targetName(),
         view.targetCode(),
