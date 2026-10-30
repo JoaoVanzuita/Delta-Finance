@@ -132,9 +132,25 @@ class ExportIT extends PostgresTestBase {
             "/api/v1/integrations/pluggy",
             Map.of("clientId", ALICE_CLIENT, "clientSecret", ALICE_SECRET))
         .andExpect(status().isOk());
+    String connectionId =
+        json(alice
+                .post("/api/v1/connections", Map.of("itemId", "item-alice-export"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+            .path("id")
+            .asString();
     alice
-        .post("/api/v1/connections", Map.of("itemId", "item-alice-export"))
-        .andExpect(status().isCreated());
+        .put(
+            "/api/v1/accounts/" + importedAccountId() + "/display-name",
+            Map.of("displayName", "Conta Exportada"))
+        .andExpect(status().isOk());
+    alice
+        .put(
+            "/api/v1/connections/" + connectionId + "/display-name",
+            Map.of("displayName", "Conexão Exportada"))
+        .andExpect(status().isOk());
 
     createManualAccount(alice, "Carteira Alice", "100.00");
     createManualTransaction(alice, "Salário Alice", "2026-10-02");
@@ -201,8 +217,14 @@ class ExportIT extends PostgresTestBase {
 
     assertThat(files.get("profile.jsonl")).contains(ALICE).doesNotContain(BOB);
     assertThat(files.get("accounts.jsonl"))
-        .contains("Carteira Alice", "Conta Alfa")
+        .contains("Carteira Alice", "Conta Alfa", "Conta Exportada")
+        .contains(
+            "\"alias\":\"Conta Alfa\"",
+            "\"providerName\":\"Conta Alfa\"",
+            "\"displayName\":\"Conta Exportada\"")
         .doesNotContain("Carteira Bob", "Conta Beta");
+    assertThat(files.get("connections.jsonl"))
+        .contains("\"institutionName\":\"Banco Alfa\"", "\"displayName\":\"Conexão Exportada\"");
     assertThat(files.get("transactions.jsonl"))
         .contains("Salário Alice", "Mercado Alice")
         .doesNotContain("Salário Bob");
@@ -217,7 +239,11 @@ class ExportIT extends PostgresTestBase {
     assertThat(files.get("financial_goals.jsonl"))
         .doesNotContain("initialValue", "DEBT_REDUCTION", "MANUAL_LIABILITY");
 
-    assertThat(files.get("accounts.csv")).contains("Carteira Alice").doesNotContain("Carteira Bob");
+    assertThat(files.get("accounts.csv"))
+        .contains("Carteira Alice", "providerName", "displayName", "Conta Exportada")
+        .doesNotContain("Carteira Bob");
+    assertThat(files.get("connections.csv"))
+        .contains("institutionName", "displayName", "Conexão Exportada");
     assertThat(files.get("transactions.csv"))
         .contains("Salário Alice")
         .doesNotContain("Salário Bob");
@@ -272,6 +298,22 @@ class ExportIT extends PostgresTestBase {
     body.put("progressRule", "ALLOCATIONS");
     body.put("allocations", List.of(allocation));
     client.post("/api/v1/goals", body).andExpect(status().isCreated());
+  }
+
+  private String importedAccountId() throws Exception {
+    for (JsonNode account :
+        json(alice
+                .get("/api/v1/accounts")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+            .path("items")) {
+      if ("IMPORTED".equals(account.path("origin").asString())) {
+        return account.path("id").asString();
+      }
+    }
+    throw new AssertionError("Conta importada não encontrada no setup do export");
   }
 
   private void createManualAccount(AuthTestClient client, String alias, String balance)

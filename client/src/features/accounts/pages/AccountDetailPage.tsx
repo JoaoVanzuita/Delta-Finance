@@ -1,9 +1,10 @@
 import { Link, useParams } from 'react-router'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/problem'
 
+import { DisplayNameEditor } from '@/components/DisplayNameEditor'
 import { financeApi } from '@/features/integration/api'
 import { connectionStatusLabels } from '@/features/integration/syncLabels'
 
@@ -26,6 +27,7 @@ const statusLabels: Record<string, string> = {
 
 export function AccountDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const queryClient = useQueryClient()
   const accountQuery = useQuery({
     queryKey: ['account', id],
     queryFn: () => financeApi.account(id ?? ''),
@@ -66,6 +68,21 @@ export function AccountDetailPage() {
   if (!account) {
     return null
   }
+  const accountId = account.id
+
+  async function renameAccount(displayName: string) {
+    const updated = await financeApi.renameAccount(accountId, displayName)
+    queryClient.setQueryData(['account', accountId], updated)
+    void queryClient.invalidateQueries()
+    return updated
+  }
+
+  async function resetAccountName() {
+    const updated = await financeApi.resetAccountName(accountId)
+    queryClient.setQueryData(['account', accountId], updated)
+    void queryClient.invalidateQueries()
+    return updated
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -73,13 +90,29 @@ export function AccountDetailPage() {
         ← Contas
       </Link>
 
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          {account.alias ?? 'Sem apelido'}
-        </h1>
-        <p className="text-sm text-ink-muted">
-          {account.institutionName ?? 'Instituição não informada'}
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">
+            {account.alias ?? 'Sem apelido'}
+          </h1>
+          <p className="text-sm text-ink-muted">
+            {account.institutionName ?? 'Instituição não informada'}
+          </p>
+          {account.nameCustomized && account.providerName ? (
+            <p className="text-xs text-ink-muted">
+              Nome original no Pluggy: {account.providerName}
+            </p>
+          ) : null}
+        </div>
+        {account.origin === 'IMPORTED' ? (
+          <DisplayNameEditor
+            currentName={account.alias ?? null}
+            originalName={account.providerName ?? null}
+            customized={Boolean(account.nameCustomized)}
+            onRename={renameAccount}
+            onReset={resetAccountName}
+          />
+        ) : null}
       </header>
 
       <section className="rounded-card border border-line bg-surface p-5">

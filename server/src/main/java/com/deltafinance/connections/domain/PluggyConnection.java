@@ -35,6 +35,9 @@ public class PluggyConnection extends BaseEntity {
   @Column(name = "institution_name_enc", columnDefinition = "bytea")
   private byte[] institutionNameEnc;
 
+  @Column(name = "display_name_enc", columnDefinition = "bytea")
+  private byte[] displayNameEnc;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 32)
   private ConnectionStatus status;
@@ -82,6 +85,24 @@ public class PluggyConnection extends BaseEntity {
 
   public byte[] getInstitutionNameEnc() {
     return institutionNameEnc;
+  }
+
+  public byte[] getDisplayNameEnc() {
+    return displayNameEnc;
+  }
+
+  public boolean hasCustomDisplayName() {
+    return displayNameEnc != null;
+  }
+
+  /** Define o nome de exibição local sem alterar o nome original do item. */
+  public void renameDisplayName(byte[] displayNameEnc) {
+    this.displayNameEnc = Objects.requireNonNull(displayNameEnc, "displayNameEnc");
+  }
+
+  /** Remove o nome personalizado e volta a exibir o nome original do item. */
+  public void clearDisplayName() {
+    this.displayNameEnc = null;
   }
 
   public ConnectionStatus getStatus() {

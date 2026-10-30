@@ -9,6 +9,7 @@
 **/test-results/
 **/blob-report/
 **/junit-results/
+**/screenshots-output/
 
 # Segredos e configuração local (nunca versionar)
 .env

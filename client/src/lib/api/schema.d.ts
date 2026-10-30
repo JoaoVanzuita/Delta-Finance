@@ -180,6 +180,32 @@ export interface paths {
         patch: operations["patchConnectionsId"];
         trace?: never;
     };
+    "/connections/{id}/display-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Define o nome de exibição de uma conexão
+         * @description Salva um nome local sem alterar o nome original recebido do Pluggy. Não sincroniza nem altera o itemId.
+         */
+        put: operations["putConnectionsIdDisplayName"];
+        post?: never;
+        /**
+         * Restaura o nome original do Pluggy
+         * @description Remove o nome de exibição personalizado. A operação é idempotente.
+         */
+        delete: operations["deleteConnectionsIdDisplayName"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/connections/{id}/sync": {
         parameters: {
             query?: never;
@@ -235,6 +261,32 @@ export interface paths {
         head?: never;
         /** Edita ou desativa uma conta manual */
         patch: operations["patchAccountsId"];
+        trace?: never;
+    };
+    "/accounts/{id}/display-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Define o nome de exibição de uma conta ou cartão importado
+         * @description Salva um nome local sem alterar o nome original recebido do Pluggy. Contas manuais continuam sendo renomeadas pelo PATCH da conta.
+         */
+        put: operations["putAccountsIdDisplayName"];
+        post?: never;
+        /**
+         * Restaura o nome original do Pluggy
+         * @description Remove o nome de exibição personalizado de uma conta ou cartão importado. A operação é idempotente.
+         */
+        delete: operations["deleteAccountsIdDisplayName"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/cards/overview": {
@@ -1001,7 +1053,12 @@ export interface components {
             /** Format: uuid */
             id: string;
             itemIdMasked?: string;
+            /** @description Nome original recebido do Pluggy. Não muda quando o nome de exibição é personalizado. */
             institutionName?: string;
+            /** @description Nome efetivamente exibido; usa o nome personalizado quando existir, senão o nome original. */
+            displayName?: string | null;
+            /** @description true quando o usuário definiu um nome de exibição local. */
+            nameCustomized?: boolean;
             /** @enum {string} */
             status: "INCOMPLETE" | "ACTIVE" | "SYNCING" | "SYNCED" | "CREDENTIAL_FAILURE" | "ACTION_REQUIRED" | "AUTHORIZATION_EXPIRED" | "ITEM_UNAVAILABLE";
             /** Format: date-time */
@@ -1019,6 +1076,10 @@ export interface components {
             /** @description Novo UUID do item após reconexão, pertencente à mesma aplicação Meu Pluggy (não o UUID da conta). Não altera o ID local da conexão; item inválido/inexistente retorna 422 e mantém o vínculo anterior. */
             itemId: string;
         };
+        ConnectionDisplayNameRequest: {
+            /** @description Nome local exibido para o item. Não é enviado ao Pluggy. */
+            displayName: string;
+        };
         ConnectionPage: {
             items: components["schemas"]["Connection"][];
             nextCursor?: string;
@@ -1033,7 +1094,12 @@ export interface components {
             /** @enum {string} */
             origin: "IMPORTED" | "MANUAL";
             institutionName?: string;
+            /** @description Nome efetivamente exibido; usa o nome personalizado quando existir, senão o nome original. Em conta manual, é o apelido informado pelo usuário. */
             alias?: string;
+            /** @description Nome original recebido do Pluggy. Nulo em conta manual. */
+            providerName?: string | null;
+            /** @description true quando o usuário definiu um nome de exibição local para uma conta importada. */
+            nameCustomized?: boolean;
             currency: string;
             /** @description Saldo atual. Em contas manuais, é o saldo de referência ajustado pelos lançamentos efetivados e pagamentos de fatura com data igual ou posterior à data de referência; em contas importadas, é o saldo informado pelo provedor. */
             currentBalance: string;
@@ -1077,6 +1143,10 @@ export interface components {
             notes?: string;
             /** @enum {string} */
             status?: "ACTIVE" | "INACTIVE";
+        };
+        AccountDisplayNameRequest: {
+            /** @description Nome local exibido para a conta ou cartão importado. Não é enviado ao Pluggy e não altera o nome original. */
+            displayName: string;
         };
         AccountList: {
             items: components["schemas"]["Account"][];
@@ -2346,6 +2416,59 @@ export interface operations {
             502: components["responses"]["BadGateway"];
         };
     };
+    putConnectionsIdDisplayName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionDisplayNameRequest"];
+            };
+        };
+        responses: {
+            /** @description Conexão com o nome de exibição atualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteConnectionsIdDisplayName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conexão com o nome original restaurado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     postConnectionsIdSync: {
         parameters: {
             query?: never;
@@ -2481,6 +2604,77 @@ export interface operations {
                 content?: never;
             };
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    putAccountsIdDisplayName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDisplayNameRequest"];
+            };
+        };
+        responses: {
+            /** @description Conta com o nome de exibição atualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Conta manual não aceita nome de exibição separado (código `ACCOUNT_NOT_IMPORTED`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteAccountsIdDisplayName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conta com o nome original restaurado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Conta manual não possui nome original de provedor (código `ACCOUNT_NOT_IMPORTED`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     getCardsOverview: {

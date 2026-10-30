@@ -68,14 +68,18 @@ class KeyRotationIT extends PostgresTestBase {
     jdbcTemplate.update(
         """
         insert into financial_account
-          (id, user_id, origin, type, alias_enc, currency, status, created_at, updated_at, version)
-        values (?, ?, 'MANUAL', 'CASH', ?, 'BRL', 'ACTIVE', ?, ?, 0)
+          (id, user_id, origin, type, alias_enc, display_name_enc, currency, status,
+           created_at, updated_at, version)
+        values (?, ?, 'MANUAL', 'CASH', ?, ?, 'BRL', 'ACTIVE', ?, ?, 0)
         """,
         accountId,
         user.id(),
         cryptoService.encrypt(
             "Carteira rotacionada",
             new CryptoContext(user.id(), "financial_account", "alias", accountId)),
+        cryptoService.encrypt(
+            "Carteira exibida",
+            new CryptoContext(user.id(), "financial_account", "display_name", accountId)),
         now,
         now);
     manualItemId = UUID.randomUUID();
@@ -175,12 +179,19 @@ class KeyRotationIT extends PostgresTestBase {
     jdbcTemplate.update(
         """
         insert into pluggy_connection
-          (id, user_id, integration_id, status, created_at, updated_at, version)
-        values (?, ?, ?, 'ACTIVE', ?, ?, 0)
+          (id, user_id, integration_id, institution_name_enc, display_name_enc, status,
+           created_at, updated_at, version)
+        values (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, 0)
         """,
         connectionId,
         user.id(),
         integrationId,
+        cryptoService.encrypt(
+            "Banco rotacionado",
+            new CryptoContext(user.id(), "pluggy_connection", "institution_name", connectionId)),
+        cryptoService.encrypt(
+            "Conexão exibida",
+            new CryptoContext(user.id(), "pluggy_connection", "display_name", connectionId)),
         now,
         now);
     jdbcTemplate.update(
@@ -319,8 +330,18 @@ class KeyRotationIT extends PostgresTestBase {
     byte[] accountBytes =
         jdbcTemplate.queryForObject(
             "select alias_enc from financial_account where id = ?", byte[].class, accountId);
+    byte[] accountDisplayBytes =
+        jdbcTemplate.queryForObject(
+            "select display_name_enc from financial_account where id = ?", byte[].class, accountId);
+    byte[] connectionDisplayBytes =
+        jdbcTemplate.queryForObject(
+            "select display_name_enc from pluggy_connection where id = ?",
+            byte[].class,
+            connectionId);
     assertThat(categoryBytes[1]).isEqualTo((byte) 2);
     assertThat(accountBytes[1]).isEqualTo((byte) 2);
+    assertThat(accountDisplayBytes[1]).isEqualTo((byte) 2);
+    assertThat(connectionDisplayBytes[1]).isEqualTo((byte) 2);
     assertThat(
             rotatedCrypto.decryptString(
                 categoryBytes, new CryptoContext(user.id(), "category", "name", categoryId)))
@@ -330,6 +351,17 @@ class KeyRotationIT extends PostgresTestBase {
                 accountBytes,
                 new CryptoContext(user.id(), "financial_account", "alias", accountId)))
         .isEqualTo("Carteira rotacionada");
+    assertThat(
+            rotatedCrypto.decryptString(
+                accountDisplayBytes,
+                new CryptoContext(user.id(), "financial_account", "display_name", accountId)))
+        .isEqualTo("Carteira exibida");
+    assertThat(
+            rotatedCrypto.decryptString(
+                connectionDisplayBytes,
+                new CryptoContext(user.id(), "pluggy_connection", "display_name", connectionId)))
+        .isEqualTo("Conexão exibida");
+    assertRotated(connectionId, "pluggy_connection", "display_name");
     assertRotated(
         manualItemId, "manual_asset_liability", "description", "reference_value", "notes");
     assertRotated(goalId, "financial_goal", "name", "description", "notes", "target_amount");

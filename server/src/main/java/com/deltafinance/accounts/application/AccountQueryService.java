@@ -1,5 +1,6 @@
 package com.deltafinance.accounts.application;
 
+import com.deltafinance.accounts.domain.AccountOrigin;
 import com.deltafinance.accounts.domain.CardProfile;
 import com.deltafinance.accounts.domain.CardProfileRepository;
 import com.deltafinance.accounts.domain.FinancialAccount;
@@ -78,6 +79,14 @@ public class AccountQueryService {
                 .orElse(null)
             : null;
     String referenceBalance = decrypt(account, account.getBalanceEnc(), "balance");
+    String providerAlias = decrypt(account, account.getAliasEnc(), "alias");
+    String customName = decrypt(account, account.getDisplayNameEnc(), "display_name");
+    boolean nameCustomized =
+        account.getOrigin() == AccountOrigin.IMPORTED
+            && customName != null
+            && !customName.isBlank();
+    String displayName = nameCustomized ? customName : providerAlias;
+    String providerName = account.getOrigin() == AccountOrigin.IMPORTED ? providerAlias : null;
 
     return new AccountView(
         account.getId(),
@@ -85,7 +94,9 @@ public class AccountQueryService {
         account.getSubtype(),
         account.getOrigin().name(),
         decrypt(account, account.getInstitutionNameEnc(), "institution_name"),
-        decrypt(account, account.getAliasEnc(), "alias"),
+        displayName,
+        providerName,
+        nameCustomized,
         account.getCurrency(),
         balanceService.effectiveBalance(account, referenceBalance),
         referenceBalance,

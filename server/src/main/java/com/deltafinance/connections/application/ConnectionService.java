@@ -246,6 +246,34 @@ public class ConnectionService {
     return toView(connection);
   }
 
+  public ConnectionView renameDisplayName(UUID userId, UUID connectionId, String displayName) {
+    PluggyConnection connection = requireConnection(userId, connectionId);
+    String normalized = requireDisplayName(displayName);
+    connection.renameDisplayName(
+        cryptoService.encrypt(
+            normalized,
+            new CryptoContext(userId, CONNECTION_TABLE, "display_name", connection.getId())));
+    connectionRepository.save(connection);
+    auditService.record(
+        userId, AuditEventType.CONNECTION_RENAMED, CONNECTION_TABLE, connection.getId());
+    return toView(connection);
+  }
+
+  public ConnectionView resetDisplayName(UUID userId, UUID connectionId) {
+    PluggyConnection connection = requireConnection(userId, connectionId);
+    connection.clearDisplayName();
+    connectionRepository.save(connection);
+    auditService.record(
+        userId, AuditEventType.CONNECTION_NAME_RESET, CONNECTION_TABLE, connection.getId());
+    return toView(connection);
+  }
+
+  private PluggyConnection requireConnection(UUID userId, UUID connectionId) {
+    return connectionRepository
+        .findByIdAndUserId(connectionId, userId)
+        .orElseThrow(NotFoundException::new);
+  }
+
   /**
    * Remove uma conexão. Por padrão preserva contas, transações e histórico operacional; com {@code
    * deleteHistory} apaga os dados financeiros vinculados e os registros operacionais da conexão.
@@ -341,10 +369,22 @@ public class ConnectionService {
                   "institution_name",
                   connection.getId()));
     }
+    String customName = null;
+    if (connection.getDisplayNameEnc() != null) {
+      customName =
+          cryptoService.decryptString(
+              connection.getDisplayNameEnc(),
+              new CryptoContext(
+                  connection.getUserId(), CONNECTION_TABLE, "display_name", connection.getId()));
+    }
+    boolean nameCustomized = customName != null && !customName.isBlank();
+    String displayName = nameCustomized ? customName : institution;
     return new ConnectionView(
         connection.getId(),
         maskItemId(itemId),
         institution,
+        displayName,
+        nameCustomized,
         connection.getStatus().name(),
         connection.getConsentExpiresAt(),
         connection.getLastSyncAt(),
@@ -367,5 +407,21 @@ public class ConnectionService {
       throw new ValidationException("itemId", "Informe o itemId da conexão.");
     }
     return itemId.trim();
+  }
+
+  private static String requireDisplayName(String displayName) {
+    if (displayName == null || displayName.isBlank()) {
+      throw new ValidationException("displayName", "Informe o nome de exibição.");
+    }
+    String trimmed = displayName.strip();
+    if (trimmed.length() > 120) {
+      throw new ValidationException(
+          "displayName", "O nome de exibição deve ter no máximo 120 caracteres.");
+    }
+    if (trimmed.chars().anyMatch(Character::isISOControl)) {
+      throw new ValidationException(
+          "displayName", "O nome de exibição contém caracteres inválidos.");
+    }
+    return trimmed;
   }
 }

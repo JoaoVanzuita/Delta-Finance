@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "screenshots": "playwright test -c playwright.screenshots.config.ts",
     "openapi:lint": "redocly lint ../specs/001-finance/contracts/openapi.yaml",
     "openapi:types": "openapi-typescript ../specs/001-finance/contracts/openapi.yaml -o src/lib/api/schema.d.ts",
     "prebuild": "npm run openapi:lint && npm run openapi:types",

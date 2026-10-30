@@ -110,6 +110,9 @@ export const financeApi = {
   addConnection: (itemId: string) => api.post<Connection>('/connections', { itemId }),
   updateConnection: (id: string, itemId: string) =>
     api.patch<Connection>(`/connections/${id}`, { itemId }),
+  renameConnection: (id: string, displayName: string) =>
+    api.put<Connection>(`/connections/${id}/display-name`, { displayName }),
+  resetConnectionName: (id: string) => api.delete<Connection>(`/connections/${id}/display-name`),
   removeConnection: (id: string, deleteHistory = false) =>
     api.delete<void>(`/connections/${id}?deleteHistory=${deleteHistory}`),
   syncConnection: (id: string) => api.post<SyncAccepted>(`/connections/${id}/sync`),
@@ -126,6 +129,9 @@ export const financeApi = {
   createAccount: (input: ManualAccountInput) => api.post<Account>('/accounts', input),
   updateAccount: (id: string, input: AccountUpdateInput) =>
     api.patch<Account>(`/accounts/${id}`, input),
+  renameAccount: (id: string, displayName: string) =>
+    api.put<Account>(`/accounts/${id}/display-name`, { displayName }),
+  resetAccountName: (id: string) => api.delete<Account>(`/accounts/${id}/display-name`),
 
   transactions: (filters: TransactionFilters = {}) =>
     api.get<TransactionPage>(`/transactions${transactionQuery(filters)}`),

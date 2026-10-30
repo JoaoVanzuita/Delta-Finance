@@ -1,9 +1,10 @@
 import { Link, useParams } from 'react-router'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/problem'
 
+import { DisplayNameEditor } from '@/components/DisplayNameEditor'
 import { formatMoney } from '@/features/accounts/format'
 import { financeApi, type Invoice } from '@/features/integration/api'
 import { CardCycleSettings } from '@/features/invoices/components/CardCycleSettings'
@@ -31,6 +32,7 @@ const INVOICE_STATUS_LABELS: Record<string, string> = {
  */
 export function CardDetailPage() {
   const { accountId = '' } = useParams<{ accountId: string }>()
+  const queryClient = useQueryClient()
   const accountQuery = useQuery({
     queryKey: ['account', accountId],
     queryFn: () => financeApi.account(accountId),
@@ -73,6 +75,26 @@ export function CardDetailPage() {
   const recentTransactions = transactions.slice(0, 10)
   const queryError = accountQuery.error ?? overviewQuery.error ?? invoicesQuery.error
 
+  async function renameCard(displayName: string) {
+    if (!account) {
+      return
+    }
+    const updated = await financeApi.renameAccount(account.id, displayName)
+    queryClient.setQueryData(['account', account.id], updated)
+    void queryClient.invalidateQueries()
+    return updated
+  }
+
+  async function resetCardName() {
+    if (!account) {
+      return
+    }
+    const updated = await financeApi.resetAccountName(account.id)
+    queryClient.setQueryData(['account', account.id], updated)
+    void queryClient.invalidateQueries()
+    return updated
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8">
       <Link to="/cards" className="text-sm font-medium text-action underline underline-offset-2">
@@ -93,26 +115,42 @@ export function CardDetailPage() {
             {profile?.level ? ` · ${profile.level}` : ''}
             {profile?.last4 ? ` · •••• ${profile.last4}` : ''}
           </p>
+          {account?.nameCustomized && account.providerName ? (
+            <p className="text-xs text-ink-muted">
+              Nome original no Pluggy: {account.providerName}
+            </p>
+          ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-card border border-line bg-surface-muted px-3 py-1 text-xs font-semibold text-ink">
-            {STATUS_LABELS[account?.status ?? card?.status ?? ''] ??
-              account?.status ??
-              card?.status ??
-              '—'}
-          </span>
-          <Link
-            to={`/cards/${accountId}/invoices`}
-            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-muted"
-          >
-            Faturas
-          </Link>
-          <Link
-            to={`/transactions?accountId=${accountId}`}
-            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-muted"
-          >
-            Transações
-          </Link>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-card border border-line bg-surface-muted px-3 py-1 text-xs font-semibold text-ink">
+              {STATUS_LABELS[account?.status ?? card?.status ?? ''] ??
+                account?.status ??
+                card?.status ??
+                '—'}
+            </span>
+            <Link
+              to={`/cards/${accountId}/invoices`}
+              className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-muted"
+            >
+              Faturas
+            </Link>
+            <Link
+              to={`/transactions?accountId=${accountId}`}
+              className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-muted"
+            >
+              Transações
+            </Link>
+          </div>
+          {account?.origin === 'IMPORTED' ? (
+            <DisplayNameEditor
+              currentName={account.alias ?? null}
+              originalName={account.providerName ?? null}
+              customized={Boolean(account.nameCustomized)}
+              onRename={renameCard}
+              onReset={resetCardName}
+            />
+          ) : null}
         </div>
       </header>
 

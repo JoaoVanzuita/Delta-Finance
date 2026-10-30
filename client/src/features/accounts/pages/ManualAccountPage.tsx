@@ -66,7 +66,8 @@ export function ManualAccountPage() {
         role="alert"
         className="rounded-card border border-warning/40 bg-warning/5 p-4 text-sm text-ink"
       >
-        Contas importadas não podem ser editadas manualmente. Altere a conexão no Meu Pluggy.
+        Contas importadas não podem ser editadas manualmente. Use “Renomear” na tela de detalhes
+        para alterar apenas o nome de exibição; os dados bancários continuam vindo do Pluggy.
       </p>
     )
   }

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/problem'
 
+import { DisplayNameEditor } from '@/components/DisplayNameEditor'
 import { financeApi, type Connection } from '../api'
 import { connectionStatusLabels, errorMessage, formatDateTime } from '../syncLabels'
 
@@ -94,6 +95,18 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
 
   const busy = sync.isPending || update.isPending || remove.isPending
 
+  async function renameConnection(id: string, displayName: string) {
+    const updated = await financeApi.renameConnection(id, displayName)
+    invalidate()
+    return updated
+  }
+
+  async function resetConnectionName(id: string) {
+    const updated = await financeApi.resetConnectionName(id)
+    invalidate()
+    return updated
+  }
+
   return (
     <section
       aria-labelledby="connections-heading"
@@ -145,8 +158,15 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="font-medium text-ink">
-                      {connection.institutionName ?? 'Instituição não informada'}
+                      {connection.displayName ??
+                        connection.institutionName ??
+                        'Instituição não informada'}
                     </p>
+                    {connection.nameCustomized && connection.institutionName ? (
+                      <p className="text-xs text-ink-muted">
+                        Instituição no Pluggy: {connection.institutionName}
+                      </p>
+                    ) : null}
                     <p className="numeric mt-1 text-xs text-ink-muted">
                       itemId {connection.itemIdMasked ?? 'não disponível'} ·{' '}
                       {connection.accountCount} conta(s)
@@ -171,72 +191,85 @@ export function ConnectionsList({ connections, configured }: ConnectionsListProp
                     ) : null}
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setError(null)
-                        setMessage(null)
-                        sync.mutate(connection.id)
-                      }}
-                      className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-3 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:opacity-60"
-                    >
-                      {sync.isPending ? 'Enfileirando…' : 'Consultar agora'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setError(null)
-                        setMessage(null)
-                        setEditingId(editing ? null : connection.id)
-                        setNewItemId('')
-                      }}
-                      className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted disabled:opacity-60"
-                    >
-                      {editing ? 'Cancelar' : 'Atualizar itemId'}
-                    </button>
-                    {confirming ? (
-                      <>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => remove.mutate({ id: connection.id, deleteHistory: false })}
-                          className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted disabled:opacity-60"
-                        >
-                          Desativar e manter dados
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => remove.mutate({ id: connection.id, deleteHistory: true })}
-                          className="inline-flex min-h-11 items-center justify-center rounded-card border border-expense/50 bg-expense/5 px-3 text-sm font-semibold text-expense disabled:opacity-60"
-                        >
-                          Excluir conexão e dados
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmingRemoveId(null)}
-                          className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink"
-                        >
-                          Cancelar
-                        </button>
-                      </>
-                    ) : (
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         disabled={busy}
                         onClick={() => {
                           setError(null)
                           setMessage(null)
-                          setConfirmingRemoveId(connection.id)
+                          sync.mutate(connection.id)
+                        }}
+                        className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-3 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:opacity-60"
+                      >
+                        {sync.isPending ? 'Enfileirando…' : 'Consultar agora'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setError(null)
+                          setMessage(null)
+                          setEditingId(editing ? null : connection.id)
+                          setNewItemId('')
                         }}
                         className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted disabled:opacity-60"
                       >
-                        Remover
+                        {editing ? 'Cancelar' : 'Atualizar itemId'}
                       </button>
-                    )}
+                      {confirming ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              remove.mutate({ id: connection.id, deleteHistory: false })
+                            }
+                            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted disabled:opacity-60"
+                          >
+                            Desativar e manter dados
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              remove.mutate({ id: connection.id, deleteHistory: true })
+                            }
+                            className="inline-flex min-h-11 items-center justify-center rounded-card border border-expense/50 bg-expense/5 px-3 text-sm font-semibold text-expense disabled:opacity-60"
+                          >
+                            Excluir conexão e dados
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingRemoveId(null)}
+                            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink"
+                          >
+                            Cancelar
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setError(null)
+                            setMessage(null)
+                            setConfirmingRemoveId(connection.id)
+                          }}
+                          className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted disabled:opacity-60"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                    <DisplayNameEditor
+                      currentName={connection.displayName ?? null}
+                      originalName={connection.institutionName ?? null}
+                      customized={Boolean(connection.nameCustomized)}
+                      onRename={(displayName) => renameConnection(connection.id, displayName)}
+                      onReset={() => resetConnectionName(connection.id)}
+                    />
                   </div>
                 </div>
 

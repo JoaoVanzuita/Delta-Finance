@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +11,8 @@ const ACCOUNT = {
   type: 'CREDIT',
   origin: 'IMPORTED',
   alias: 'Cartão Alfa',
+  providerName: 'Cartão Original',
+  nameCustomized: true,
   institutionName: 'Banco Alfa',
   currency: 'BRL',
   currentBalance: '180.00',
@@ -99,6 +102,8 @@ const OVERVIEW = {
   ],
 }
 
+let currentAccount = { ...ACCOUNT }
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -117,11 +122,17 @@ function renderPage() {
 
 describe('detalhe do cartão', () => {
   beforeEach(() => {
+    currentAccount = { ...ACCOUNT }
     document.cookie = 'XSRF-TOKEN=token-de-teste; path=/'
     vi.stubGlobal(
       'fetch',
-      vi.fn((url: string) => {
-        if (url.includes('/accounts/card-1')) return jsonResponse(ACCOUNT)
+      vi.fn((url: string, init: RequestInit = {}) => {
+        if (url.includes('/accounts/card-1/display-name') && init.method === 'PUT') {
+          const body = JSON.parse(String(init.body)) as { displayName: string }
+          currentAccount = { ...currentAccount, alias: body.displayName }
+          return jsonResponse(currentAccount)
+        }
+        if (url.includes('/accounts/card-1')) return jsonResponse(currentAccount)
         if (url.includes('/cards/overview')) return jsonResponse(OVERVIEW)
         if (url.includes('/cards/card-1/invoices')) {
           return jsonResponse({ items: [OPEN_INVOICE, CLOSED_INVOICE], hasMore: false })
@@ -160,6 +171,7 @@ describe('detalhe do cartão', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Cartão Alfa' }),
     ).toBeInTheDocument()
+    expect(screen.getByText('Nome original no Pluggy: Cartão Original')).toBeInTheDocument()
     expect(screen.getByText('Banco Alfa · VISA · PLATINUM · •••• 1234')).toBeInTheDocument()
     expect(screen.getByText('R$ 4.820,00')).toBeInTheDocument()
     expect(screen.getAllByText('R$ 50,00').length).toBeGreaterThan(0)
@@ -177,5 +189,25 @@ describe('detalhe do cartão', () => {
       'href',
       '/invoices/invoice-closed',
     )
+  })
+
+  it('permite renomear o cartão sem alterar o nome original', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Cartão Alfa' }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Renomear' }))
+    const input = screen.getByLabelText('Nome de exibição')
+    await user.clear(input)
+    await user.type(input, 'Cartão Novo')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Cartão Novo' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Nome original no Pluggy: Cartão Original')).toBeInTheDocument()
   })
 })

@@ -44,6 +44,9 @@ public class FinancialAccount extends BaseEntity {
   @Column(name = "alias_enc", columnDefinition = "bytea")
   private byte[] aliasEnc;
 
+  @Column(name = "display_name_enc", columnDefinition = "bytea")
+  private byte[] displayNameEnc;
+
   @Column(name = "currency", nullable = false, length = 3)
   private String currency;
 
@@ -125,6 +128,24 @@ public class FinancialAccount extends BaseEntity {
 
   public byte[] getAliasEnc() {
     return aliasEnc;
+  }
+
+  public byte[] getDisplayNameEnc() {
+    return displayNameEnc;
+  }
+
+  public boolean hasCustomDisplayName() {
+    return displayNameEnc != null;
+  }
+
+  /** Define o nome de exibição local sem alterar o nome importado do provedor. */
+  public void renameDisplayName(byte[] displayNameEnc) {
+    this.displayNameEnc = Objects.requireNonNull(displayNameEnc, "displayNameEnc");
+  }
+
+  /** Remove o nome personalizado e volta a exibir o nome importado. */
+  public void clearDisplayName() {
+    this.displayNameEnc = null;
   }
 
   public String getCurrency() {

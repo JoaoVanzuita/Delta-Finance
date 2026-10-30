@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -54,6 +55,20 @@ public class ConnectionController {
       @PathVariable UUID id, @Valid @RequestBody ConnectionUpdateRequest request) {
     return ConnectionResponse.from(
         connectionService.updateItemId(authenticatedUser.requireId(), id, request.itemId()));
+  }
+
+  @PutMapping("/{id}/display-name")
+  public ConnectionResponse rename(
+      @PathVariable UUID id, @Valid @RequestBody ConnectionDisplayNameRequest request) {
+    return ConnectionResponse.from(
+        connectionService.renameDisplayName(
+            authenticatedUser.requireId(), id, request.displayName()));
+  }
+
+  @DeleteMapping("/{id}/display-name")
+  public ConnectionResponse resetName(@PathVariable UUID id) {
+    return ConnectionResponse.from(
+        connectionService.resetDisplayName(authenticatedUser.requireId(), id));
   }
 
   @DeleteMapping("/{id}")

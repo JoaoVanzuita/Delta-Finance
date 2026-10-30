@@ -123,6 +123,8 @@ public class ExportService {
                 "origin",
                 "institutionName",
                 "alias",
+                "providerName",
+                "displayName",
                 "currency",
                 "currentBalance",
                 "balanceReferenceAt",
@@ -131,16 +133,25 @@ public class ExportService {
                 "notes",
                 "createdAt",
                 "updatedAt"),
-            "select id, user_id, type, subtype, origin, institution_name_enc, alias_enc, currency,"
-                + " balance_enc, balance_reference_at, status, last_sync_at, notes_enc, created_at,"
-                + " updated_at from financial_account where user_id = ? order by created_at, id",
+            "select id, user_id, type, subtype, origin, institution_name_enc, alias_enc,"
+                + " display_name_enc, currency, balance_enc, balance_reference_at, status,"
+                + " last_sync_at, notes_enc, created_at, updated_at from financial_account"
+                + " where user_id = ? order by created_at, id",
             rs -> {
               UUID id = uuid(rs, "id");
+              String origin = rs.getString("origin");
+              String alias =
+                  decrypt(
+                      rs.getObject("user_id", UUID.class),
+                      "financial_account",
+                      "alias",
+                      id,
+                      rs.getBytes("alias_enc"));
               Map<String, Object> row = new LinkedHashMap<>();
               row.put("id", id);
               row.put("type", rs.getString("type"));
               row.put("subtype", rs.getString("subtype"));
-              row.put("origin", rs.getString("origin"));
+              row.put("origin", origin);
               row.put(
                   "institutionName",
                   decrypt(
@@ -149,14 +160,16 @@ public class ExportService {
                       "institution_name",
                       id,
                       rs.getBytes("institution_name_enc")));
+              row.put("alias", alias);
+              row.put("providerName", "IMPORTED".equals(origin) ? alias : null);
               row.put(
-                  "alias",
+                  "displayName",
                   decrypt(
                       rs.getObject("user_id", UUID.class),
                       "financial_account",
-                      "alias",
+                      "display_name",
                       id,
-                      rs.getBytes("alias_enc")));
+                      rs.getBytes("display_name_enc")));
               row.put("currency", rs.getString("currency"));
               row.put(
                   "currentBalance",
@@ -1276,6 +1289,7 @@ public class ExportService {
                 "id",
                 "integrationId",
                 "institutionName",
+                "displayName",
                 "status",
                 "consentExpiresAt",
                 "nextAutoSyncAt",
@@ -1283,7 +1297,7 @@ public class ExportService {
                 "lastErrorCode",
                 "createdAt",
                 "updatedAt"),
-            "select id, user_id, integration_id, institution_name_enc, status,"
+            "select id, user_id, integration_id, institution_name_enc, display_name_enc, status,"
                 + " consent_expires_at, next_auto_sync_at, last_sync_at, last_error_code,"
                 + " created_at, updated_at from pluggy_connection where user_id = ?",
             rs -> {
@@ -1299,6 +1313,14 @@ public class ExportService {
                       "institution_name",
                       id,
                       rs.getBytes("institution_name_enc")));
+              row.put(
+                  "displayName",
+                  decrypt(
+                      rs.getObject("user_id", UUID.class),
+                      "pluggy_connection",
+                      "display_name",
+                      id,
+                      rs.getBytes("display_name_enc")));
               row.put("status", rs.getString("status"));
               row.put("consentExpiresAt", instant(rs, "consent_expires_at"));
               row.put("nextAutoSyncAt", instant(rs, "next_auto_sync_at"));

@@ -11,6 +11,8 @@ public record AccountView(
     String origin,
     String institutionName,
     String alias,
+    String providerName,
+    boolean nameCustomized,
     String currency,
     String currentBalance,
     String referenceBalance,
