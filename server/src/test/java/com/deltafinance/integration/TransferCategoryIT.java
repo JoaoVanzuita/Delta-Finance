@@ -187,7 +187,7 @@ class TransferCategoryIT extends PostgresTestBase {
     JsonNode categories = categories();
     assertThat(categoryKind(categories, "Transferências")).isEqualTo("TRANSFER");
     assertThat(categoryKind(categories, "Transferências externas")).isEqualTo("OTHER");
-    assertThat(categoryKind(categories, "Aportes")).isEqualTo("TRANSFER");
+    assertThat(categoryKind(categories, "Aplicações")).isEqualTo("TRANSFER");
     assertThat(categoryKind(categories, "Resgates")).isEqualTo("TRANSFER");
     assertThat(categoryKind(categories, "Salário")).isEqualTo("INCOME");
     assertThat(categoryKind(categories, "Alimentação")).isEqualTo("EXPENSE");

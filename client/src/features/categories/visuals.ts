@@ -169,6 +169,8 @@ const KNOWN_NAMES = new Map<string, number>([
   // uma categoria de receita distinta.
   ['rendimentos de investimentos', 10],
   ['rendimentos', 10],
+  ['aplicacoes', 10],
+  ['aplicações', 10],
   ['aportes', 10],
   ['resgates', 10],
   // Transferências externas compartilham o ícone/cor de transferências, mas

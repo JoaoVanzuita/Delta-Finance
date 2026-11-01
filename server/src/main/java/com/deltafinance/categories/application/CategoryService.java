@@ -48,7 +48,7 @@ public class CategoryService {
           new Predefined("salario", "Salário", CategoryKind.INCOME),
           new Predefined("rendimentos", "Rendimentos de investimentos", CategoryKind.INCOME),
           new Predefined("investimentos", "Investimentos", CategoryKind.OTHER),
-          new Predefined("aportes", "Aportes", CategoryKind.TRANSFER),
+          new Predefined("aplicacoes", "Aplicações", CategoryKind.TRANSFER),
           new Predefined("resgates", "Resgates", CategoryKind.TRANSFER),
           new Predefined("transferencias", "Transferências", CategoryKind.TRANSFER),
           new Predefined("transferencias_externas", "Transferências externas", CategoryKind.OTHER),
@@ -186,6 +186,14 @@ public class CategoryService {
         .map(Category::getId)
         .orElseThrow(
             () -> new ValidationException("category", "Categoria canônica não encontrada: " + key));
+  }
+
+  /** ID da categoria predefinida existente, sem criá-la; nula quando a chave não existe. */
+  public UUID predefinedCategoryId(UUID userId, String key) {
+    return categoryRepository
+        .findByUserIdAndPredefinedKey(userId, key)
+        .map(Category::getId)
+        .orElse(null);
   }
 
   private Category requireCategory(UUID userId, UUID categoryId) {

@@ -84,6 +84,8 @@ class CategoryTaxonomyTest {
     }
     assertThat(CategoryTaxonomy.isInvestmentKey(CategoryTaxonomy.INVESTIMENTOS)).isTrue();
     assertThat(CategoryTaxonomy.isInvestmentKey(CategoryTaxonomy.OUTROS)).isFalse();
+    assertThat(CategoryTaxonomy.canonicalKey("Aportes")).isEqualTo(CategoryTaxonomy.APLICACOES);
+    assertThat(CategoryTaxonomy.canonicalKey("Aplicações")).isEqualTo(CategoryTaxonomy.APLICACOES);
     assertThat(CategoryTaxonomy.canonicalKey("Proceeds interests and dividends"))
         .isEqualTo("rendimentos");
   }

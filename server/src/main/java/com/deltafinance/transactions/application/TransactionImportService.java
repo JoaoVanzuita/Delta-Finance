@@ -582,11 +582,12 @@ public class TransactionImportService {
         && CategoryTaxonomy.isCardInvoicePaymentDescription(description)) {
       canonicalKey = CategoryTaxonomy.TRANSFERENCIAS;
     }
-    // Aporte e resgate são movimentos patrimoniais, não receita/despesa. O Pluggy usa a mesma
+    // Aplicação e resgate são movimentos patrimoniais, não receita/despesa. O Pluggy usa a mesma
     // família de categorias ("Investments" e filhos) para os dois sentidos; a direção separa.
+    // O débito de corretagem compra o ativo (Aplicações); o crédito vende/resgata (Resgates).
     if (CategoryTaxonomy.isInvestmentKey(canonicalKey)) {
       canonicalKey =
-          type == TransactionType.CREDIT ? CategoryTaxonomy.RESGATES : CategoryTaxonomy.APORTES;
+          type == TransactionType.CREDIT ? CategoryTaxonomy.RESGATES : CategoryTaxonomy.APLICACOES;
     }
     // Em conta bancária, um crédito numa categoria de despesa é uma entrada atípica (reembolso,
     // devolução ou categorização incorreta do provedor). Ele não pode aparecer como “despesa” no

@@ -19,7 +19,14 @@ public final class CategoryTaxonomy {
   public static final String TRANSFERENCIAS = "transferencias";
   public static final String TRANSFERENCIAS_EXTERNAS = "transferencias_externas";
   public static final String INVESTIMENTOS = "investimentos";
+
+  /**
+   * Chave legada usada apenas para localizar e desativar a categoria antiga durante a migração.
+   * Novos lançamentos de corretagem usam {@link #APLICACOES}.
+   */
   public static final String APORTES = "aportes";
+
+  public static final String APLICACOES = "aplicacoes";
   public static final String RESGATES = "resgates";
 
   private static final Set<String> EXPENSE_KEYS =
@@ -53,7 +60,9 @@ public final class CategoryTaxonomy {
           Map.entry("rendimentos", "rendimentos"),
           Map.entry("rendimentos de investimentos", "rendimentos"),
           Map.entry("investimentos", INVESTIMENTOS),
-          Map.entry("aportes", APORTES),
+          Map.entry("aportes", APLICACOES),
+          Map.entry("aplicacoes", APLICACOES),
+          Map.entry("aplicações", APLICACOES),
           Map.entry("resgates", RESGATES),
           Map.entry("transferencias", "transferencias"),
           Map.entry("transferências", "transferencias"),
