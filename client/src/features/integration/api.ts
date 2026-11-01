@@ -51,6 +51,12 @@ export type InvestmentIncomeInput = components['schemas']['InvestmentIncomeReque
 export type InvestmentCostBasisInput = components['schemas']['InvestmentCostBasisRequest']
 export type InvestmentAssetClassInput = components['schemas']['InvestmentAssetClassRequest']
 export type WealthOverview = components['schemas']['WealthOverview']
+export type WealthSnapshotSummary = components['schemas']['WealthSnapshotSummary']
+export type WealthSnapshot = components['schemas']['WealthSnapshot']
+export type WealthSnapshotItem = components['schemas']['WealthSnapshotItem']
+export type WealthSnapshotCaptureInput = components['schemas']['WealthSnapshotCaptureRequest']
+export type InvestmentHistoryPoint = components['schemas']['InvestmentHistoryPoint']
+export type InvestmentClassSlice = components['schemas']['InvestmentClassSlice']
 export type WealthItem = components['schemas']['WealthItem']
 export type WealthManualItem = components['schemas']['WealthManualItem']
 export type WealthManualItemList = components['schemas']['WealthManualItemList']
@@ -183,6 +189,23 @@ export const financeApi = {
     api.patch<void>(`/investments/holdings/${id}/asset-class`, input),
 
   wealthOverview: () => api.get<WealthOverview>('/wealth/overview'),
+  wealthHistory: (from?: string, to?: string) => {
+    const params = new URLSearchParams()
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    const query = params.toString()
+    return api.get<WealthSnapshotSummary[]>(`/wealth/history${query ? `?${query}` : ''}`)
+  },
+  wealthSnapshot: (id: string) => api.get<WealthSnapshot>(`/wealth/history/${id}`),
+  createWealthSnapshot: (input: WealthSnapshotCaptureInput = {}) =>
+    api.post<WealthSnapshot>('/wealth/history', input),
+  investmentHistory: (from?: string, to?: string) => {
+    const params = new URLSearchParams()
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    const query = params.toString()
+    return api.get<InvestmentHistoryPoint[]>(`/investments/history${query ? `?${query}` : ''}`)
+  },
   wealthManualItems: () => api.get<WealthManualItemList>('/wealth/manual-items'),
   createWealthManualItem: (input: WealthManualItemInput) =>
     api.post<WealthManualItem>('/wealth/manual-items', input),

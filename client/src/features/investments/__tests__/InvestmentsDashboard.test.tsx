@@ -67,6 +67,24 @@ describe('dashboard de investimentos', () => {
     expect(await screen.findByRole('dialog', { name: 'FII Alfa' })).toBeInTheDocument()
   })
 
+  it('mostra evolução por classe e abre o snapshot do mês', async () => {
+    stubInvestmentsApi()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    const history = await screen.findByRole('region', { name: 'Evolução dos investimentos' })
+    expect(
+      await within(history).findByRole('img', { name: /Evolução do valor investido/i }),
+    ).toBeInTheDocument()
+    expect(within(history).getAllByText(/R\$\s*1\.750,00/).length).toBeGreaterThan(0)
+
+    await user.click(within(history).getAllByRole('button', { name: 'Detalhe' })[0]!)
+    const detail = await screen.findByRole('dialog', { name: /Posição de 31\/10\/2026/ })
+    expect(within(detail).getByText('FII Alfa (AAAA11)')).toBeInTheDocument()
+    expect(within(detail).getByText('Renda fixa')).toBeInTheDocument()
+  })
+
   it('filtra posições ativas e encerradas', async () => {
     stubInvestmentsApi()
     const user = userEvent.setup()

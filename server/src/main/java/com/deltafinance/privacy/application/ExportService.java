@@ -297,6 +297,109 @@ public class ExportService {
               return row;
             }),
         new Dataset(
+            "wealth_snapshots",
+            List.of(
+                "id",
+                "referenceDate",
+                "capturedAt",
+                "trigger",
+                "completeness",
+                "grossAssets",
+                "liabilities",
+                "netWorth",
+                "coverage",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, reference_date, captured_at, capture_trigger, completeness,"
+                + " gross_assets_enc, liabilities_enc, net_worth_enc, coverage, created_at,"
+                + " updated_at from wealth_snapshot where user_id = ?"
+                + " order by reference_date desc, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("referenceDate", date(rs, "reference_date"));
+              row.put("capturedAt", instant(rs, "captured_at"));
+              row.put("trigger", rs.getString("capture_trigger"));
+              row.put("completeness", rs.getString("completeness"));
+              row.put(
+                  "grossAssets",
+                  decrypt(
+                      userId,
+                      "wealth_snapshot",
+                      "gross_assets",
+                      id,
+                      rs.getBytes("gross_assets_enc")));
+              row.put(
+                  "liabilities",
+                  decrypt(
+                      userId,
+                      "wealth_snapshot",
+                      "liabilities",
+                      id,
+                      rs.getBytes("liabilities_enc")));
+              row.put(
+                  "netWorth",
+                  decrypt(
+                      userId, "wealth_snapshot", "net_worth", id, rs.getBytes("net_worth_enc")));
+              row.put("coverage", rs.getString("coverage"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "wealth_snapshot_items",
+            List.of(
+                "id",
+                "snapshotId",
+                "sourceType",
+                "sourceId",
+                "assetClass",
+                "description",
+                "value",
+                "currency",
+                "included",
+                "exclusionReason",
+                "referenceDate",
+                "stale",
+                "createdAt",
+                "updatedAt"),
+            "select id, snapshot_id, user_id, source_type, source_id, asset_class,"
+                + " description_enc, value_enc, currency, included, exclusion_reason,"
+                + " source_reference_date, stale, created_at, updated_at"
+                + " from wealth_snapshot_item where user_id = ?"
+                + " order by snapshot_id, source_type, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("snapshotId", uuid(rs, "snapshot_id"));
+              row.put("sourceType", rs.getString("source_type"));
+              row.put("sourceId", uuid(rs, "source_id"));
+              row.put("assetClass", rs.getString("asset_class"));
+              row.put(
+                  "description",
+                  decrypt(
+                      userId,
+                      "wealth_snapshot_item",
+                      "description",
+                      id,
+                      rs.getBytes("description_enc")));
+              row.put(
+                  "value",
+                  decrypt(userId, "wealth_snapshot_item", "value", id, rs.getBytes("value_enc")));
+              row.put("currency", rs.getString("currency"));
+              row.put("included", rs.getBoolean("included"));
+              row.put("exclusionReason", rs.getString("exclusion_reason"));
+              row.put("referenceDate", date(rs, "source_reference_date"));
+              row.put("stale", rs.getBoolean("stale"));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
             "financial_goals",
             List.of(
                 "id",

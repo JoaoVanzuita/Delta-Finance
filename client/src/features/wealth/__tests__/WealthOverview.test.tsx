@@ -74,6 +74,77 @@ const OVERVIEW = {
   ],
 }
 
+const SNAPSHOTS = [
+  {
+    id: 'snap-2',
+    referenceDate: '2026-10-31',
+    capturedAt: '2026-11-01T03:10:00Z',
+    trigger: 'SCHEDULED',
+    completeness: 'PARTIAL',
+    grossAssets: '1500.00',
+    liabilities: '300.00',
+    netWorth: '1200.00',
+    itemCount: 5,
+    includedItemCount: 4,
+    hasPartialData: true,
+  },
+  {
+    id: 'snap-1',
+    referenceDate: '2026-09-30',
+    capturedAt: '2026-10-01T03:10:00Z',
+    trigger: 'SCHEDULED',
+    completeness: 'COMPLETE',
+    grossAssets: '1400.00',
+    liabilities: '250.00',
+    netWorth: '1150.00',
+    itemCount: 4,
+    includedItemCount: 4,
+    hasPartialData: false,
+  },
+]
+
+const SNAPSHOT_DETAIL = {
+  ...SNAPSHOTS[0],
+  items: [
+    {
+      sourceType: 'ACCOUNT',
+      sourceId: 'acc-bank',
+      description: 'Conta Alfa',
+      value: '1000.00',
+      currency: 'BRL',
+      assetClass: null,
+      included: true,
+      exclusionReason: null,
+      referenceDate: '2026-10-31',
+      stale: false,
+    },
+    {
+      sourceType: 'CARD',
+      sourceId: 'card-1',
+      description: 'Cartão Alfa',
+      value: '100.00',
+      currency: 'BRL',
+      assetClass: null,
+      included: true,
+      exclusionReason: null,
+      referenceDate: '2026-10-31',
+      stale: false,
+    },
+    {
+      sourceType: 'ACCOUNT',
+      sourceId: 'acc-gap',
+      description: 'Conta sem saldo',
+      value: '0.00',
+      currency: 'BRL',
+      assetClass: null,
+      included: false,
+      exclusionReason: 'Saldo não informado.',
+      referenceDate: null,
+      stale: false,
+    },
+  ],
+}
+
 const MANUAL_ITEMS = [
   {
     id: 'item-1',
@@ -113,6 +184,15 @@ function stubApi(): {
     const method = init.method ?? 'GET'
     if (url.includes('/auth/me')) return jsonResponse(USER)
     if (url.includes('/wealth/overview')) return jsonResponse(OVERVIEW)
+    if (url.includes('/wealth/history/snap-')) {
+      return jsonResponse(SNAPSHOT_DETAIL)
+    }
+    if (url.includes('/wealth/history') && method === 'GET') {
+      return jsonResponse(SNAPSHOTS)
+    }
+    if (url.includes('/wealth/history') && method === 'POST') {
+      return jsonResponse(SNAPSHOT_DETAIL, 201)
+    }
     if (url.endsWith('/wealth/manual-items') && method === 'GET') {
       return jsonResponse({ items: state.manualItems })
     }
@@ -179,6 +259,27 @@ describe('visão patrimonial', () => {
     expect(within(composition).getAllByText('Empréstimo').length).toBeGreaterThan(0)
     expect(within(composition).getByText(/Saldo não informado/)).toBeInTheDocument()
     expect(within(composition).getByText('Conta sem saldo')).toBeInTheDocument()
+  })
+
+  it('mostra evolução, abre o detalhe e registra snapshot manual', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })
+    const history = await screen.findByRole('region', { name: 'Evolução patrimonial' })
+    expect(
+      await within(history).findByRole('img', { name: /Evolução patrimonial/i }),
+    ).toBeInTheDocument()
+    expect(within(history).getAllByText(/R\$\s*1\.200,00/).length).toBeGreaterThan(0)
+
+    await user.click(within(history).getAllByRole('button', { name: 'Detalhe' })[0]!)
+    const detail = await screen.findByRole('dialog', { name: /Posição de 31\/10\/2026/ })
+    expect(within(detail).getByText('Conta Alfa')).toBeInTheDocument()
+    expect(within(detail).getByText(/Saldo não informado/)).toBeInTheDocument()
+
+    await user.click(within(history).getByRole('button', { name: /Registrar snapshot/ }))
+    expect(await screen.findByText('Snapshot registrado.')).toBeInTheDocument()
   })
 
   it('cria item manual como ativo com valor e data de referência', async () => {

@@ -880,6 +880,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wealth/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Histórico de snapshots patrimoniais
+         * @description Série mensal imutável; não reconstrói meses anteriores à ativação.
+         */
+        get: operations["getWealthHistory"];
+        put?: never;
+        /** Captura manual de snapshot patrimonial */
+        post: operations["postWealthHistory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wealth/history/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Detalhe de um snapshot patrimonial */
+        get: operations["getWealthHistoryId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/investments/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Histórico mensal de investimentos
+         * @description Derivado dos snapshots patrimoniais; não calcula rentabilidade.
+         */
+        get: operations["getInvestmentsHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wealth/manual-items": {
         parameters: {
             query?: never;
@@ -1849,6 +1909,63 @@ export interface components {
             /** @description Indica se há ao menos uma fonte incluída na consolidação. */
             hasData: boolean;
             items: components["schemas"]["WealthItem"][];
+        };
+        WealthSnapshotSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            referenceDate: string;
+            /** Format: date-time */
+            capturedAt: string;
+            /** @enum {string} */
+            trigger: "SCHEDULED" | "MANUAL";
+            /** @enum {string} */
+            completeness: "COMPLETE" | "PARTIAL" | "ESTIMATED";
+            grossAssets: string;
+            liabilities: string;
+            netWorth: string;
+            itemCount: number;
+            includedItemCount: number;
+            hasPartialData: boolean;
+        };
+        WealthSnapshotItem: {
+            /** @enum {string} */
+            sourceType: "ACCOUNT" | "CARD" | "INVESTMENT" | "MANUAL_ASSET" | "MANUAL_LIABILITY";
+            /** Format: uuid */
+            sourceId?: string | null;
+            description: string;
+            /** @description Valor na moeda original; não é cotação. */
+            value: string;
+            currency: string;
+            assetClass?: string | null;
+            included: boolean;
+            exclusionReason?: string | null;
+            /** Format: date */
+            referenceDate?: string | null;
+            stale: boolean;
+        };
+        WealthSnapshot: components["schemas"]["WealthSnapshotSummary"] & {
+            items: components["schemas"]["WealthSnapshotItem"][];
+        };
+        WealthSnapshotCaptureRequest: {
+            /** Format: date */
+            referenceDate?: string | null;
+        };
+        InvestmentClassSlice: {
+            assetClass: string;
+            value: string;
+            percentage: string;
+            positionCount: number;
+        };
+        InvestmentHistoryPoint: {
+            /** Format: uuid */
+            snapshotId: string;
+            /** Format: date */
+            referenceDate: string;
+            totalValue: string;
+            /** @enum {string} */
+            completeness: "COMPLETE" | "PARTIAL" | "ESTIMATED";
+            allocation: components["schemas"]["InvestmentClassSlice"][];
         };
         WealthItem: {
             /** @enum {string} */
@@ -3871,6 +3988,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WealthOverview"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWealthHistory: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["DateFrom"];
+                to?: components["parameters"]["DateTo"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Snapshots do período, mais recentes primeiro. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthSnapshotSummary"][];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    postWealthHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WealthSnapshotCaptureRequest"];
+            };
+        };
+        responses: {
+            /** @description Snapshot criado. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthSnapshot"];
+                };
+            };
+            /** @description Já existe snapshot para a data. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWealthHistoryId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Snapshot com composição e lacunas. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WealthSnapshot"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInvestmentsHistory: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["DateFrom"];
+                to?: components["parameters"]["DateTo"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pontos mensais com total e alocação por classe. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentHistoryPoint"][];
                 };
             };
             /** @description Erro do cliente. */

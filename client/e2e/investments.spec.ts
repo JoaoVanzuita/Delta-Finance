@@ -318,6 +318,9 @@ async function installStub(page: Page, overrides: Overrides = {}): Promise<void>
         body: JSON.stringify(USER),
       })
     }
+    if (path === '/wealth/history' || path === '/investments/history') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    }
     if (path === '/investments/overview') {
       return route.fulfill({
         status: 200,

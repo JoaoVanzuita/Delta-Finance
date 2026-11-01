@@ -56,6 +56,9 @@ async function installStub(page: Page) {
         body: JSON.stringify(SUMMARY),
       })
     }
+    if (path === '/wealth/history' || path === '/investments/history') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    }
     if (path === '/wealth/overview') {
       return route.fulfill({
         status: 200,

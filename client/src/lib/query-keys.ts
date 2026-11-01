@@ -39,10 +39,12 @@ export const queryKeys = {
   investmentHoldings: (status?: string, assetClass?: string) =>
     ['investments', 'holdings', status ?? '', assetClass ?? ''] as const,
   investmentIncome: ['investments', 'income'] as const,
+  investmentHistory: ['investments', 'history'] as const,
 
   wealth: ['wealth'] as const,
   wealthOverview: ['wealth', 'overview'] as const,
   wealthManualItems: ['wealth', 'manual-items'] as const,
+  wealthHistory: ['wealth', 'history'] as const,
 
   goals: ['goals'] as const,
 } as const

@@ -55,6 +55,8 @@ class ExportIT extends PostgresTestBase {
           "accounts",
           "card_profiles",
           "manual_asset_liabilities",
+          "wealth_snapshots",
+          "wealth_snapshot_items",
           "financial_goals",
           "goal_allocations",
           "goal_progress_snapshots",
@@ -180,10 +182,6 @@ class ExportIT extends PostgresTestBase {
     assertThat(files.keySet()).containsExactlyInAnyOrderElementsOf(expectedFiles);
     assertThat(files)
         .doesNotContainKeys(
-            "wealth_snapshots.jsonl",
-            "wealth_snapshots.csv",
-            "wealth_snapshot_items.jsonl",
-            "wealth_snapshot_items.csv",
             "webhook_subscriptions.jsonl",
             "webhook_subscriptions.csv",
             "webhook_events.jsonl",

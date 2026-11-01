@@ -120,6 +120,13 @@ delta:
     retry-base: ${DELTA_SYNC_RETRY_BASE:30s}
     retry-max: ${DELTA_SYNC_RETRY_MAX:1h}
     batch-size: ${DELTA_SYNC_BATCH_SIZE:10}
+  wealth:
+    snapshot:
+      # Snapshot mensal imutável; o job captura o fechamento do mês anterior.
+      enabled: ${DELTA_WEALTH_SNAPSHOT_ENABLED:true}
+      cron: ${DELTA_WEALTH_SNAPSHOT_CRON:0 10 0 1 * *}
+      retention-months: ${DELTA_WEALTH_SNAPSHOT_RETENTION_MONTHS:60}
+      retention-cron: ${DELTA_WEALTH_SNAPSHOT_RETENTION_CRON:0 45 3 * * *}
   privacy:
     retention:
       # Expurgo diário: login_attempt 30 d, sync_run 90 d, audit_event 1 ano e

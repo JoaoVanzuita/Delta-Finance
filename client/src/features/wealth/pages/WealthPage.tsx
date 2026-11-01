@@ -23,6 +23,7 @@ import {
 } from '@/features/integration/api'
 
 import { ManualItemForm } from '../components/ManualItemForm'
+import { WealthHistorySection } from '../components/WealthHistorySection'
 import { WealthComposition } from '../components/WealthComposition'
 import { COMPLETENESS_LABELS, formatDate, formatMoney } from '../format'
 
@@ -326,6 +327,7 @@ function WealthOverviewSections({ overview }: { readonly overview: WealthOvervie
       </section>
 
       <WealthComposition items={overview.items} />
+      <WealthHistorySection />
     </div>
   )
 }

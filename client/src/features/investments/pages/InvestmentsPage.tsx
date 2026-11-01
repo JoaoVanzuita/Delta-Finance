@@ -24,6 +24,7 @@ import {
 import { InvestmentAllocation } from '../components/InvestmentAllocation'
 import { InvestmentCoverage } from '../components/InvestmentCoverage'
 import { InvestmentHoldingDrawer } from '../components/InvestmentHoldingDrawer'
+import { InvestmentHistorySection } from '../components/InvestmentHistorySection'
 import { InvestmentHoldings } from '../components/InvestmentHoldings'
 import { InvestmentIncomeForm } from '../components/InvestmentIncomeForm'
 import { InvestmentIncomeSection } from '../components/InvestmentIncomeSection'
@@ -171,6 +172,7 @@ export function InvestmentsPage() {
                   onOpenHolding={setOpenHolding}
                 />
               </section>
+              <InvestmentHistorySection />
               <InvestmentCoverage sources={overview.coverage} />
               <details className="rounded-card border border-line bg-surface-muted p-4">
                 <summary className="min-h-11 cursor-pointer text-body-sm font-semibold text-ink">

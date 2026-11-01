@@ -321,6 +321,20 @@ public class WealthService {
             ? name
             : name + " (" + holding.code() + ")";
     boolean stale = holding.stale();
+    if (!Money.BRL.equals(holding.currency())) {
+      accumulator.exclude(
+          item(
+              WealthSourceType.INVESTMENT,
+              holding.id(),
+              description,
+              "0.00",
+              false,
+              "Moeda diferente de BRL não compõe o patrimônio consolidado.",
+              "PROVIDER",
+              holding.referenceDate(),
+              stale));
+      return;
+    }
     if (holding.balance() == null || holding.balance().isBlank()) {
       accumulator.gap(
           item(

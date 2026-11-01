@@ -275,6 +275,81 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+export const INVESTMENT_HISTORY = [
+  {
+    snapshotId: 'snap-inv-2',
+    referenceDate: '2026-10-31',
+    totalValue: '1750.00',
+    completeness: 'COMPLETE',
+    allocation: [
+      { assetClass: 'FII', value: '1500.00', percentage: '85.71', positionCount: 2 },
+      { assetClass: 'RENDA_FIXA', value: '250.00', percentage: '14.29', positionCount: 1 },
+    ],
+  },
+  {
+    snapshotId: 'snap-inv-1',
+    referenceDate: '2026-09-30',
+    totalValue: '1600.00',
+    completeness: 'COMPLETE',
+    allocation: [
+      { assetClass: 'FII', value: '1400.00', percentage: '87.50', positionCount: 2 },
+      { assetClass: 'RENDA_FIXA', value: '200.00', percentage: '12.50', positionCount: 1 },
+    ],
+  },
+]
+
+const SNAPSHOT_DETAIL = {
+  id: 'snap-inv-2',
+  referenceDate: '2026-10-31',
+  capturedAt: '2026-11-01T03:10:00Z',
+  trigger: 'SCHEDULED',
+  completeness: 'COMPLETE',
+  grossAssets: '1750.00',
+  liabilities: '0.00',
+  netWorth: '1750.00',
+  itemCount: 3,
+  includedItemCount: 3,
+  hasPartialData: false,
+  items: [
+    {
+      sourceType: 'INVESTMENT',
+      sourceId: 'holding-1',
+      description: 'FII Alfa (AAAA11)',
+      value: '1000.00',
+      currency: 'BRL',
+      assetClass: 'FII',
+      included: true,
+      exclusionReason: null,
+      referenceDate: '2026-10-31',
+      stale: false,
+    },
+    {
+      sourceType: 'INVESTMENT',
+      sourceId: 'holding-2',
+      description: 'FII Beta (BBBB11)',
+      value: '500.00',
+      currency: 'BRL',
+      assetClass: 'FII',
+      included: true,
+      exclusionReason: null,
+      referenceDate: '2026-10-31',
+      stale: false,
+    },
+    {
+      sourceType: 'INVESTMENT',
+      sourceId: 'holding-3',
+      description: 'CDB Alfa (CDB-1)',
+      value: '250.00',
+      currency: 'BRL',
+      assetClass: 'RENDA_FIXA',
+      included: true,
+      exclusionReason: null,
+      referenceDate: '2026-10-31',
+      stale: false,
+    },
+  ],
+}
+
 export function stubInvestmentsApi(options: StubOptions = {}) {
   let holdings = (options.holdings ?? HOLDINGS).map((holding) => ({ ...holding }))
   const overview = options.overview ?? OVERVIEW
@@ -349,6 +424,8 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
     if (path === '/auth/me') return jsonResponse(USER)
     if (path === '/auth/csrf') return new Response(null, { status: 204 })
     if (path === '/investments/overview') return jsonResponse(overview)
+    if (path === '/investments/history') return jsonResponse(INVESTMENT_HISTORY)
+    if (path.startsWith('/wealth/history/')) return jsonResponse(SNAPSHOT_DETAIL)
     if (path === '/investments/income' && method === 'GET') return jsonResponse(currentIncome())
     if (path === '/investments/holdings') {
       const params = new URL(url, 'http://localhost').searchParams
