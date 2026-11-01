@@ -54,6 +54,10 @@ public class Transaction extends BaseEntity {
   @Column(name = "currency", nullable = false, length = 3)
   private String currency;
 
+  /** Moeda original do provedor quando difere da moeda da conta (transação internacional). */
+  @Column(name = "source_currency", length = 3)
+  private String sourceCurrency;
+
   @Column(name = "amount_source_enc", nullable = false, columnDefinition = "bytea")
   private byte[] amountSourceEnc;
 
@@ -107,6 +111,22 @@ public class Transaction extends BaseEntity {
   /** Primeiro dia do mês da fatura informado pelo provedor; nulo em lançamentos manuais. */
   @Column(name = "provider_bill_month")
   private LocalDate providerBillMonth;
+
+  /** Tipo de operação do provedor (ex.: PAGAMENTO_FATURA em pagamentos sintéticos). */
+  @Column(name = "operation_type", length = 32)
+  private String operationType;
+
+  /** Identificador estável da transação no provedor, quando disponível. */
+  @Column(name = "provider_id", length = 128)
+  private String providerId;
+
+  /** Bill oficial à qual a transação pertence, segundo o provedor. */
+  @Column(name = "provider_bill_id", length = 128)
+  private String providerBillId;
+
+  /** Data de fechamento da Bill oficial informada no metadado do cartão. */
+  @Column(name = "provider_bill_closing_date")
+  private LocalDate providerBillClosingDate;
 
   protected Transaction() {
     // Hibernate
@@ -237,6 +257,21 @@ public class Transaction extends BaseEntity {
     return currency;
   }
 
+  public String getSourceCurrency() {
+    return sourceCurrency;
+  }
+
+  /** Moeda da conta usada no valor efetivo; a origem fica em {@code amount_source}. */
+  public void applyAccountCurrency(String currency) {
+    this.currency = currency == null || currency.isBlank() ? "BRL" : currency;
+  }
+
+  /** Moeda original do provedor, preservada para auditoria de conversão. */
+  public void applySourceCurrency(String sourceCurrency) {
+    this.sourceCurrency =
+        sourceCurrency == null || sourceCurrency.isBlank() ? null : sourceCurrency;
+  }
+
   public byte[] getAmountSourceEnc() {
     return amountSourceEnc;
   }
@@ -323,6 +358,42 @@ public class Transaction extends BaseEntity {
 
   public LocalDate getProviderBillMonth() {
     return providerBillMonth;
+  }
+
+  public String getOperationType() {
+    return operationType;
+  }
+
+  public String getProviderId() {
+    return providerId;
+  }
+
+  public String getProviderBillId() {
+    return providerBillId;
+  }
+
+  public LocalDate getProviderBillClosingDate() {
+    return providerBillClosingDate;
+  }
+
+  /** Metadados do provedor para alocação determinística; valores ausentes não apagam os atuais. */
+  public void applyProviderMetadata(
+      String operationType,
+      String providerId,
+      String providerBillId,
+      LocalDate providerBillClosingDate) {
+    if (operationType != null && !operationType.isBlank()) {
+      this.operationType = operationType;
+    }
+    if (providerId != null && !providerId.isBlank()) {
+      this.providerId = providerId;
+    }
+    if (providerBillId != null && !providerBillId.isBlank()) {
+      this.providerBillId = providerBillId;
+    }
+    if (providerBillClosingDate != null) {
+      this.providerBillClosingDate = providerBillClosingDate;
+    }
   }
 
   /** Mês da fatura informado pela origem; usado para alocar compras e pagamentos ao ciclo certo. */

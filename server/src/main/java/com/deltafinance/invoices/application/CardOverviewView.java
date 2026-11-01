@@ -30,9 +30,12 @@ public record CardOverviewView(
       String last4,
       String usedAmount,
       String outstanding,
+      String invoicedOutstanding,
+      String unbilledAmount,
       String utilization,
       LocalDate nextDueDate,
       InvoiceView currentInvoice,
       InvoiceView nextDueInvoice,
+      int pendingCount,
       int unallocatedCount) {}
 }

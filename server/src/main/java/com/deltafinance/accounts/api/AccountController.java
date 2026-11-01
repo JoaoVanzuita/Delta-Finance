@@ -1,6 +1,7 @@
 package com.deltafinance.accounts.api;
 
 import com.deltafinance.accounts.application.AccountDisplayNameService;
+import com.deltafinance.accounts.application.AccountInvestmentService;
 import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -19,14 +20,17 @@ public class AccountController {
 
   private final AccountQueryService accountQueryService;
   private final AccountDisplayNameService accountDisplayNameService;
+  private final AccountInvestmentService accountInvestmentService;
   private final AuthenticatedUser authenticatedUser;
 
   public AccountController(
       AccountQueryService accountQueryService,
       AccountDisplayNameService accountDisplayNameService,
+      AccountInvestmentService accountInvestmentService,
       AuthenticatedUser authenticatedUser) {
     this.accountQueryService = accountQueryService;
     this.accountDisplayNameService = accountDisplayNameService;
+    this.accountInvestmentService = accountInvestmentService;
     this.authenticatedUser = authenticatedUser;
   }
 
@@ -53,5 +57,13 @@ public class AccountController {
   @DeleteMapping("/{id}/display-name")
   public AccountResponse resetName(@PathVariable UUID id) {
     return AccountResponse.from(accountDisplayNameService.reset(authenticatedUser.requireId(), id));
+  }
+
+  @PutMapping("/{id}/investment")
+  public AccountResponse updateInvestment(
+      @PathVariable UUID id, @Valid @RequestBody AccountInvestmentRequest request) {
+    return AccountResponse.from(
+        accountInvestmentService.update(
+            authenticatedUser.requireId(), id, request.investmentAccount()));
   }
 }

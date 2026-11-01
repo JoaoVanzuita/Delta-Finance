@@ -1,5 +1,6 @@
 package com.deltafinance.investments.api;
 
+import com.deltafinance.investments.application.InvestmentContributionService;
 import com.deltafinance.investments.application.InvestmentQueryService;
 import com.deltafinance.security.AuthenticatedUser;
 import java.time.LocalDate;
@@ -17,11 +18,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class InvestmentDashboardController {
 
   private final InvestmentQueryService queryService;
+  private final InvestmentContributionService contributionService;
   private final AuthenticatedUser authenticatedUser;
 
   public InvestmentDashboardController(
-      InvestmentQueryService queryService, AuthenticatedUser authenticatedUser) {
+      InvestmentQueryService queryService,
+      InvestmentContributionService contributionService,
+      AuthenticatedUser authenticatedUser) {
     this.queryService = queryService;
+    this.contributionService = contributionService;
     this.authenticatedUser = authenticatedUser;
   }
 
@@ -59,5 +64,14 @@ public class InvestmentDashboardController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
     return InvestmentIncomeResponse.from(
         queryService.income(authenticatedUser.requireId(), from, to));
+  }
+
+  @GetMapping("/contributions")
+  public InvestmentContributionResponse contributions(
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+      @RequestParam(required = false) UUID connectionId) {
+    return InvestmentContributionResponse.from(
+        contributionService.contributions(authenticatedUser.requireId(), from, to, connectionId));
   }
 }

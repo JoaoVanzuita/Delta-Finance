@@ -43,11 +43,16 @@ public final class PluggyModels {
       String accountExternalId,
       String description,
       BigDecimal amount,
+      BigDecimal amountInAccountCurrency,
       LocalDate date,
       String status,
       String category,
       String type,
       String currency,
+      String operationType,
+      String providerId,
+      String providerBillId,
+      LocalDate providerBillClosingDate,
       JsonNode creditCardMetadata) {}
 
   public record PluggyAccountPage(List<PluggyAccount> items, boolean complete) {}

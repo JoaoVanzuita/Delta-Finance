@@ -6,6 +6,7 @@ import com.deltafinance.categories.application.CategoryService;
 import com.deltafinance.categories.application.CategoryView;
 import com.deltafinance.categories.domain.CategoryKind;
 import com.deltafinance.connections.application.SyncQueryService;
+import com.deltafinance.invoices.application.CardDebtService;
 import com.deltafinance.invoices.application.InvoiceReportingService;
 import com.deltafinance.invoices.application.InvoiceReportingService.InvoiceReportItem;
 import com.deltafinance.reconciliation.application.InternalMatchService;
@@ -70,6 +71,7 @@ public class ReportingService {
   private final AccountQueryService accountQueryService;
   private final TransactionQueryService transactionQueryService;
   private final InvoiceReportingService invoiceReportingService;
+  private final CardDebtService cardDebtService;
   private final CategoryService categoryService;
   private final SyncQueryService syncQueryService;
   private final InternalMatchService internalMatchService;
@@ -79,6 +81,7 @@ public class ReportingService {
       AccountQueryService accountQueryService,
       TransactionQueryService transactionQueryService,
       InvoiceReportingService invoiceReportingService,
+      CardDebtService cardDebtService,
       CategoryService categoryService,
       SyncQueryService syncQueryService,
       InternalMatchService internalMatchService,
@@ -86,6 +89,7 @@ public class ReportingService {
     this.accountQueryService = accountQueryService;
     this.transactionQueryService = transactionQueryService;
     this.invoiceReportingService = invoiceReportingService;
+    this.cardDebtService = cardDebtService;
     this.categoryService = categoryService;
     this.syncQueryService = syncQueryService;
     this.internalMatchService = internalMatchService;
@@ -694,9 +698,16 @@ public class ReportingService {
         ReportingService.UNCATEGORIZED_ID.equals(resolved.categoryId())
             ? null
             : resolved.categoryId();
+    Set<UUID> creditCardAccounts = new HashSet<>();
+    for (AccountView account : resolved.accounts()) {
+      if ("CREDIT".equals(account.type())) {
+        creditCardAccounts.add(account.id());
+      }
+    }
     int count = 0;
     BigDecimal income = BigDecimal.ZERO;
     BigDecimal expenses = BigDecimal.ZERO;
+    BigDecimal expenseReductions = BigDecimal.ZERO;
     for (TransactionView transaction :
         transactionQueryService.listForReporting(
             userId,
@@ -716,12 +727,17 @@ public class ReportingService {
       }
       count++;
       if (amount.signum() > 0) {
-        income = income.add(amount);
+        if (creditCardAccounts.contains(transaction.accountId())) {
+          // Entrada pendente em cartão é pagamento/estorno: reduz despesa e nunca vira receita.
+          expenseReductions = expenseReductions.add(amount);
+        } else {
+          income = income.add(amount);
+        }
       } else {
         expenses = expenses.add(amount.abs());
       }
     }
-    return new Pending(count, income, expenses);
+    return new Pending(count, income, expenses.subtract(expenseReductions).max(BigDecimal.ZERO));
   }
 
   private Balance currentBalance(Resolved resolved) {
@@ -761,7 +777,7 @@ public class ReportingService {
       }
       cardIds.add(account.id());
     }
-    return invoiceReportingService.outstandingBalance(userId, cardIds);
+    return cardDebtService.total(userId, cardIds);
   }
 
   private Instant lastSuccessfulSync(UUID userId, Resolved resolved) {

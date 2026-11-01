@@ -147,7 +147,7 @@ class InternalMatchIT extends PostgresTestBase {
     assertThat(match.path("kind").asString()).isEqualTo("TRANSFER");
     assertThat(match.path("score").asDouble()).isGreaterThanOrEqualTo(80);
     assertThat(match.path("status").asString()).isEqualTo("PENDING");
-    assertThat(match.path("criteriaVersion").asString()).isEqualTo("v1");
+    assertThat(match.path("criteriaVersion").asString()).isEqualTo("v2");
 
     JsonNode confirmed =
         json(

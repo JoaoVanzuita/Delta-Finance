@@ -102,4 +102,45 @@ class CategoryTaxonomyTest {
     assertThat(CategoryTaxonomy.canonicalKey(null)).isNull();
     assertThat(CategoryTaxonomy.canonicalKey("  ")).isNull();
   }
+
+  @Test
+  void reconheceDescricoesDeSalarioSemConfundirTransferenciasComuns() {
+    assertThat(CategoryTaxonomy.isSalaryDescription("CREDITO TED CONTA SALÁRIO - JOAO")).isTrue();
+    assertThat(CategoryTaxonomy.isSalaryDescription("PAGAMENTO SALARIO")).isTrue();
+    assertThat(CategoryTaxonomy.isSalaryDescription("FOLHA DE PAGAMENTO")).isTrue();
+    assertThat(CategoryTaxonomy.isSalaryDescription("Transferência recebida JOAO GABRIEL"))
+        .isFalse();
+    assertThat(CategoryTaxonomy.isSalaryDescription("Pix recebido")).isFalse();
+    assertThat(CategoryTaxonomy.isSalaryDescription(null)).isFalse();
+  }
+
+  @Test
+  void reconheceDebitoBancarioDePagamentoDeFatura() {
+    assertThat(
+            CategoryTaxonomy.isCardInvoicePaymentDescription(
+                "DÉB. PAGAMENTO DE BOLETO INTERCREDIS - PAGAMENTO DE CARTÃO DE CRÉDITO"))
+        .isTrue();
+    assertThat(CategoryTaxonomy.isCardInvoicePaymentDescription("PAGAMENTO DE FATURA")).isTrue();
+    assertThat(CategoryTaxonomy.isCardInvoicePaymentDescription("Pagamento fatura Nubank"))
+        .isTrue();
+    assertThat(CategoryTaxonomy.isCardInvoicePaymentDescription("PAGAMENTO DE BOLETO CONDOMINIO"))
+        .isFalse();
+    assertThat(CategoryTaxonomy.isCardInvoicePaymentDescription("Pix enviado")).isFalse();
+    assertThat(CategoryTaxonomy.isCardInvoicePaymentDescription(null)).isFalse();
+  }
+
+  @Test
+  void reconheceLiquidacaoDeCorretagemSemConfundirTransferencia() {
+    assertThat(
+            CategoryTaxonomy.isBrokerageSettlementDescription(
+                "OPERAÇÕES EM BOLSA PR 26/10/2026 NOTA Nº 147454841"))
+        .isTrue();
+    assertThat(CategoryTaxonomy.isBrokerageSettlementDescription("Nota de corretagem 123"))
+        .isTrue();
+    assertThat(CategoryTaxonomy.isBrokerageSettlementDescription("Compra de título CDB")).isTrue();
+    assertThat(CategoryTaxonomy.isBrokerageSettlementDescription("Transferência para investimento"))
+        .isFalse();
+    assertThat(CategoryTaxonomy.isBrokerageSettlementDescription("Pix recebido")).isFalse();
+    assertThat(CategoryTaxonomy.isBrokerageSettlementDescription(null)).isFalse();
+  }
 }

@@ -66,6 +66,9 @@ public class FinancialAccount extends BaseEntity {
   @Column(name = "notes_enc", columnDefinition = "bytea")
   private byte[] notesEnc;
 
+  @Column(name = "investment_account", nullable = false)
+  private boolean investmentAccount;
+
   protected FinancialAccount() {
     // Hibernate
   }
@@ -170,6 +173,15 @@ public class FinancialAccount extends BaseEntity {
 
   public byte[] getNotesEnc() {
     return notesEnc;
+  }
+
+  /** Conta marcada pelo usuário como fronteira de caixa do perímetro de investimento. */
+  public boolean isInvestmentAccount() {
+    return investmentAccount;
+  }
+
+  public void updateInvestmentAccount(boolean investmentAccount) {
+    this.investmentAccount = investmentAccount;
   }
 
   public void applyImported(

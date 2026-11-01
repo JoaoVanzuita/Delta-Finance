@@ -334,18 +334,24 @@ public class PluggyDataClient {
         if (externalId == null || externalId.isBlank()) {
           continue;
         }
+        JsonNode cardMetadata = node.path("creditCardMetadata");
         transactions.add(
             new PluggyModels.PluggyTransaction(
                 externalId,
                 node.path("accountId").asString(accountId),
                 node.path("description").asString(null),
                 PluggyModels.decimal(node, "amount"),
+                PluggyModels.decimal(node, "amountInAccountCurrency"),
                 PluggyModels.date(node, "date"),
                 node.path("status").asString(null),
                 node.path("category").asString(null),
                 node.path("type").asString(null),
                 node.path("currencyCode").asString("BRL"),
-                node.path("creditCardMetadata")));
+                node.path("operationType").asString(null),
+                node.path("providerId").asString(null),
+                cardMetadata.path("billId").asString(null),
+                PluggyModels.civilDate(cardMetadata, "billClosingDate"),
+                cardMetadata));
       }
       next = root.path("next").asString(null);
       if (next == null || next.isBlank()) {

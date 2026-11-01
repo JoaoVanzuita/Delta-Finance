@@ -15,6 +15,7 @@ import java.util.Set;
 public final class CategoryTaxonomy {
 
   public static final String OUTROS = "outros";
+  public static final String SALARIO = "salario";
   public static final String TRANSFERENCIAS = "transferencias";
   public static final String TRANSFERENCIAS_EXTERNAS = "transferencias_externas";
   public static final String INVESTIMENTOS = "investimentos";
@@ -175,6 +176,83 @@ public final class CategoryTaxonomy {
 
   public static boolean isExpenseKey(String key) {
     return key != null && EXPENSE_KEYS.contains(key);
+  }
+
+  /**
+   * Reconhece créditos de salário pela descrição do lançamento.
+   *
+   * <p>O provedor costuma rotular a TED de salário como {@code Same person transfer}, que a
+   * taxonomia trata como transferência interna e exclui das receitas. Como a conta de origem
+   * normalmente não está conectada, a entrada é dinheiro novo no universo do app e deve entrar como
+   * receita. A regra é deliberadamente restrita a descrições explícitas de salário.
+   */
+  public static boolean isSalaryDescription(String description) {
+    if (description == null || description.isBlank()) {
+      return false;
+    }
+    String normalized =
+        Normalizer.normalize(description, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("\\s+", " ")
+            .strip();
+    return normalized.contains("conta salario")
+        || normalized.contains("salario")
+        || normalized.contains("folha de pagamento")
+        || normalized.contains("pagamento salario");
+  }
+
+  /**
+   * Reconhece o débito de liquidação de uma nota de corretagem.
+   *
+   * <p>É a conversão de caixa em ativo dentro da conta de investimento, não um resgate. O valor
+   * aplicado vem das movimentações {@code BUY} do provedor; o débito bancário serve para conciliar
+   * custos e saldo ocioso.
+   */
+  public static boolean isBrokerageSettlementDescription(String description) {
+    if (description == null || description.isBlank()) {
+      return false;
+    }
+    String normalized =
+        Normalizer.normalize(description, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("\\s+", " ")
+            .strip();
+    return normalized.contains("operacoes em bolsa")
+        || normalized.contains("operacao em bolsa")
+        || normalized.contains("nota de corretagem")
+        || normalized.contains("corretagem")
+        || normalized.contains("bolsa de valores")
+        || normalized.contains("aplicacao financeira")
+        || normalized.contains("compra de titulo")
+        || normalized.contains("compra de ativo");
+  }
+
+  /**
+   * Reconhece o débito bancário que paga a fatura do cartão.
+   *
+   * <p>É movimentação interna (conta → cartão), não despesa. O rótulo do Sicoob ({@code DÉB.
+   * PAGAMENTO DE BOLETO INTERCREDIS - PAGAMENTO DE CARTÃO DE CRÉDITO}) não está na lista de
+   * categorias do provedor e cairia em “Outros”, duplicando a despesa já lançada no cartão.
+   */
+  public static boolean isCardInvoicePaymentDescription(String description) {
+    if (description == null || description.isBlank()) {
+      return false;
+    }
+    String normalized =
+        Normalizer.normalize(description, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("\\s+", " ")
+            .strip();
+    return normalized.contains("pagamento de fatura")
+        || normalized.contains("pagamento fatura")
+        || (normalized.contains("pagamento")
+            && normalized.contains("boleto")
+            && normalized.contains("intercredis"))
+        || normalized.contains("pagamento de cartao de credito")
+        || normalized.contains("pagamento cartao de credito");
   }
 
   public static String normalize(String value) {

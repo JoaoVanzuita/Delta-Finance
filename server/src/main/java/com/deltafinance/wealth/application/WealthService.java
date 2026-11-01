@@ -4,8 +4,8 @@ import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
 import com.deltafinance.investments.application.InvestmentHoldingView;
 import com.deltafinance.investments.application.InvestmentQueryService;
+import com.deltafinance.invoices.application.CardDebtService;
 import com.deltafinance.invoices.application.InvoiceQueryService;
-import com.deltafinance.invoices.application.InvoiceReportingService;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
@@ -56,7 +56,7 @@ public class WealthService {
   private final ManualAssetLiabilityRepository manualRepository;
   private final AccountQueryService accountQueryService;
   private final InvoiceQueryService invoiceQueryService;
-  private final InvoiceReportingService invoiceReportingService;
+  private final CardDebtService cardDebtService;
   private final InvestmentQueryService investmentQueryService;
   private final CryptoService cryptoService;
   private final AuditService auditService;
@@ -66,7 +66,7 @@ public class WealthService {
       ManualAssetLiabilityRepository manualRepository,
       AccountQueryService accountQueryService,
       InvoiceQueryService invoiceQueryService,
-      InvoiceReportingService invoiceReportingService,
+      CardDebtService cardDebtService,
       InvestmentQueryService investmentQueryService,
       CryptoService cryptoService,
       AuditService auditService,
@@ -74,7 +74,7 @@ public class WealthService {
     this.manualRepository = manualRepository;
     this.accountQueryService = accountQueryService;
     this.invoiceQueryService = invoiceQueryService;
-    this.invoiceReportingService = invoiceReportingService;
+    this.cardDebtService = cardDebtService;
     this.investmentQueryService = investmentQueryService;
     this.cryptoService = cryptoService;
     this.auditService = auditService;
@@ -100,7 +100,7 @@ public class WealthService {
         // Sem ciclo configurado: o cartão aparece como lacuna, não como erro fatal.
       }
     }
-    Map<UUID, BigDecimal> cardOutstanding = invoiceReportingService.outstandingByCard(userId);
+    Map<UUID, CardDebtService.CardDebt> cardOutstanding = cardDebtService.byCard(userId);
 
     for (AccountView account : accounts) {
       if ("CREDIT".equals(account.type())) {
@@ -250,7 +250,7 @@ public class WealthService {
   private void addCard(
       Accumulator accumulator,
       AccountView account,
-      Map<UUID, BigDecimal> cardOutstanding,
+      Map<UUID, CardDebtService.CardDebt> cardOutstanding,
       LocalDate today) {
     String description = description(account, "CREDIT");
     if (!Money.BRL.equals(account.currency())) {
@@ -267,7 +267,8 @@ public class WealthService {
               false));
       return;
     }
-    if (!cardOutstanding.containsKey(account.id())) {
+    CardDebtService.CardDebt debt = cardOutstanding.get(account.id());
+    if (debt == null || !debt.known()) {
       accumulator.gap(
           item(
               WealthSourceType.CARD,
@@ -281,7 +282,7 @@ public class WealthService {
               false));
       return;
     }
-    BigDecimal value = cardOutstanding.get(account.id()).setScale(2, RoundingMode.HALF_EVEN);
+    BigDecimal value = debt.outstanding().setScale(2, RoundingMode.HALF_EVEN);
     if (!"ACTIVE".equals(account.status()) && value.signum() == 0) {
       accumulator.exclude(
           item(

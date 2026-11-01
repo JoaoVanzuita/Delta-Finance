@@ -270,7 +270,7 @@ public class InvoiceGenerationService {
       return changed;
     }
 
-    InvoicePayment duplicate = findDuplicatePayment(userId, cardAccountId, dedupKey);
+    InvoicePayment duplicate = findDuplicatePayment(userId, cardAccountId, dedupKey, transaction);
     if (duplicate != null) {
       changed |= adoptDuplicate(userId, transaction, duplicate);
       return changed;
@@ -353,41 +353,52 @@ public class InvoiceGenerationService {
    * Procura pagamento equivalente, inclusive entre registros antigos sem `dedup_key`.
    *
    * <p>O backfill é limitado aos pagamentos do cartão e ignora chaves repetidas, preservando os
-   * registros existentes caso um ambiente já tenha duplicidades históricas.
+   * registros existentes caso um ambiente já tenha duplicidades históricas. Quando a chave não
+   * coincide, um segundo critério compara cartão, data e valor entre transações que ambas parecem
+   * pagamento de fatura. Isso une a via sintética do provedor ("Pagamento recebido") à via da
+   * instituição ("PAGAMENTO-BOLETO BANCARIO"), que têm descrições diferentes para o mesmo evento.
    */
-  private InvoicePayment findDuplicatePayment(UUID userId, UUID cardAccountId, byte[] dedupKey) {
+  private InvoicePayment findDuplicatePayment(
+      UUID userId, UUID cardAccountId, byte[] dedupKey, Transaction transaction) {
     Optional<InvoicePayment> direct = paymentRepository.findByUserIdAndDedupKey(userId, dedupKey);
     if (direct.isPresent()) {
       return direct.get();
     }
     Set<String> assigned = new HashSet<>();
+    BigDecimal amount = decryptAmount(userId, transaction);
+    boolean paymentDescription = isPaymentDescription(transaction);
     for (Invoice invoice :
         invoiceRepository.findByUserIdAndCardAccountIdOrderByCycleStartDesc(
             userId, cardAccountId)) {
       for (InvoicePayment candidate :
           paymentRepository.findByUserIdAndInvoiceIdOrderByPaidOnAscCreatedAtAsc(
               userId, invoice.getId())) {
-        if (candidate.getDedupKey() != null || candidate.getSourceTransactionId() == null) {
-          continue;
+        Transaction source = null;
+        if (candidate.getSourceTransactionId() != null) {
+          source =
+              transactionRepository
+                  .findByIdAndUserId(candidate.getSourceTransactionId(), userId)
+                  .orElse(null);
         }
-        Transaction source =
-            transactionRepository
-                .findByIdAndUserId(candidate.getSourceTransactionId(), userId)
-                .orElse(null);
-        if (source == null) {
-          continue;
+        if (candidate.getDedupKey() == null && source != null) {
+          byte[] key = paymentDedupKey(userId, source);
+          String hex = HexFormat.of().formatHex(key);
+          if (!assigned.add(hex)) {
+            continue;
+          }
+          if (Arrays.equals(key, dedupKey)) {
+            candidate.applyDedupKey(key);
+            paymentRepository.save(candidate);
+            return candidate;
+          }
         }
-        byte[] key = paymentDedupKey(userId, source);
-        String hex = HexFormat.of().formatHex(key);
-        if (!assigned.add(hex)) {
-          continue;
+        if (paymentDescription
+            && candidate.getStatus() == InvoicePaymentStatus.CONFIRMED
+            && candidate.getPaidOn().equals(transaction.getPostedOn())
+            && (source != null && isPaymentDescription(source))
+            && decryptPayment(candidate).compareTo(amount) == 0) {
+          return candidate;
         }
-        if (!Arrays.equals(key, dedupKey)) {
-          continue;
-        }
-        candidate.applyDedupKey(key);
-        paymentRepository.save(candidate);
-        return candidate;
       }
     }
     return null;
@@ -546,6 +557,16 @@ public class InvoiceGenerationService {
             cryptoService.decryptString(
                 transaction.getAmountEffectiveEnc(),
                 new CryptoContext(userId, "transaction", "amount_effective", transaction.getId())))
+        .abs()
+        .setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+  }
+
+  private BigDecimal decryptPayment(InvoicePayment payment) {
+    return new BigDecimal(
+            cryptoService.decryptString(
+                payment.getAmountEnc(),
+                new CryptoContext(
+                    payment.getUserId(), "invoice_payment", "amount", payment.getId())))
         .abs()
         .setScale(Money.SCALE, RoundingMode.HALF_EVEN);
   }

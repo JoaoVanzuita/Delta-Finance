@@ -105,7 +105,9 @@ export function InvestmentHoldingDrawer({
                           ? 'informado por você'
                           : holding.costBasisSource === 'PROVIDER'
                             ? 'provedor'
-                            : 'sem custo'
+                            : holding.costBasisSource === 'DERIVED'
+                              ? 'derivado das compras'
+                              : 'sem custo'
                       }`
                 }
               />
@@ -139,6 +141,12 @@ export function InvestmentHoldingDrawer({
               />
               <Value label="Última leitura" value={formatDateTime(holding.syncedAt)} />
             </dl>
+            {holding.costBasisSource === 'DERIVED' ? (
+              <p className="px-4 pb-4 text-caption text-ink-muted">
+                Custo derivado da soma das compras do provedor. As quantidades compradas conferem
+                com a posição atual; custos de corretagem não entram neste valor.
+              </p>
+            ) : null}
           </details>
 
           <HoldingSettingsForm holding={holding} onChanged={onChanged} />

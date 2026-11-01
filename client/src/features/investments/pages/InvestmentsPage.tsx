@@ -22,6 +22,7 @@ import {
 } from '@/features/integration/api'
 
 import { InvestmentAllocation } from '../components/InvestmentAllocation'
+import { InvestmentContributionsSection } from '../components/InvestmentContributionsSection'
 import { InvestmentCoverage } from '../components/InvestmentCoverage'
 import { InvestmentHoldingDrawer } from '../components/InvestmentHoldingDrawer'
 import { InvestmentHistorySection } from '../components/InvestmentHistorySection'
@@ -39,10 +40,31 @@ const STATUS_OPTIONS = [
   { value: 'ALL', label: 'Todas' },
 ] as const
 
-type InvestmentsTab = 'summary' | 'positions' | 'income'
+const CONTRIBUTION_RANGES = [
+  { months: 1, label: 'Mês atual' },
+  { months: 3, label: '3 meses' },
+  { months: 6, label: '6 meses' },
+  { months: 12, label: '12 meses' },
+] as const
+
+function isoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`
+}
+
+function contributionRange(months: number): { from: string; to: string } {
+  const today = new Date()
+  const from = new Date(today.getFullYear(), today.getMonth() - (months - 1), 1)
+  return { from: isoDate(from), to: isoDate(today) }
+}
+
+type InvestmentsTab = 'summary' | 'positions' | 'contributions' | 'income'
 
 function parseTab(value: string | null): InvestmentsTab {
-  return value === 'positions' || value === 'income' ? value : 'summary'
+  return value === 'positions' || value === 'contributions' || value === 'income'
+    ? value
+    : 'summary'
 }
 
 function searchParamsWithTab(params: URLSearchParams, tab: InvestmentsTab): URLSearchParams {
@@ -61,6 +83,7 @@ export function InvestmentsPage() {
   const [assetClass, setAssetClass] = useState<string>('')
   const [search, setSearch] = useState('')
   const [visibleCount, setVisibleCount] = useState(12)
+  const [contributionMonths, setContributionMonths] = useState<number>(3)
   const [openHolding, setOpenHolding] = useState<InvestmentHolding | null>(null)
   const [incomeForm, setIncomeForm] = useState<'new' | InvestmentIncomeItem | null>(null)
 
@@ -82,6 +105,14 @@ export function InvestmentsPage() {
     queryKey: queryKeys.investmentIncome,
     queryFn: () => financeApi.investmentIncome(),
     enabled: tab === 'income',
+  })
+  const contributionsQuery = useQuery({
+    queryKey: [...queryKeys.investments, 'contributions', contributionMonths],
+    queryFn: () => {
+      const range = contributionRange(contributionMonths)
+      return financeApi.investmentContributions(range.from, range.to)
+    },
+    enabled: tab === 'contributions',
   })
 
   const overview = overviewQuery.data
@@ -149,6 +180,7 @@ export function InvestmentsPage() {
           <TabList label="Seções de investimentos">
             <Tab value="summary">Resumo</Tab>
             <Tab value="positions">Posições</Tab>
+            <Tab value="contributions">Aportes</Tab>
             <Tab value="income">Proventos</Tab>
           </TabList>
 
@@ -291,6 +323,38 @@ export function InvestmentsPage() {
                     </Button>
                   ) : null}
                 </>
+              ) : null}
+            </section>
+          </TabPanel>
+
+          <TabPanel value="contributions">
+            <section className="space-y-4">
+              <div className="flex flex-wrap gap-1" aria-label="Período do relatório de aportes">
+                {CONTRIBUTION_RANGES.map((option) => (
+                  <Button
+                    key={option.months}
+                    type="button"
+                    size="sm"
+                    variant={contributionMonths === option.months ? 'primary' : 'secondary'}
+                    aria-pressed={contributionMonths === option.months}
+                    onClick={() => setContributionMonths(option.months)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              {contributionsQuery.isLoading ? (
+                <p role="status" className="text-body-sm text-ink-muted">
+                  Carregando aportes…
+                </p>
+              ) : null}
+              {contributionsQuery.isError ? (
+                <Alert variant="danger" title="Aportes indisponíveis">
+                  Não foi possível carregar os aportes do período.
+                </Alert>
+              ) : null}
+              {contributionsQuery.data ? (
+                <InvestmentContributionsSection contributions={contributionsQuery.data} />
               ) : null}
             </section>
           </TabPanel>

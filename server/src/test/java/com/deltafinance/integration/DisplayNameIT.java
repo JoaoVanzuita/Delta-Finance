@@ -105,6 +105,11 @@ class DisplayNameIT extends PostgresTestBase {
     assertThat(renamedConnection.path("institutionName").asString()).isEqualTo("Banco Alfa");
     assertThat(renamedConnection.path("nameCustomized").asBoolean()).isTrue();
 
+    // Contas/cartões passam a exibir o nome da conexão (4.7), não o rótulo do agregador.
+    JsonNode accountAfterConnectionRename = json(account());
+    assertThat(accountAfterConnectionRename.path("institutionName").asString())
+        .isEqualTo("Banco da família");
+
     alice
         .post("/api/v1/connections/" + connectionId + "/sync", null)
         .andExpect(status().isAccepted());

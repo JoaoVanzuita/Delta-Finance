@@ -36,6 +36,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function stubApi() {
   const mock = vi.fn((url: string, init: RequestInit = {}) => {
+    if (url.includes('/accounts/acc-1/investment') && init.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as { investmentAccount: boolean }
+      currentAccount = { ...currentAccount, investmentAccount: body.investmentAccount }
+      return jsonResponse(currentAccount)
+    }
     if (url.includes('/accounts/acc-1/display-name') && init.method === 'PUT') {
       const body = JSON.parse(String(init.body)) as { displayName: string }
       currentAccount = { ...currentAccount, alias: body.displayName }
@@ -135,6 +140,28 @@ describe('detalhe da conta com nome personalizado', () => {
       expect.stringContaining('/accounts/acc-1/display-name'),
       expect.objectContaining({ method: 'DELETE' }),
     )
+  })
+
+  it('marca a conta como perímetro de investimento', async () => {
+    const fetchMock = stubApi()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Conta da Casa' })
+    await user.click(screen.getByRole('tab', { name: 'Configurações' }))
+    const checkbox = screen.getByRole('checkbox', { name: /fronteira de caixa/i })
+    expect(checkbox).not.toBeChecked()
+    await user.click(checkbox)
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/accounts/acc-1/investment'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ investmentAccount: true }),
+        }),
+      )
+    })
   })
 
   it('mostra movimentações recentes em aba própria', async () => {

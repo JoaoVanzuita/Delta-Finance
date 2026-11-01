@@ -289,6 +289,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{id}/investment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Marca ou desmarca uma conta como perímetro de investimento
+         * @description Créditos nessa conta passam a ser aportes e débitos de corretagem passam a ser aplicações. Cartões não podem ser marcados.
+         */
+        put: operations["putAccountsIdInvestment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cards/overview": {
         parameters: {
             query?: never;
@@ -784,6 +806,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/investments/contributions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Aportes, resgates e aplicações do perímetro de investimento
+         * @description Separa o caixa que entra ou sai da conta de investimento das compras e vendas de ativos registradas pelo provedor. Não soma aporte e aplicação como o mesmo evento.
+         */
+        get: operations["getInvestmentsContributions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/investments/income": {
         parameters: {
             query?: never;
@@ -1160,6 +1202,8 @@ export interface components {
             providerName?: string | null;
             /** @description true quando o usuário definiu um nome de exibição local para uma conta importada. */
             nameCustomized?: boolean;
+            /** @description true quando a conta é a fronteira de caixa do perímetro de investimento. Créditos nessa conta são aportes; débitos de corretagem são aplicações, não resgates. */
+            investmentAccount?: boolean;
             currency: string;
             /** @description Saldo atual. Em contas manuais, é o saldo de referência ajustado pelos lançamentos efetivados e pagamentos de fatura com data igual ou posterior à data de referência; em contas importadas, é o saldo informado pelo provedor. */
             currentBalance: string;
@@ -1207,6 +1251,10 @@ export interface components {
         AccountDisplayNameRequest: {
             /** @description Nome local exibido para a conta ou cartão importado. Não é enviado ao Pluggy e não altera o nome original. */
             displayName: string;
+        };
+        AccountInvestmentRequest: {
+            /** @description Marca a conta como fronteira de caixa do perímetro de investimento. */
+            investmentAccount: boolean;
         };
         AccountList: {
             items: components["schemas"]["Account"][];
@@ -1257,13 +1305,20 @@ export interface components {
             level?: string | null;
             last4?: string | null;
             usedAmount: string;
+            /** @description Dívida total do cartão, considerando faturas não pagas e saldo do provedor. */
             outstanding: string;
+            /** @description Parte da dívida já faturada (faturas não pagas). */
+            invoicedOutstanding: string;
+            /** @description Parte da dívida ainda não faturada, segundo o saldo do provedor. */
+            unbilledAmount: string;
             /** @description Percentual utilizado do limite, com duas casas decimais. */
             utilization: string | null;
             /** Format: date */
             nextDueDate: string | null;
             currentInvoice: components["schemas"]["Invoice"] | null;
             nextDueInvoice: components["schemas"]["Invoice"] | null;
+            /** @description Total de transações PENDING do cartão, sem o limite da listagem. */
+            pendingCount: number;
             unallocatedCount: number;
         };
         CardProfileRequest: {
@@ -1755,7 +1810,7 @@ export interface components {
             /** @description Soma de amountProfit informado pelo provedor; nulo quando nenhuma posição informa. */
             profitReported?: string | null;
             profitCoverageCount: number;
-            /** @description Resultado estimado com custo informado ou custo original do provedor, incluindo proventos e resgates; nulo quando nenhuma posição tem custo. */
+            /** @description Resultado estimado com custo manual, custo original do provedor ou custo derivado das compras; inclui proventos e resgates. Nulo quando nenhuma posição tem custo conhecido. */
             estimatedProfit?: string | null;
             estimatedProfitCoverageCount?: number;
             /** Format: date-time */
@@ -1789,6 +1844,96 @@ export interface components {
         };
         InvestmentSourceList: {
             items: components["schemas"]["InvestmentSource"][];
+        };
+        InvestmentContribution: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            currency: string;
+            /** @description Créditos externos que entraram na conta de investimento. */
+            contributions: string;
+            /** @description Débitos externos que saíram da conta de investimento. */
+            withdrawals: string;
+            /** @description contributions - withdrawals. */
+            netContributions: string;
+            /** @description Soma das compras (BUY) registradas pelo provedor. */
+            applied: string;
+            /** @description Soma das vendas, amortizações e resgates de ativos. */
+            redeemed: string;
+            /** @description Proventos INTEREST do provedor no período. */
+            income: string;
+            /** @description Custos informados pelo provedor ou derivados da diferença entre o débito de corretagem e as compras. */
+            fees: string;
+            /** @description Caixa gerado no período e ainda não aplicado. */
+            idleCash: string;
+            /** @description Soma do saldo das posições ativas no perímetro. */
+            portfolioValue: string;
+            /** @description Saldo atual das contas de caixa do perímetro. */
+            cashBalance: string;
+            /** @description Débitos de liquidação de corretagem identificados no período. */
+            settlementDebits: string;
+            /** @description portfolioValue + cashBalance - aportes líquidos acumulados; nulo quando o período não termina hoje ou não há aportes rastreados. */
+            result?: string | null;
+            resultPercentage?: string | null;
+            /** @description Aportes desde o primeiro lançamento rastreado até `to`. */
+            cumulativeContributions: string;
+            cumulativeWithdrawals: string;
+            /** @enum {string} */
+            feeSource: "PROVIDER" | "DERIVED" | "UNAVAILABLE";
+            /** @description settlementDebits - applied - fees; nulo sem débito de corretagem no período. */
+            reconciliationDifference?: string | null;
+            contributionCount: number;
+            withdrawalCount: number;
+            applicationCount: number;
+            positionCount: number;
+            months: components["schemas"]["InvestmentContributionMonth"][];
+            flows: components["schemas"]["InvestmentContributionFlow"][];
+            sources: components["schemas"]["InvestmentContributionSource"][];
+        };
+        InvestmentContributionMonth: {
+            /** @description Ano e mês no formato YYYY-MM. */
+            month: string;
+            contributions: string;
+            withdrawals: string;
+            netContributions: string;
+            applied: string;
+            redeemed: string;
+            income: string;
+            fees: string;
+            idleCash: string;
+        };
+        InvestmentContributionFlow: {
+            /** Format: date */
+            date: string;
+            /** @enum {string} */
+            kind: "CONTRIBUTION" | "WITHDRAWAL" | "INTERNAL_TRANSFER" | "APPLICATION" | "REDEMPTION" | "INCOME" | "FEE";
+            /** @description Valor assinado; transferências internas aparecem com valor absoluto e não entram nos totais. */
+            amount: string;
+            description?: string | null;
+            /** Format: uuid */
+            accountId?: string | null;
+            /** Format: uuid */
+            connectionId?: string | null;
+            /** Format: uuid */
+            transactionId?: string | null;
+            /** Format: uuid */
+            investmentId?: string | null;
+            investmentName?: string | null;
+            investmentCode?: string | null;
+            /** @enum {string} */
+            source: "BANK" | "PROVIDER";
+            /** @enum {string} */
+            status: "CONFIRMED" | "SUGGESTED" | "PROVIDER";
+        };
+        InvestmentContributionSource: {
+            /** Format: uuid */
+            connectionId: string;
+            name?: string | null;
+            accountCount: number;
+            positionCount: number;
+            /** @enum {string} */
+            perimeterSource: "ACCOUNT_FLAG" | "CONNECTION_FALLBACK";
         };
         InvestmentHolding: {
             /** Format: uuid */
@@ -1839,7 +1984,7 @@ export interface components {
             /** @description Custo usado no resultado estimado; manual tem prioridade sobre amountOriginal. */
             costBasis?: string | null;
             /** @enum {string} */
-            costBasisSource?: "MANUAL" | "PROVIDER" | "UNAVAILABLE";
+            costBasisSource?: "MANUAL" | "PROVIDER" | "DERIVED" | "UNAVAILABLE";
             /** @description Proventos do provedor e manuais somados para esta posição. */
             incomeTotal?: string;
             /** @description balance + proventos + resgates - costBasis; nulo sem custo conhecido. */
@@ -2792,6 +2937,44 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    putAccountsIdInvestment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountInvestmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Conta com a marcação atualizada. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Cartão não pode ser marcado como conta de investimento (código `ACCOUNT_IS_CARD`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getCardsOverview: {
@@ -3798,6 +3981,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvestmentSourceList"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInvestmentsContributions: {
+        parameters: {
+            query?: {
+                /** @description Data inicial; o padrão é o primeiro dia do mês atual. */
+                from?: string;
+                /** @description Data final; o padrão é hoje. */
+                to?: string;
+                /** @description Restringe o relatório a uma conexão com investimentos. */
+                connectionId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aportes, resgates, aplicações, custos e conciliação. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestmentContribution"];
                 };
             };
             /** @description Erro do cliente. */

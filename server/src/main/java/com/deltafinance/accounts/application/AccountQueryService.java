@@ -22,6 +22,7 @@ public class AccountQueryService {
   private final FinancialAccountRepository accountRepository;
   private final CardProfileRepository cardProfileRepository;
   private final ConnectionStatusPort connectionStatusPort;
+  private final ConnectionNamePort connectionNamePort;
   private final AccountBalanceService balanceService;
   private final CryptoService cryptoService;
 
@@ -29,11 +30,13 @@ public class AccountQueryService {
       FinancialAccountRepository accountRepository,
       CardProfileRepository cardProfileRepository,
       ConnectionStatusPort connectionStatusPort,
+      ConnectionNamePort connectionNamePort,
       AccountBalanceService balanceService,
       CryptoService cryptoService) {
     this.accountRepository = accountRepository;
     this.cardProfileRepository = cardProfileRepository;
     this.connectionStatusPort = connectionStatusPort;
+    this.connectionNamePort = connectionNamePort;
     this.balanceService = balanceService;
     this.cryptoService = cryptoService;
   }
@@ -93,10 +96,12 @@ public class AccountQueryService {
         account.getType().name(),
         account.getSubtype(),
         account.getOrigin().name(),
-        decrypt(account, account.getInstitutionNameEnc(), "institution_name"),
+        institutionName(
+            account, decrypt(account, account.getInstitutionNameEnc(), "institution_name")),
         displayName,
         providerName,
         nameCustomized,
+        account.isInvestmentAccount(),
         account.getCurrency(),
         balanceService.effectiveBalance(account, referenceBalance),
         referenceBalance,
@@ -113,6 +118,25 @@ public class AccountQueryService {
       return null;
     }
     return connectionStatusPort.statusOf(account.getUserId(), account.getConnectionId());
+  }
+
+  /**
+   * Nome de instituição para exibição.
+   *
+   * <p>Contas importadas preferem o nome de exibição da conexão. É o que corrige o agrupamento no
+   * MeuPluggy, onde o item se chama "MeuPluggy" e o banco real está no nome da conexão. Contas
+   * manuais ou conexões sem nome mantêm o valor gravado na conta.
+   */
+  private String institutionName(FinancialAccount account, String storedName) {
+    if (account.getConnectionId() == null) {
+      return storedName;
+    }
+    String connectionName =
+        connectionNamePort.displayNameOf(account.getUserId(), account.getConnectionId());
+    if (connectionName != null && !connectionName.isBlank()) {
+      return connectionName;
+    }
+    return storedName;
   }
 
   private CardProfileView toCardView(CardProfile profile) {

@@ -48,6 +48,10 @@ export type InvestmentIncome = components['schemas']['InvestmentIncome']
 export type InvestmentIncomeItem = components['schemas']['InvestmentIncomeItem']
 export type InvestmentIncomeEntry = components['schemas']['InvestmentIncomeEntry']
 export type InvestmentIncomeInput = components['schemas']['InvestmentIncomeRequest']
+export type InvestmentContribution = components['schemas']['InvestmentContribution']
+export type InvestmentContributionMonth = components['schemas']['InvestmentContributionMonth']
+export type InvestmentContributionFlow = components['schemas']['InvestmentContributionFlow']
+export type InvestmentContributionSource = components['schemas']['InvestmentContributionSource']
 export type InvestmentCostBasisInput = components['schemas']['InvestmentCostBasisRequest']
 export type InvestmentAssetClassInput = components['schemas']['InvestmentAssetClassRequest']
 export type WealthOverview = components['schemas']['WealthOverview']
@@ -138,6 +142,8 @@ export const financeApi = {
   renameAccount: (id: string, displayName: string) =>
     api.put<Account>(`/accounts/${id}/display-name`, { displayName }),
   resetAccountName: (id: string) => api.delete<Account>(`/accounts/${id}/display-name`),
+  updateAccountInvestment: (id: string, investmentAccount: boolean) =>
+    api.put<Account>(`/accounts/${id}/investment`, { investmentAccount }),
 
   transactions: (filters: TransactionFilters = {}) =>
     api.get<TransactionPage>(`/transactions${transactionQuery(filters)}`),
@@ -177,6 +183,16 @@ export const financeApi = {
     if (to) params.set('to', to)
     const query = params.toString()
     return api.get<InvestmentIncome>(`/investments/income${query ? `?${query}` : ''}`)
+  },
+  investmentContributions: (from?: string, to?: string, connectionId?: string) => {
+    const params = new URLSearchParams()
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    if (connectionId) params.set('connectionId', connectionId)
+    const query = params.toString()
+    return api.get<InvestmentContribution>(
+      `/investments/contributions${query ? `?${query}` : ''}`,
+    )
   },
   createInvestmentIncome: (input: InvestmentIncomeInput) =>
     api.post<InvestmentIncomeEntry>('/investments/income', input),

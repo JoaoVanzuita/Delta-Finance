@@ -312,6 +312,27 @@ public class InvestmentQueryService {
         flow.income = flow.income.add(amount);
       } else if ("SELL".equals(type) || "AMORTIZATION".equals(type)) {
         flow.proceeds = flow.proceeds.add(amount);
+      } else if ("BUY".equals(type)) {
+        BigDecimal netAmount =
+            decimal(
+                decrypt(
+                    userId,
+                    TRANSACTION_TABLE,
+                    "net_amount",
+                    transaction.getId(),
+                    transaction.getNetAmountEnc()));
+        flow.buyCost = flow.buyCost.add(netAmount == null ? amount : netAmount);
+        BigDecimal quantity =
+            decimal(
+                decrypt(
+                    userId,
+                    TRANSACTION_TABLE,
+                    "quantity",
+                    transaction.getId(),
+                    transaction.getQuantityEnc()));
+        if (quantity != null) {
+          flow.buyQuantity = flow.buyQuantity.add(quantity);
+        }
       }
     }
     return flows;
@@ -337,9 +358,31 @@ public class InvestmentQueryService {
         decrypt(userId, INVESTMENT_TABLE, "amount_original", id, investment.getAmountOriginalEnc());
     BigDecimal manualCost = decimal(manualCostBasis);
     BigDecimal providerCost = decimal(amountOriginal);
-    BigDecimal costBasis = manualCost == null ? providerCost : manualCost;
-    String costBasisSource =
-        manualCost == null ? (providerCost == null ? "UNAVAILABLE" : "PROVIDER") : "MANUAL";
+    BigDecimal quantity =
+        decimal(decrypt(userId, INVESTMENT_TABLE, "quantity", id, investment.getQuantityEnc()));
+    BigDecimal derivedCost = null;
+    if (flow.buyCost.signum() > 0
+        && quantity != null
+        && flow.buyQuantity.compareTo(quantity) == 0) {
+      // A soma das quantidades compradas confere com a posição atual: o histórico de BUY está
+      // completo e pode servir como custo derivado. Custos de corretagem não entram aqui.
+      derivedCost = flow.buyCost;
+    }
+    BigDecimal costBasis;
+    String costBasisSource;
+    if (manualCost != null) {
+      costBasis = manualCost;
+      costBasisSource = "MANUAL";
+    } else if (providerCost != null) {
+      costBasis = providerCost;
+      costBasisSource = "PROVIDER";
+    } else if (derivedCost != null) {
+      costBasis = derivedCost;
+      costBasisSource = "DERIVED";
+    } else {
+      costBasis = null;
+      costBasisSource = "UNAVAILABLE";
+    }
     BigDecimal balance =
         decimal(decrypt(userId, INVESTMENT_TABLE, "balance", id, investment.getBalanceEnc()));
     BigDecimal incomeTotal = flow.income.add(manualIncome);
@@ -374,7 +417,7 @@ public class InvestmentQueryService {
         classification.source(),
         investment.getStatus(),
         investment.getCurrency(),
-        decrypt(userId, INVESTMENT_TABLE, "quantity", id, investment.getQuantityEnc()),
+        quantity == null ? null : quantity.toPlainString(),
         decrypt(userId, INVESTMENT_TABLE, "unit_value", id, investment.getUnitValueEnc()),
         decrypt(userId, INVESTMENT_TABLE, "amount", id, investment.getAmountEnc()),
         decrypt(userId, INVESTMENT_TABLE, "balance", id, investment.getBalanceEnc()),
@@ -417,6 +460,8 @@ public class InvestmentQueryService {
   private static final class Flow {
     private BigDecimal income = BigDecimal.ZERO;
     private BigDecimal proceeds = BigDecimal.ZERO;
+    private BigDecimal buyCost = BigDecimal.ZERO;
+    private BigDecimal buyQuantity = BigDecimal.ZERO;
   }
 
   private InvestmentSourceView toSource(ProviderInvestmentSync sync) {

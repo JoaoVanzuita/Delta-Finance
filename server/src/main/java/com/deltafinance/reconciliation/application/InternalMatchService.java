@@ -48,7 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class InternalMatchService {
 
   /** Versão explícita dos critérios usados nas sugestões. */
-  public static final String CRITERIA_VERSION = "v1";
+  public static final String CRITERIA_VERSION = "v2";
 
   private static final int TRANSFER_WINDOW_DAYS = 3;
   private static final int CARD_PAYMENT_WINDOW_DAYS = 7;
@@ -56,6 +56,34 @@ public class InternalMatchService {
   private static final BigDecimal TOLERANCE_RATE = new BigDecimal("0.005");
   private static final BigDecimal THRESHOLD = new BigDecimal("80");
   private static final int LOOKBACK_DAYS = 366;
+
+  /** Palavras genéricas que não ajudam a distinguir contrapartes. */
+  private static final Set<String> STOPWORDS =
+      Set.of(
+          "pix",
+          "ted",
+          "doc",
+          "transferencia",
+          "transfer",
+          "recebido",
+          "recebida",
+          "enviado",
+          "enviada",
+          "pagamento",
+          "conta",
+          "para",
+          "com",
+          "dos",
+          "das",
+          "que",
+          "por",
+          "uma",
+          "banco",
+          "agencia",
+          "credito",
+          "debito",
+          "fatura",
+          "cartao");
 
   private final TransactionRepository transactionRepository;
   private final FinancialAccountRepository accountRepository;
@@ -128,8 +156,10 @@ public class InternalMatchService {
     }
     Set<UUID> transferCategoryIds = transferCategoryIds(userId);
     Map<UUID, BigDecimal> amounts = new HashMap<>();
+    Map<UUID, Set<String>> descriptionTokens = new HashMap<>();
     for (Transaction transaction : transactions) {
       amounts.put(transaction.getId(), effectiveAmount(transaction));
+      descriptionTokens.put(transaction.getId(), nameTokens(transaction));
     }
 
     List<InternalMatch> existing = matchRepository.findByUserIdOrderByCreatedAtDesc(userId);
@@ -195,13 +225,18 @@ public class InternalMatchService {
         if (score.compareTo(THRESHOLD) < 0) {
           continue;
         }
-        candidates.add(new Candidate(kind, debit, credit, score, dayDiff, valueDiff, window));
+        int nameScore =
+            nameOverlap(
+                descriptionTokens.get(debit.getId()), descriptionTokens.get(credit.getId()));
+        candidates.add(
+            new Candidate(kind, debit, credit, score, nameScore, dayDiff, valueDiff, window));
       }
     }
 
     candidates.sort(
         Comparator.comparing(Candidate::score)
             .reversed()
+            .thenComparing(Comparator.comparingInt(Candidate::nameScore).reversed())
             .thenComparingLong(Candidate::dayDiff)
             .thenComparing(Candidate::valueDiff)
             .thenComparing(candidate -> candidate.debit().getId())
@@ -236,6 +271,48 @@ public class InternalMatchService {
             transaction.getAmountEffectiveEnc(),
             new CryptoContext(
                 transaction.getUserId(), "transaction", "amount_effective", transaction.getId())));
+  }
+
+  /** Tokens do nome/descrição usados apenas como desempate, nunca como critério isolado. */
+  private Set<String> nameTokens(Transaction transaction) {
+    String description;
+    try {
+      description =
+          cryptoService.decryptString(
+              transaction.getDescriptionEffectiveEnc(),
+              new CryptoContext(
+                  transaction.getUserId(),
+                  "transaction",
+                  "description_effective",
+                  transaction.getId()));
+    } catch (RuntimeException exception) {
+      return Set.of();
+    }
+    Set<String> tokens = new HashSet<>();
+    for (String token :
+        java.text.Normalizer.normalize(
+                description == null ? "" : description, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(java.util.Locale.ROOT)
+            .split("[^a-z0-9]+")) {
+      if (token.length() >= 3 && !STOPWORDS.contains(token)) {
+        tokens.add(token);
+      }
+    }
+    return tokens;
+  }
+
+  private static int nameOverlap(Set<String> debitTokens, Set<String> creditTokens) {
+    if (debitTokens == null || creditTokens == null || debitTokens.isEmpty()) {
+      return 0;
+    }
+    int overlap = 0;
+    for (String token : debitTokens) {
+      if (creditTokens.contains(token)) {
+        overlap++;
+      }
+    }
+    return overlap;
   }
 
   private Set<UUID> transferCategoryIds(UUID userId) {
@@ -354,7 +431,8 @@ public class InternalMatchService {
   private static String reason(Candidate candidate) {
     return "Valor dentro da tolerância; diferença de "
         + candidate.dayDiff()
-        + " dia(s); contas distintas.";
+        + " dia(s); contas distintas"
+        + (candidate.nameScore() > 0 ? "; descrições com nome compatível." : ".");
   }
 
   private static String pairKey(UUID debitId, UUID creditId) {
@@ -402,6 +480,7 @@ public class InternalMatchService {
       Transaction debit,
       Transaction credit,
       BigDecimal score,
+      int nameScore,
       long dayDiff,
       BigDecimal valueDiff,
       int window) {}

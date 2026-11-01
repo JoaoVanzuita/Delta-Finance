@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeftRight, IdCard, Settings2, Wallet } from 'lucide-react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router'
 
@@ -89,6 +89,16 @@ export function AccountDetailPage() {
     },
     [accountId, queryClient],
   )
+
+  const investmentFlag = useMutation({
+    mutationFn: (investmentAccount: boolean) =>
+      financeApi.updateAccountInvestment(accountId, investmentAccount),
+    onSuccess: async (updated) => {
+      queryClient.setQueryData(queryKeys.account(accountId), updated)
+      await invalidateAccountViews(queryClient)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.investments })
+    },
+  })
 
   function selectTab(next: string) {
     const params = new URLSearchParams(searchParams)
@@ -336,6 +346,42 @@ export function AccountDetailPage() {
                 </div>
               )}
             </Card>
+
+            {account.origin === 'IMPORTED' ? (
+              <Card className="p-5">
+                <div className="flex items-center gap-2">
+                  <Wallet aria-hidden="true" className="size-4 text-ink-muted" />
+                  <h2 className="text-section-title font-semibold text-ink">
+                    Perímetro de investimento
+                  </h2>
+                </div>
+                <p className="mt-2 text-body-sm text-ink-muted">
+                  Marque a conta onde o dinheiro chega antes de ser aplicado. Créditos nessa conta
+                  viram aportes; débitos de corretagem viram aplicações; transferências para fora
+                  viram resgates. A marcação não altera o saldo nem os lançamentos.
+                </p>
+                <label className="mt-3 flex items-start gap-2 rounded-card border border-line bg-surface-muted p-3 text-body-sm text-ink">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(account.investmentAccount)}
+                    disabled={investmentFlag.isPending}
+                    onChange={(event) => investmentFlag.mutate(event.target.checked)}
+                    className="mt-1 size-4 accent-[var(--df-primary)]"
+                  />
+                  <span>
+                    Esta conta é a fronteira de caixa do meu perímetro de investimento.
+                    {investmentFlag.isPending ? ' Salvando…' : ''}
+                  </span>
+                </label>
+                {investmentFlag.isError ? (
+                  <p role="alert" className="mt-2 text-body-sm text-expense">
+                    {investmentFlag.error instanceof ApiError
+                      ? investmentFlag.error.message
+                      : 'Não foi possível atualizar a marcação.'}
+                  </p>
+                ) : null}
+              </Card>
+            ) : null}
 
             <Card className="p-5">
               <div className="flex items-center gap-2">

@@ -101,6 +101,27 @@ function hasAdvancedFilters(filters: DashboardFiltersValue): boolean {
   )
 }
 
+/** Intervalo do mês anterior a uma data ISO, para o atalho de período vazio. */
+function previousMonthRange(start: string): { from: string; to: string; label: string } | null {
+  const parts = start.split('-').map(Number)
+  const year = parts[0]
+  const month = parts[1]
+  if (parts.length !== 3 || year === undefined || month === undefined) return null
+  if (Number.isNaN(year) || Number.isNaN(month)) return null
+  const first = new Date(Date.UTC(year, month - 2, 1))
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0))
+  const label = new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(first)
+  return {
+    from: first.toISOString().slice(0, 10),
+    to: last.toISOString().slice(0, 10),
+    label,
+  }
+}
+
 /**
  * Dashboard: resultado, indicadores, atenção, evolução, categorias e últimas
  * movimentações. Cada total vem do endpoint de reporting; o frontend apenas
@@ -191,6 +212,10 @@ export function DashboardPage() {
   const periodLabel = summary
     ? formatPeriodLabel(summary.periodStart, summary.periodEnd)
     : 'Período selecionado'
+  const previousMonth =
+    emptyPeriod && !filtered && period === 'MONTH' && summary
+      ? previousMonthRange(summary.periodStart)
+      : null
 
   const announcement = summaryQuery.isFetching
     ? 'Atualizando dashboard…'
@@ -330,7 +355,16 @@ export function DashboardPage() {
       />
 
       {emptyPeriod ? (
-        <DashboardEmptyPeriod filtered={filtered} onClearFilters={clearFilters} />
+        <DashboardEmptyPeriod
+          filtered={filtered}
+          previousPeriodLabel={previousMonth?.label}
+          onPreviousPeriod={
+            previousMonth
+              ? () => applyFilters({ period: 'MONTH', from: previousMonth.from, to: previousMonth.to })
+              : undefined
+          }
+          onClearFilters={clearFilters}
+        />
       ) : (
         <>
           <DashboardSection

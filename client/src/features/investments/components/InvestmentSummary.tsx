@@ -77,7 +77,7 @@ export function InvestmentSummary({ overview }: InvestmentSummaryProps) {
           value={formatMoney(overview.estimatedProfit, 'BRL')}
           hint={
             overview.estimatedProfit == null
-              ? 'Informe o custo de uma posição para estimar o resultado.'
+              ? 'Informe o custo ou sincronize as compras para estimar o resultado.'
               : `Estimativa com custo e proventos, cobertura de ${overview.estimatedProfitCoverageCount} de ${overview.activeCount} posição(ões) ativa(s).`
           }
         />

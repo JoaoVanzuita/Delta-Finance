@@ -77,11 +77,24 @@ export function DashboardPartialError({
 
 export function DashboardEmptyPeriod({
   filtered,
+  previousPeriodLabel,
+  onPreviousPeriod,
   onClearFilters,
 }: {
   readonly filtered: boolean
+  readonly previousPeriodLabel?: string
+  readonly onPreviousPeriod?: () => void
   readonly onClearFilters?: () => void
 }) {
+  const action = filtered && onClearFilters ? (
+    <Button type="button" variant="secondary" onClick={onClearFilters}>
+      Limpar filtros
+    </Button>
+  ) : previousPeriodLabel && onPreviousPeriod ? (
+    <Button type="button" variant="secondary" onClick={onPreviousPeriod}>
+      Ver {previousPeriodLabel}
+    </Button>
+  ) : null
   return (
     <EmptyState
       icon={filtered ? <SearchX className="size-5" /> : <WalletCards className="size-5" />}
@@ -89,15 +102,11 @@ export function DashboardEmptyPeriod({
       description={
         filtered
           ? 'Os totais oficiais estão zerados porque nenhuma entrada corresponde aos filtros atuais. Remova os filtros ou amplie o período.'
-          : 'Não há receitas, despesas ou itens de fatura efetivados neste período. Escolha outra semana, mês ou ano para consultar.'
+          : previousPeriodLabel
+            ? 'Não há receitas, despesas ou itens de fatura efetivados neste período. O mês atual pode ainda não ter lançamentos; abra o período anterior ou escolha outra data.'
+            : 'Não há receitas, despesas ou itens de fatura efetivados neste período. Escolha outra semana, mês ou ano para consultar.'
       }
-      action={
-        filtered && onClearFilters ? (
-          <Button type="button" variant="secondary" onClick={onClearFilters}>
-            Limpar filtros
-          </Button>
-        ) : null
-      }
+      action={action}
     />
   )
 }

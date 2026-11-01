@@ -35,16 +35,19 @@ public class CardOverviewService {
   private final InvoiceQueryService invoiceQueryService;
   private final InvoiceRepository invoiceRepository;
   private final TransactionRepository transactionRepository;
+  private final CardDebtService cardDebtService;
 
   public CardOverviewService(
       AccountQueryService accountQueryService,
       InvoiceQueryService invoiceQueryService,
       InvoiceRepository invoiceRepository,
-      TransactionRepository transactionRepository) {
+      TransactionRepository transactionRepository,
+      CardDebtService cardDebtService) {
     this.accountQueryService = accountQueryService;
     this.invoiceQueryService = invoiceQueryService;
     this.invoiceRepository = invoiceRepository;
     this.transactionRepository = transactionRepository;
+    this.cardDebtService = cardDebtService;
   }
 
   public CardOverviewView overview(UUID userId) {
@@ -98,7 +101,10 @@ public class CardOverviewService {
             .map(invoice -> parse(invoice.outstanding(), ZERO))
             .reduce(ZERO, BigDecimal::add)
             .max(ZERO);
-
+    CardDebtService.CardDebt debt = cardDebtService.byAccount(account, outstanding);
+    BigDecimal invoicedOutstanding = debt.invoicedOutstanding();
+    BigDecimal unbilledAmount = debt.unbilledAmount();
+    outstanding = debt.outstanding();
     BigDecimal used = parse(account.currentBalance(), null);
     if (used == null || used.signum() <= 0) {
       // O provedor usa valor positivo para dívida; saldo neutro/negativo sem dívida vira 0.
@@ -130,10 +136,13 @@ public class CardOverviewService {
         account.cardProfile() == null ? null : account.cardProfile().last4(),
         format(used),
         format(outstanding),
+        format(invoicedOutstanding),
+        format(unbilledAmount),
         utilization(used, limit),
         nextDueDate,
         currentInvoice,
         nextDueInvoice,
+        pendingCount(userId, account.id()),
         unallocatedCount(userId, account.id()));
   }
 
@@ -150,6 +159,13 @@ public class CardOverviewService {
         userId,
         account.id(),
         invoiceRepository.findByUserIdAndCardAccountIdOrderByCycleStartDesc(userId, account.id()));
+  }
+
+  private int pendingCount(UUID userId, UUID accountId) {
+    long count =
+        transactionRepository.countByUserIdAndAccountIdAndStatus(
+            userId, accountId, TransactionStatus.PENDING);
+    return (int) Math.min(Integer.MAX_VALUE, count);
   }
 
   private int unallocatedCount(UUID userId, UUID accountId) {

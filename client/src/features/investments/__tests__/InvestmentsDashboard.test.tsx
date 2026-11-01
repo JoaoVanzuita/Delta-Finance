@@ -122,6 +122,25 @@ describe('dashboard de investimentos', () => {
     expect(within(income).getAllByText('FII Alfa').length).toBeGreaterThan(0)
   })
 
+  it('mostra aportes, aplicações e conciliação do período', async () => {
+    stubInvestmentsApi()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    await screen.findByRole('tab', { name: 'Aportes' })
+    await user.click(screen.getByRole('tab', { name: 'Aportes' }))
+    const contributions = await region('Aportes')
+
+    expect(within(contributions).getAllByText(/R\$\s*53\.474,02/).length).toBeGreaterThan(0)
+    expect(within(contributions).getAllByText(/R\$\s*53\.427,70/).length).toBeGreaterThan(0)
+    expect(within(contributions).getAllByText(/R\$\s*45,47/).length).toBeGreaterThan(0)
+    expect(within(contributions).getAllByText(/R\$\s*0,85/).length).toBeGreaterThan(0)
+    expect(within(contributions).getByText('Conta marcada')).toBeInTheDocument()
+    expect(within(contributions).getByText(/out.*2026/i)).toBeInTheDocument()
+    expect(within(contributions).getAllByText(/R\$\s*2\.275,63/).length).toBeGreaterThan(0)
+  })
+
   it('mostra estado vazio quando o provedor não informa proventos', async () => {
     stubInvestmentsApi({
       income: {

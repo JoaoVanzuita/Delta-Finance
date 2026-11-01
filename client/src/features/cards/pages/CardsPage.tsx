@@ -124,7 +124,8 @@ export function CardsPage() {
                       : formatMoney(overview.totalOutstanding, 'BRL')}
                   </p>
                   <p className="mt-1 text-body-sm text-ink-muted">
-                    Soma das faturas não pagas dos cartões em BRL. Não é somado ao saldo em contas.
+                    Soma das faturas não pagas e das compras ainda não faturadas dos cartões em BRL.
+                    Não é somado ao saldo em contas.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-body-sm">
@@ -214,6 +215,10 @@ function CardTile({ card }: { readonly card: CardOverviewItem }) {
           <p className="text-caption text-ink-muted">Saldo devedor</p>
           <p className="numeric mt-1 text-metric-md font-semibold text-expense">
             {formatMoney(card.outstanding, card.currency)}
+          </p>
+          <p className="mt-1 text-caption text-ink-muted">
+            {formatMoney(card.invoicedOutstanding, card.currency)} faturado ·{' '}
+            {formatMoney(card.unbilledAmount, card.currency)} a faturar
           </p>
         </div>
       ) : (

@@ -435,6 +435,7 @@ describe('dashboard', () => {
       await screen.findByRole('heading', { name: 'Nenhuma movimentação no período' }),
     ).toBeInTheDocument()
     expect(screen.queryByText(/Nenhum resultado para estes filtros/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ver setembro de 2026' })).toBeInTheDocument()
     unmount()
 
     renderPage('/dashboard?categoryId=cat-1')

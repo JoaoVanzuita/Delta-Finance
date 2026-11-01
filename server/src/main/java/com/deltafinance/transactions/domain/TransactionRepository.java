@@ -29,6 +29,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   long countByUserIdAndAccountIdAndInvoiceIdIsNullAndStatusIn(
       UUID userId, UUID accountId, Collection<TransactionStatus> statuses);
 
+  long countByUserIdAndAccountIdAndStatus(UUID userId, UUID accountId, TransactionStatus status);
+
   List<Transaction> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
   @Query(

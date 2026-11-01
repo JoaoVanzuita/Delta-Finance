@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 
 import type {
+  InvestmentContribution,
   InvestmentHolding,
   InvestmentIncome,
   InvestmentIncomeItem,
@@ -266,6 +267,7 @@ interface StubOptions {
   readonly holdings?: InvestmentHolding[]
   readonly overview?: InvestmentOverview
   readonly income?: InvestmentIncome
+  readonly contributions?: InvestmentContribution
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -350,6 +352,85 @@ const SNAPSHOT_DETAIL = {
   ],
 }
 
+export const CONTRIBUTIONS: InvestmentContribution = {
+  from: '2026-10-01',
+  to: '2026-10-31',
+  currency: 'BRL',
+  contributions: '53474.02',
+  withdrawals: '0.00',
+  netContributions: '53474.02',
+  applied: '53427.70',
+  redeemed: '0.00',
+  income: '0.00',
+  fees: '45.47',
+  idleCash: '0.85',
+  portfolioValue: '51197.54',
+  cashBalance: '0.85',
+  settlementDebits: '53473.17',
+  result: '-2275.63',
+  resultPercentage: '-4.26',
+  cumulativeContributions: '53474.02',
+  cumulativeWithdrawals: '0.00',
+  feeSource: 'DERIVED',
+  reconciliationDifference: '0.00',
+  contributionCount: 4,
+  withdrawalCount: 0,
+  applicationCount: 28,
+  positionCount: 12,
+  months: [
+    {
+      month: '2026-10',
+      contributions: '53474.02',
+      withdrawals: '0.00',
+      netContributions: '53474.02',
+      applied: '53427.70',
+      redeemed: '0.00',
+      income: '0.00',
+      fees: '45.47',
+      idleCash: '0.85',
+    },
+  ],
+  flows: [
+    {
+      date: '2026-10-26',
+      kind: 'CONTRIBUTION',
+      amount: '25000.00',
+      description: 'TED recebida para investimento',
+      accountId: 'account-1',
+      connectionId: 'connection-1',
+      transactionId: 'tx-1',
+      investmentId: null,
+      investmentName: null,
+      investmentCode: null,
+      source: 'BANK',
+      status: 'CONFIRMED',
+    },
+    {
+      date: '2026-10-26',
+      kind: 'APPLICATION',
+      amount: '-1985.98',
+      description: 'Aplicação',
+      accountId: null,
+      connectionId: 'connection-1',
+      transactionId: null,
+      investmentId: 'holding-1',
+      investmentName: 'FII Alfa',
+      investmentCode: 'AAAA11',
+      source: 'PROVIDER',
+      status: 'PROVIDER',
+    },
+  ],
+  sources: [
+    {
+      connectionId: 'connection-1',
+      name: 'XP',
+      accountCount: 1,
+      positionCount: 3,
+      perimeterSource: 'ACCOUNT_FLAG',
+    },
+  ],
+}
+
 export function stubInvestmentsApi(options: StubOptions = {}) {
   let holdings = (options.holdings ?? HOLDINGS).map((holding) => ({ ...holding }))
   const overview = options.overview ?? OVERVIEW
@@ -424,6 +505,8 @@ export function stubInvestmentsApi(options: StubOptions = {}) {
     if (path === '/auth/me') return jsonResponse(USER)
     if (path === '/auth/csrf') return new Response(null, { status: 204 })
     if (path === '/investments/overview') return jsonResponse(overview)
+    if (path === '/investments/contributions')
+      return jsonResponse(options.contributions ?? CONTRIBUTIONS)
     if (path === '/investments/history') return jsonResponse(INVESTMENT_HISTORY)
     if (path.startsWith('/wealth/history/')) return jsonResponse(SNAPSHOT_DETAIL)
     if (path === '/investments/income' && method === 'GET') return jsonResponse(currentIncome())

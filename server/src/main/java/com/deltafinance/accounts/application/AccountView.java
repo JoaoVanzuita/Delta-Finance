@@ -13,6 +13,7 @@ public record AccountView(
     String alias,
     String providerName,
     boolean nameCustomized,
+    boolean investmentAccount,
     String currency,
     String currentBalance,
     String referenceBalance,

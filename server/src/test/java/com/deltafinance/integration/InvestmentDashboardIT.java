@@ -68,6 +68,12 @@ class InvestmentDashboardIT extends PostgresTestBase {
     PLUGGY.addInvestment(
         ITEM, investment("inv-3", "FII Gama", "CCCC11", "TOTAL_WITHDRAWAL", "0", "0"));
     PLUGGY.addInvestmentTransaction(
+        "inv-1", buy("tx-buy-1a", "300.00", "4", LocalDate.now().minusDays(2).toString()));
+    PLUGGY.addInvestmentTransaction(
+        "inv-1", buy("tx-buy-1b", "500.00", "6", LocalDate.now().minusDays(1).toString()));
+    PLUGGY.addInvestmentTransaction(
+        "inv-2", buy("tx-buy-2", "450.00", "5", LocalDate.now().minusDays(1).toString()));
+    PLUGGY.addInvestmentTransaction(
         "inv-1",
         transaction(
             "tx-interest-dashboard",
@@ -217,8 +223,52 @@ class InvestmentDashboardIT extends PostgresTestBase {
     bob.get("/api/v1/investments/holdings/" + providerHoldingId).andExpect(status().isNotFound());
   }
 
+  @Test
+  void derivaCustoDasComprasQuandoProvedorNaoInformaCusto() throws Exception {
+    JsonNode holding =
+        json(
+            alice
+                .get("/api/v1/investments/holdings/" + providerHoldingId)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+    assertThat(holding.path("costBasis").asString()).isEqualTo("800.00");
+    assertThat(holding.path("costBasisSource").asString()).isEqualTo("DERIVED");
+    assertThat(holding.path("estimatedProfit").asString()).isEqualTo("212.50");
+    assertThat(holding.path("estimatedReturnPercentage").asString()).isEqualTo("26.56");
+
+    JsonNode overview =
+        json(
+            alice
+                .get("/api/v1/investments/overview")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(overview.path("estimatedProfit").asString()).isEqualTo("262.50");
+    assertThat(overview.path("estimatedProfitCoverageCount").asInt()).isEqualTo(2);
+  }
+
   private JsonNode json(String body) {
     return jsonMapper.readTree(body);
+  }
+
+  private static Map<String, Object> buy(String id, String amount, String quantity, String date) {
+    Map<String, Object> value = new LinkedHashMap<>();
+    value.put("id", id);
+    value.put("type", "BUY");
+    value.put("movementType", "CREDIT");
+    value.put("amount", amount);
+    value.put("netAmount", amount);
+    value.put("quantity", quantity);
+    value.put("value", amount);
+    value.put("date", date);
+    value.put("tradeDate", date);
+    value.put("description", "Aplicação");
+    value.put("expenses", Map.of());
+    return value;
   }
 
   private static Map<String, Object> investment(

@@ -89,15 +89,6 @@ export function CardDetailPage() {
     null
   const otherInvoices = invoices.filter((invoice) => invoice.id !== openInvoice?.id)
   const transactions = transactionsQuery.data?.items ?? []
-  const pendingTransactions = openInvoice
-    ? transactions.filter(
-        (transaction) =>
-          transaction.status === 'PENDING' &&
-          transaction.type === 'DEBIT' &&
-          transaction.postedOn >= openInvoice.cycleStart &&
-          transaction.postedOn <= openInvoice.cycleEnd,
-      )
-    : []
   const queryError = accountQuery.error ?? overviewQuery.error ?? invoicesQuery.error
 
   async function renameCard(displayName: string) {
@@ -234,7 +225,12 @@ export function CardDetailPage() {
                 {formatMoney(card.outstanding, currency)}
               </p>
               <p className="mt-1 text-body-sm text-ink-muted">
-                Soma das faturas não pagas deste cartão. Não é saldo em conta.
+                Soma das faturas não pagas e das compras ainda não faturadas deste cartão. Não é
+                saldo em conta.
+              </p>
+              <p className="mt-2 text-caption text-ink-muted">
+                {formatMoney(card.invoicedOutstanding, currency)} faturado ·{' '}
+                {formatMoney(card.unbilledAmount, currency)} a faturar
               </p>
             </Card>
 
@@ -301,17 +297,21 @@ export function CardDetailPage() {
               </div>
             ) : null}
 
-            {pendingTransactions.length > 0 && openInvoice ? (
+            {(card.pendingCount ?? 0) > 0 ? (
               <Alert
                 variant="warning"
-                title={`${pendingTransactions.length} compra(s) pendente(s)`}
+                title={`${card.pendingCount} transação(ões) pendente(s) no cartão`}
               >
-                <Link
-                  to={`/invoices/${openInvoice.id}`}
-                  className="font-semibold text-action underline underline-offset-4"
-                >
-                  Abrir fatura atual
-                </Link>
+                {openInvoice ? (
+                  <Link
+                    to={`/invoices/${openInvoice.id}`}
+                    className="font-semibold text-action underline underline-offset-4"
+                  >
+                    Abrir fatura atual
+                  </Link>
+                ) : (
+                  'As compras ainda não faturadas aparecem no ciclo atual.'
+                )}
               </Alert>
             ) : null}
           </div>
@@ -378,7 +378,7 @@ export function CardDetailPage() {
               <div>
                 <h2 className="text-section-title font-semibold text-ink">Transações recentes</h2>
                 <p className="text-caption text-ink-muted">
-                  Últimas transações do cartão, incluindo pendentes.
+                  As 100 transações mais recentes do cartão, incluindo pendentes.
                 </p>
               </div>
               <Link
