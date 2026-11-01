@@ -64,8 +64,8 @@ export function ProviderReconciliationDialog({
       title="Conciliar com o total do provedor"
       description={
         numeric >= 0
-          ? `O total desta fatura será aumentado em ${formatMoney(adjustment, 'BRL')}. O ajuste é um item manual auditado; compras e pagamentos existentes não são reescritos.`
-          : `O total desta fatura será reduzido em ${formatMoney(adjustment.replace('-', ''), 'BRL')}. O ajuste é um item manual auditado; compras e pagamentos existentes não são reescritos.`
+          ? `O total desta fatura será aumentado em ${formatMoney(adjustment, 'BRL')}. O ajuste é um item manual auditado.`
+          : `O total desta fatura será reduzido em ${formatMoney(adjustment.replace('-', ''), 'BRL')}. O ajuste é um item manual auditado.`
       }
       size="sm"
       busy={save.isPending}

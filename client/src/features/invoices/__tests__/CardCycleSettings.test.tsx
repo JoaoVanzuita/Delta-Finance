@@ -48,9 +48,7 @@ describe('configuração do ciclo do cartão', () => {
     await user.type(screen.getByLabelText('Limite (R$)'), '1000,00')
     await user.click(screen.getByRole('button', { name: 'Salvar ciclo' }))
 
-    expect(
-      await screen.findByText(/Faturas já fechadas ou pagas não são reescritas/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Ciclo do cartão atualizado.')).toBeInTheDocument()
     const putCall = fetchMock.mock.calls.find(([, init]) => init.method === 'PUT')
     expect(putCall).toBeDefined()
     expect(JSON.parse(String(putCall?.[1].body))).toMatchObject({

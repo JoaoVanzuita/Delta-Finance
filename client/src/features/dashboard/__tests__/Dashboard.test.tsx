@@ -239,7 +239,7 @@ describe('dashboard', () => {
     expect(screen.getAllByText(/R\$\s*1\.100,00/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/R\$\s*610,00/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/R\$\s*310,00/).length).toBeGreaterThan(0)
-    expect(screen.getByText(/Dívida separada do saldo/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Acompanhar cartões' })).toBeInTheDocument()
 
     const attention = screen.getByRole('heading', { name: 'Precisa de atenção' }).closest('section')
     expect(attention).not.toBeNull()

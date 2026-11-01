@@ -68,8 +68,7 @@ export function InvestmentHistorySection() {
             Evolução dos investimentos
           </h2>
           <p className="text-caption text-ink-muted">
-            Posição mensal por classe, derivada dos snapshots patrimoniais. Não é rentabilidade nem
-            cotação em tempo real.
+            Posição mensal por classe, a partir dos snapshots patrimoniais.
           </p>
         </div>
         <div className="flex flex-wrap gap-1" aria-label="Período do histórico de investimentos">

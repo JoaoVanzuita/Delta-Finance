@@ -239,9 +239,7 @@ export function AccountDetailPage() {
                 <h2 className="text-section-title font-semibold text-ink">
                   Movimentações recentes
                 </h2>
-                <p className="text-caption text-ink-muted">
-                  Últimas 20 transações da conta, importadas e manuais.
-                </p>
+                <p className="text-caption text-ink-muted">Últimas 20 movimentações.</p>
               </div>
               <Link
                 to={`/transactions?accountId=${account.id}`}

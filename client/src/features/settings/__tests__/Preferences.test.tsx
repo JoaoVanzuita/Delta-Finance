@@ -74,6 +74,8 @@ describe('preferências visuais', () => {
     await waitFor(() => expect(window.localStorage.getItem('delta.prefs.active')).toBe(USER.id))
     expect(screen.getByRole('radio', { name: /Sistema/ })).toBeChecked()
     expect(screen.getByRole('radio', { name: /Azul/ })).toBeChecked()
+    expect(screen.queryByText('Padrão do Delta Finance.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Tema claro em uso')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('radio', { name: /Escuro/ }))
     await user.click(screen.getByRole('radio', { name: /Verde/ }))
@@ -92,9 +94,9 @@ describe('preferências visuais', () => {
     renderPreferences()
 
     expect(await screen.findByText('Pré-visualização')).toBeVisible()
-    expect(screen.getByText('Valores ilustrativos')).toBeVisible()
-    expect(screen.getByText('Saldo em contas · exemplo')).toBeVisible()
-    expect(screen.getByText(/separadas por usuário autenticado/i)).toBeVisible()
+    expect(screen.getByText('Saldo em contas')).toBeVisible()
+    expect(screen.queryByText('Valores ilustrativos')).not.toBeInTheDocument()
+    expect(screen.getByText('Preferência salva neste navegador.')).toBeVisible()
   })
 
   it('marca a área atual na navegação secundária e preserva URLs próprias', async () => {

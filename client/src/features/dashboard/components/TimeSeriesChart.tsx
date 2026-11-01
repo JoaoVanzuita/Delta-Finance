@@ -164,11 +164,11 @@ export function TimeSeriesChart({ buckets, selectedStart, onDrillDown }: TimeSer
             )
           })}
         </fieldset>
-        <p className="text-caption text-ink-muted">
-          {chartBuckets.length < buckets.length
-            ? `${buckets.length} períodos agrupados em ${chartBuckets.length} pontos visuais`
-            : `${buckets.length} período(s)`}
-        </p>
+        {chartBuckets.length < buckets.length ? (
+          <p className="text-caption text-ink-muted">
+            {buckets.length} períodos agrupados em {chartBuckets.length} pontos visuais
+          </p>
+        ) : null}
       </div>
 
       <div className="relative">

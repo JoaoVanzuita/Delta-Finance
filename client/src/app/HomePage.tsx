@@ -49,7 +49,7 @@ export function HomePage() {
           <div aria-hidden="true" className="period-thread w-24" />
           <p className="text-body text-ink-muted">
             Um painel privado para acompanhar quanto você tem, quanto entrou, quanto saiu e o que
-            precisa de atenção. Cada pessoa vê somente o próprio espaço.
+            precisa de atenção.
           </p>
         </div>
         <div className="flex flex-wrap gap-3 pt-1">

@@ -94,7 +94,9 @@ describe('painel de sincronização', () => {
     renderWithProviders(<SyncStatusPanel connections={[CONNECTION]} integrationConfigured />)
 
     expect((await screen.findAllByText('Atualizado')).length).toBeGreaterThan(0)
-    expect(screen.getByText(/não força a instituição de origem a atualizar/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/consultar agora não atualiza a instituição de origem/i),
+    ).toBeInTheDocument()
 
     const queue = screen.getByText('Consultas na fila').closest('div')
     expect(queue).not.toBeNull()

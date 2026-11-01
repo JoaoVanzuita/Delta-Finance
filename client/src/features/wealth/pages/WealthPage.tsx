@@ -97,7 +97,7 @@ export function WealthPage() {
       <PageHeader
         overline="Planejar"
         title="Patrimônio"
-        description="Ativos, passivos e patrimônio líquido a partir de contas, cartões, investimentos e itens manuais, sem dupla contagem."
+        description="Ativos, passivos e patrimônio líquido."
         actions={
           <Button
             type="button"
@@ -144,7 +144,7 @@ export function WealthPage() {
               Itens manuais
             </h2>
             <p className="text-caption text-ink-muted">
-              Valores de referência informados por você. Não são cotação de mercado.
+              Valores de referência informados por você.
             </p>
           </div>
         </div>
@@ -199,7 +199,7 @@ export function WealthPage() {
         open={form !== null}
         onClose={() => setForm(null)}
         title={form === 'new' || form === null ? 'Novo item manual' : 'Editar item manual'}
-        description="O valor é uma referência informada por você, não uma cotação de mercado."
+        description="O valor é uma referência informada por você, não é cotação de mercado."
         width="md"
         busy={save.isPending}
       >
@@ -227,7 +227,7 @@ export function WealthPage() {
           setDeleteError(null)
         }}
         title={`Excluir “${deleting?.description ?? 'item'}”`}
-        description="O item deixará de compor o patrimônio. Esta ação não apaga transações."
+        description="O item deixará de compor o patrimônio."
         size="sm"
         busy={remove.isPending}
         footer={
@@ -291,9 +291,7 @@ function WealthOverviewSections({ overview }: { readonly overview: WealthOvervie
           <p className="numeric mt-2 text-metric-xl font-bold tracking-tight text-ink">
             {overview.hasData ? formatMoney(overview.netWorth) : 'Sem dados suficientes'}
           </p>
-          <p className="mt-1 text-body-sm text-ink-muted">
-            Ativos brutos menos passivos. O valor de referência não é cotação de mercado.
-          </p>
+          <p className="mt-1 text-body-sm text-ink-muted">Ativos brutos menos passivos.</p>
         </div>
 
         <dl className="grid gap-3 sm:grid-cols-2">
@@ -321,7 +319,7 @@ function WealthOverviewSections({ overview }: { readonly overview: WealthOvervie
         ) : null}
         {overview.completeness === 'ESTIMATED' ? (
           <Alert variant="info" title="Visão estimada">
-            Há valores de referência com mais de 30 dias. A visão é uma referência, não cotação.
+            Há valores de referência com mais de 30 dias. A visão é uma referência.
           </Alert>
         ) : null}
       </section>

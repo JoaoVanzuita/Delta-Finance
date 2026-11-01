@@ -91,7 +91,9 @@ describe('categorias', () => {
     await user.click(within(row as HTMLElement).getByRole('button', { name: 'Desativar' }))
 
     const dialog = await screen.findByRole('dialog', { name: /Desativar “Feira”/ })
-    expect(within(dialog).getByText(/Nenhuma transação é apagada/)).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/Transações existentes desta categoria serão reatribuídas/),
+    ).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Reatribuir transações para')).toBeInTheDocument()
     expect(
       within(dialog).getByRole('button', { name: 'Confirmar desativação' }),

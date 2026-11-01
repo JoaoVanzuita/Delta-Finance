@@ -58,7 +58,7 @@ export function CardCycleSettings({
       }),
     onSuccess: async () => {
       setError(null)
-      setMessage('Ciclo do cartão atualizado. Faturas já fechadas ou pagas não são reescritas.')
+      setMessage('Ciclo do cartão atualizado.')
       await invalidateCardViews(queryClient)
     },
     onError: (caught) => {

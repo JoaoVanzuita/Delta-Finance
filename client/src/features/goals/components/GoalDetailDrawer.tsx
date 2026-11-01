@@ -81,7 +81,6 @@ export function GoalDetailDrawer({
       open={open}
       onClose={onClose}
       title={current.name}
-      description="Metas representam planejamento. Alocações não movimentam dinheiro."
       width="lg"
       busy={busy}
       bodyClassName="space-y-5"
@@ -189,9 +188,6 @@ export function GoalDetailDrawer({
 
       <section className="space-y-2">
         <h3 className="text-body-sm font-semibold text-ink">Alocações planejadas</h3>
-        <p className="text-caption text-ink-muted">
-          Alocações representam planejamento e não são movimentações financeiras reais.
-        </p>
         {current.allocations.length === 0 ? (
           <p className="text-body-sm text-ink-muted">
             Nenhuma alocação explícita; o progresso usa a regra selecionada.

@@ -91,9 +91,7 @@ export function RegisterPage() {
       <header className="mb-6 space-y-2">
         <p className="overline text-ink-muted">Conta pessoal</p>
         <h1 className="text-page-title font-bold tracking-tight text-ink">Criar conta</h1>
-        <p className="text-body-sm text-ink-muted">
-          Sua conta é individual: apenas você verá as suas contas, transações e conexões.
-        </p>
+        <p className="text-body-sm text-ink-muted">Conta individual.</p>
       </header>
 
       <Card className="p-5 sm:p-6">

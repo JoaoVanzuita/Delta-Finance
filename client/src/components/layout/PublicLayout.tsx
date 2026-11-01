@@ -52,9 +52,7 @@ export function PublicLayout({ children }: { children?: ReactNode }) {
       </main>
 
       <footer className="border-t border-line px-4 py-4 text-caption text-ink-muted sm:px-6 lg:px-10">
-        <div className="mx-auto w-full max-w-[var(--content-max)]">
-          Delta Finance · instalação self-hosted · dados isolados por usuário
-        </div>
+        <div className="mx-auto w-full max-w-[var(--content-max)]">Delta Finance</div>
       </footer>
     </div>
   )

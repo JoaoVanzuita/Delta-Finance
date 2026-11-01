@@ -75,7 +75,7 @@ export function CategoriesPage() {
       <PageHeader
         overline="Organizar"
         title="Categorias"
-        description="Predefinidas e personalizadas. Desativar não apaga transações: elas são reatribuídas ou ficam sem categoria."
+        description="Classificação de receitas e despesas."
         actions={
           <Button
             type="button"
@@ -104,9 +104,11 @@ export function CategoriesPage() {
             />
           </span>
         </label>
-        <p role="status" className="text-caption text-ink-muted">
-          {visible.length} de {categories.length} categoria(s)
-        </p>
+        {search.trim() ? (
+          <p role="status" className="text-caption text-ink-muted">
+            {visible.length} de {categories.length} categoria(s)
+          </p>
+        ) : null}
       </div>
 
       {categoriesQuery.isLoading ? (
@@ -130,7 +132,7 @@ export function CategoriesPage() {
         <EmptyState
           icon={<Tags className="size-5" />}
           title="Nenhuma categoria cadastrada"
-          description="Crie uma categoria para classificar receitas e despesas. As categorias predefinidas aparecem automaticamente."
+          description="Crie uma categoria para classificar receitas e despesas."
           action={
             <Button type="button" onClick={() => setCreating(true)}>
               Criar categoria
@@ -381,7 +383,7 @@ function DeactivateCategoryDialog({
       open
       onClose={onClose}
       title={`Desativar “${category.name}”`}
-      description="A categoria deixa de aceitar novos lançamentos. Nenhuma transação é apagada."
+      description="A categoria deixa de aceitar novos lançamentos."
       size="sm"
       busy={deactivate.isPending}
       initialFocusRef={reassignRef}

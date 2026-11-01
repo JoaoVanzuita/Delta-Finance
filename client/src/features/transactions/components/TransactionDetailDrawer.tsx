@@ -63,7 +63,7 @@ export function TransactionDetailDrawer({
       open={open}
       onClose={onClose}
       title="Detalhes da transação"
-      description="Informações da transação, origem e correções. O contexto da lista é preservado."
+      description="Origem, vínculos e correções."
       width="md"
       footer={
         <div className="flex flex-wrap justify-between gap-2">

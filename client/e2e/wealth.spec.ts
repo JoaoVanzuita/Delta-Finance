@@ -229,6 +229,9 @@ test('não apresenta valor manual como cotação de mercado', async ({ page }) =
   await installStub(page)
   await page.goto('/wealth')
 
-  await expect(page.getByText(/não é cotação de mercado/i)).toBeVisible()
   await expect(page.getByText(/Valores de referência informados por você/i)).toBeVisible()
+  await page.getByRole('button', { name: 'Adicionar item manual' }).click()
+  const drawer = page.getByRole('dialog', { name: 'Novo item manual' })
+  await expect(drawer.getByText(/não é cotação de mercado/i)).toBeVisible()
+  await drawer.getByRole('button', { name: 'Cancelar' }).click()
 })

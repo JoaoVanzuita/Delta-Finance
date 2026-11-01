@@ -202,9 +202,6 @@ export function InvoiceDetailPage() {
           <h2 id="invoice-pending-heading" className="text-sm font-semibold text-ink">
             Compras pendentes neste ciclo
           </h2>
-          <p className="text-xs leading-relaxed text-ink-muted">
-            Elas ainda não compõem o total nem o saldo devedor desta fatura.
-          </p>
           {pendingTransactions.length === 0 ? (
             <p className="text-sm text-ink-muted">Nenhuma compra pendente neste ciclo.</p>
           ) : (

@@ -10,7 +10,7 @@ const CONNECTION: Connection = {
   id: 'conn-1',
   itemIdMasked: 'item…0001',
   institutionName: 'Banco Alfa',
-  displayName: 'Banco da família',
+  displayName: 'Banco principal',
   nameCustomized: true,
   status: 'SYNCED',
   lastSyncAt: '2026-10-23T12:00:00Z',

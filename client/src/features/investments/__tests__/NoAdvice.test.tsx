@@ -38,7 +38,9 @@ describe('investimentos sem aconselhamento', () => {
       screen.queryByRole('heading', { name: 'Cobertura das conexões' }),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Posições manuais' })).not.toBeInTheDocument()
-    expect(screen.getByText(/não calcula cotação em tempo real/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/O valor atual não é cotação em tempo real/i),
+    ).toBeInTheDocument()
   })
 
   it('não oferece recomendação, ranking ou chamada de compra, venda ou alocação', async () => {
@@ -46,7 +48,7 @@ describe('investimentos sem aconselhamento', () => {
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
     expect(
-      screen.getByText(/não há recomendação de compra, venda, alocação ou ranking/i),
+      await screen.findByText(/não há recomendação de compra, venda ou alocação/i),
     ).toBeInTheDocument()
 
     const forbidden = /comprar|vender|investir agora|melhor investimento/i

@@ -78,7 +78,7 @@ export function TransactionFiltersDrawer({
       open={open}
       onClose={onClose}
       title="Filtros de transações"
-      description="Todos os filtros são aplicados ao carregar a lista e preservados na URL."
+      description="Aplicados à lista e preservados na URL."
       width="md"
       initialFocusRef={accountRef}
       footer={

@@ -137,17 +137,27 @@ export function PrivacySettingsPage() {
       <PageHeader
         overline="Configurações"
         title="Privacidade e dados"
-        description="Exporte uma cópia portátil dos seus dados, desconecte o provedor bancário ou encerre sua conta. Cada pessoa vê e controla somente os próprios dados."
+        description="Exporte seus dados, desconecte a integração ou encerre sua conta."
       />
 
       <Card className="p-5 sm:p-6">
         <SectionHeader
           title="Exportar meus dados"
-          description="ZIP com JSON Lines e CSV contendo perfil, contas, cartões, categorias, transações, faturas, itens, pagamentos, reconciliações, investimentos, patrimônio, metas, histórico de metas, integrações e auditoria."
+          description="ZIP com seus dados em JSON Lines e CSV."
         />
-        <p className="mt-3 text-body-sm text-ink-muted">
-          Segredos, credenciais, API Keys, tokens, chaves e hashes não são incluídos.
-        </p>
+        <details className="mt-3 rounded-control border border-line bg-surface-muted p-3">
+          <summary className="cursor-pointer text-body-sm font-medium text-ink">
+            O que está incluído
+          </summary>
+          <p className="mt-2 text-body-sm leading-relaxed text-ink-muted">
+            Perfil, contas, cartões, categorias, transações, faturas, itens, pagamentos,
+            reconciliações, investimentos, patrimônio, metas, histórico de metas, integrações e
+            auditoria.
+          </p>
+          <p className="mt-2 text-body-sm leading-relaxed text-ink-muted">
+            Segredos, credenciais, API Keys, tokens, chaves e hashes não são incluídos.
+          </p>
+        </details>
         <Button
           className="mt-4"
           onClick={() => void exportData()}
@@ -171,7 +181,7 @@ export function PrivacySettingsPage() {
       <Card className="p-5 sm:p-6">
         <SectionHeader
           title="Desconectar integração"
-          description="A desconexão remove as credenciais e interrompe novas sincronizações. Escolha se os dados já importados devem ser preservados."
+          description="A desconexão remove as credenciais e interrompe novas sincronizações."
         />
 
         {integrationQuery.isLoading ? (
@@ -328,7 +338,6 @@ export function PrivacySettingsPage() {
           <p className="font-semibold">O que será removido</p>
           <p className="mt-1 text-ink-muted">
             Contas, cartões, transações, faturas, investimentos, patrimônio, metas e histórico.
-            Contas manuais criadas por outras pessoas da instalação não são afetadas.
           </p>
         </div>
         <form

@@ -31,7 +31,7 @@ export function DashboardCategoryDrawer({
       open={open}
       onClose={onClose}
       title={income ? 'Receitas por categoria' : 'Despesas por categoria'}
-      description={`${categories.length} categoria(s) no período · ${formatMoney(total, 'BRL')} no total`}
+      description={`Total de ${formatMoney(total, 'BRL')} no período`}
       width="md"
       footer={
         <Button type="button" variant="secondary" onClick={onClose}>

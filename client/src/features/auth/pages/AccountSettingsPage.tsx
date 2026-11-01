@@ -99,13 +99,12 @@ export function AccountSettingsPage() {
       <PageHeader
         overline="Configurações"
         title="Configurações da conta"
-        description="Gerencie seu acesso. Seus dados financeiros permanecem privados e separados dos demais usuários."
+        description="Gerencie seu acesso."
       />
 
       <Card className="p-5 sm:p-6">
         <SectionHeader
           title="Identidade"
-          description="Informações da sua conta nesta instalação."
           actions={
             <span
               aria-hidden="true"
@@ -130,7 +129,7 @@ export function AccountSettingsPage() {
       <Card className="p-5 sm:p-6">
         <SectionHeader
           title="Alterar senha"
-          description="A nova senha segue a mesma política do cadastro: 12 a 128 caracteres. As outras sessões serão encerradas."
+          description="A nova senha deve ter 12 a 128 caracteres; as outras sessões serão encerradas."
           actions={
             <span
               aria-hidden="true"
@@ -214,7 +213,7 @@ export function AccountSettingsPage() {
       <Card className="p-5 sm:p-6">
         <SectionHeader
           title="Sessão"
-          description="Ao sair, os dados em cache neste navegador são descartados."
+          description="Encerra a sessão neste navegador."
           actions={
             <span
               aria-hidden="true"

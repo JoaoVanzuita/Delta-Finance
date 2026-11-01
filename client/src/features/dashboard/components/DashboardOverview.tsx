@@ -84,7 +84,6 @@ export function DashboardOverview({ summary, periodLabel }: DashboardOverviewPro
           icon={TrendingDown}
           label="Despesas"
           value={formatMoney(summary.expenses, 'BRL')}
-          note="O total que as categorias detalham abaixo."
           tone="expense"
         />
         <MetricCard
@@ -99,15 +98,12 @@ export function DashboardOverview({ summary, periodLabel }: DashboardOverviewPro
           label="Saldo devedor de cartões"
           value={formatMoney(summary.cardOutstandingBalance, 'BRL')}
           note={
-            <span>
-              Dívida separada do saldo.{' '}
-              <Link
-                to="/cards"
-                className="font-semibold text-action underline underline-offset-4 hover:text-action-hover"
-              >
-                Acompanhar cartões
-              </Link>
-            </span>
+            <Link
+              to="/cards"
+              className="font-semibold text-action underline underline-offset-4 hover:text-action-hover"
+            >
+              Acompanhar cartões
+            </Link>
           }
           tone="expense"
         />
@@ -126,7 +122,7 @@ function MetricCard({
   readonly icon: LucideIcon
   readonly label: string
   readonly value: string
-  readonly note: ReactNode
+  readonly note?: ReactNode
   readonly tone: 'neutral' | 'income' | 'expense'
 }) {
   return (
@@ -157,7 +153,7 @@ function MetricCard({
       >
         {value}
       </p>
-      <div className="mt-2 text-caption leading-relaxed text-ink-muted">{note}</div>
+      {note ? <div className="mt-2 text-caption leading-relaxed text-ink-muted">{note}</div> : null}
     </article>
   )
 }

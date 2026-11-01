@@ -133,11 +133,6 @@ export function ConnectionsList({
           <h2 id="connections-heading" className="text-section-title font-semibold text-ink">
             Conexões
           </h2>
-          <p className="mt-1 max-w-2xl text-body-sm text-ink-muted">
-            Cada conexão corresponde a uma autorização bancária. Desativar interrompe novas
-            sincronizações e preserva o histórico; excluir remove também as contas e transações
-            importadas por esta conexão.
-          </p>
         </div>
         <Badge variant={configured ? 'neutral' : 'warning'}>
           {connectionLimit !== undefined
@@ -155,10 +150,6 @@ export function ConnectionsList({
         <Alert variant="danger" role="alert">
           {error}
         </Alert>
-      ) : null}
-
-      {!configured ? (
-        <Alert variant="neutral">Salve credenciais válidas para adicionar conexões.</Alert>
       ) : null}
 
       {configured && connections.length === 0 ? (

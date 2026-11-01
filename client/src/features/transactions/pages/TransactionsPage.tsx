@@ -145,7 +145,7 @@ export function TransactionsPage() {
       <PageHeader
         overline="Meu dinheiro"
         title="Transações"
-        description="Movimentos importados e manuais. Pendentes aparecem no estado próprio e não entram nos totais oficiais."
+        description="Movimentos importados e manuais."
         actions={
           <Link to="/transactions/new" className={cn(buttonVariants({ variant: 'primary' }))}>
             <Plus aria-hidden="true" className="size-4" />
@@ -203,9 +203,6 @@ export function TransactionsPage() {
 
         {activeFilters > 0 ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-            <span className="text-caption font-medium text-ink-muted">
-              {activeFilters} filtro(s) ativo(s)
-            </span>
             {filters.accountId ? (
               <FilterChip
                 label={`Conta: ${accountNames.get(filters.accountId) ?? 'Conta'}`}

@@ -289,8 +289,7 @@ export function DashboardAttention({
         </div>
       ) : (
         <Alert variant="success" title="Nenhuma pendência crítica">
-          Totais oficiais em dia. A sincronização mais recente entre as conexões foi{' '}
-          {lastSync ? formatDateTime(lastSync) : 'ainda não registrada'}.
+          Última sincronização: {lastSync ? formatDateTime(lastSync) : 'ainda não registrada'}.
         </Alert>
       )}
     </section>

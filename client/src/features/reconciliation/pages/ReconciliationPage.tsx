@@ -67,7 +67,7 @@ export function ReconciliationPage() {
       <PageHeader
         overline="Organizar"
         title="Reconciliação"
-        description="Transferências entre contas próprias e pagamentos de fatura não são receitas nem despesas. Confirme apenas quando as duas pernas corresponderem."
+        description="Transferências internas e pagamentos de fatura não são receita nem despesa; confirme quando as duas pernas corresponderem."
       />
 
       {matchesQuery.isLoading ? (
@@ -98,7 +98,7 @@ export function ReconciliationPage() {
         <EmptyState
           icon={<GitCompareArrows className="size-5" />}
           title="Nenhuma sugestão pendente"
-          description="Transferências e pagamentos já confirmados continuam fora dos totais. Novas sugestões aparecem após a sincronização."
+          description="Novas sugestões aparecem após a sincronização."
         />
       ) : null}
 

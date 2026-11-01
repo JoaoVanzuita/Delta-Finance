@@ -75,7 +75,7 @@ export function AccountsPage() {
       <PageHeader
         overline="Meu dinheiro"
         title="Contas"
-        description="Saldos bancários, carteiras e dinheiro. Cartões de crédito ficam no painel de cartões."
+        description="Saldos de contas e carteiras."
         actions={
           <>
             <Link to="/accounts/new" className={cn(buttonVariants({ variant: 'primary' }))}>
@@ -113,7 +113,7 @@ export function AccountsPage() {
         <EmptyState
           icon={<Wallet className="size-5" />}
           title="Nenhuma conta bancária"
-          description="Adicione uma conta manual ou configure a integração para importar contas bancárias. Cartões têm um painel próprio."
+          description="Crie uma conta manual ou configure a integração."
           action={
             <div className="flex flex-wrap gap-2">
               <Link to="/accounts/new" className={cn(buttonVariants({ variant: 'primary' }))}>
@@ -168,9 +168,7 @@ export function AccountsPage() {
                 >
                   Contas em uso
                 </h2>
-                <p className="text-caption text-ink-muted">
-                  Agrupadas por instituição. Ordem alfabética.
-                </p>
+                <p className="text-caption text-ink-muted">Agrupadas por instituição.</p>
               </div>
               <div className="space-y-6">
                 {Array.from(groups.entries())
@@ -208,8 +206,7 @@ export function AccountsPage() {
               </summary>
               <div className="border-t border-line p-4">
                 <p className="mb-3 text-caption text-ink-muted">
-                  Inativas, indisponíveis ou em moeda diferente de BRL. Continuam acessíveis sem
-                  competir com o saldo principal.
+                  Inativas, indisponíveis ou em outra moeda.
                 </p>
                 <ul className="grid gap-3 sm:grid-cols-2">
                   {otherAccounts.map((account) => (

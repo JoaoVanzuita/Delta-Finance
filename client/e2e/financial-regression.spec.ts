@@ -26,7 +26,7 @@ test('dashboard preserva resultado, receitas, despesas, saldo e dívida de cart�
   ]) {
     await expect(page.getByText(value).first()).toBeVisible()
   }
-  await expect(page.getByText('Dívida separada do saldo.')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Acompanhar cartões' })).toBeVisible()
 })
 
 test('patrimônio separa ativos, passivos, cartão e moeda não consolidada', async ({ page }) => {
@@ -83,5 +83,7 @@ test('metas preservam alvo, progresso e alocações planejadas', async ({ page }
   await expect(page.getByText('R$ 20.000,00').first()).toBeVisible()
   await expect(page.getByText('R$ 10.000,00').first()).toBeVisible()
   await expect(page.getByText('50%').first()).toBeVisible()
-  await expect(page.getByText(/Alocações são planejamento/)).toBeVisible()
+  await expect(
+    page.getByText(/Objetivos e progresso por alocação ou patrimônio líquido/),
+  ).toBeVisible()
 })

@@ -250,7 +250,6 @@ describe('visão patrimonial', () => {
     expect(within(summary).getByText(/R\$\s*300,00/)).toBeInTheDocument()
     expect(within(summary).getByText(/R\$\s*1\.200,00/)).toBeInTheDocument()
     expect(within(summary).getByText('Parcial')).toBeInTheDocument()
-    expect(within(summary).getByText(/não é cotação de mercado/i)).toBeInTheDocument()
 
     const composition = screen.getByRole('region', { name: 'Composição' })
     expect(within(composition).getAllByText('Conta Alfa').length).toBeGreaterThan(0)
@@ -290,6 +289,7 @@ describe('visão patrimonial', () => {
     await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })
     await user.click(screen.getByRole('button', { name: 'Adicionar item manual' }))
     const drawer = await screen.findByRole('dialog', { name: 'Novo item manual' })
+    expect(within(drawer).getByText(/não é cotação de mercado/i)).toBeInTheDocument()
     await user.selectOptions(within(drawer).getByLabelText('Natureza'), 'ASSET')
     await user.type(within(drawer).getByLabelText('Tipo do item'), 'IMOVEL')
     await user.type(within(drawer).getByLabelText('Descrição'), 'Apartamento')

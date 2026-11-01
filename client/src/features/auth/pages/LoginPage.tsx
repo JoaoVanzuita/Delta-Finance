@@ -90,7 +90,6 @@ export function LoginPage() {
       <header className="mb-6 space-y-2">
         <p className="overline text-ink-muted">Conta pessoal</p>
         <h1 className="text-page-title font-bold tracking-tight text-ink">Entrar</h1>
-        <p className="text-body-sm text-ink-muted">Acesse o seu espaço financeiro privado.</p>
       </header>
 
       {state?.registered ? (

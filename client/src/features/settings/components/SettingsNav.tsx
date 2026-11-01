@@ -6,7 +6,6 @@ import { cn } from '@/lib/cn'
 interface SettingsDestination {
   readonly to: string
   readonly label: string
-  readonly description: string
   readonly icon: LucideIcon
 }
 
@@ -14,25 +13,21 @@ const DESTINATIONS: readonly SettingsDestination[] = [
   {
     to: '/settings/preferences',
     label: 'Preferências',
-    description: 'Tema e cor principal',
     icon: Palette,
   },
   {
     to: '/settings/integration',
     label: 'Integração',
-    description: 'Meu Pluggy e conexões',
     icon: Plug,
   },
   {
     to: '/settings/privacy',
     label: 'Privacidade',
-    description: 'Exportação e exclusão',
     icon: ShieldCheck,
   },
   {
     to: '/account',
     label: 'Conta',
-    description: 'Identidade e senha',
     icon: UserRound,
   },
 ]
@@ -69,7 +64,6 @@ export function SettingsNav() {
                     className={cn('size-4', isActive ? 'text-primary' : 'text-ink-muted')}
                   />
                   <span>{destination.label}</span>
-                  <span className="sr-only"> — {destination.description}</span>
                 </>
               )}
             </NavLink>

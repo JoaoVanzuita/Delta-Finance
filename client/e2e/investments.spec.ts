@@ -461,6 +461,8 @@ test('mostra resumo, filtros e proventos sem recomendação', async ({ page }) =
   await expect(page.getByRole('heading', { level: 1, name: 'Investimentos' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Cobertura da importação' })).toBeVisible()
   await expect(page.getByText('R$ 1.500,00').first()).toBeVisible()
+  await page.getByText('Limites deste módulo').click()
+  await expect(page.getByText(/não há recomendação de compra, venda ou alocação/i)).toBeVisible()
 
   await page.getByRole('tab', { name: 'Posições' }).click()
   await expect(page).toHaveURL(/tab=positions/)
@@ -480,7 +482,6 @@ test('mostra resumo, filtros e proventos sem recomendação', async ({ page }) =
   await expect(page).toHaveURL(/tab=income/)
   const income = page.getByRole('region', { name: 'Proventos' })
   await expect(income.getByText(/R\$\s*12,50/).first()).toBeVisible()
-  await expect(page.getByText(/não há recomendação de compra, venda, alocação/i)).toBeVisible()
   await expect(page.getByRole('button', { name: /comprar|vender|investir agora/i })).toHaveCount(0)
 })
 

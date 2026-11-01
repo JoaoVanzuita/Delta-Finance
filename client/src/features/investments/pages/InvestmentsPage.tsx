@@ -111,7 +111,7 @@ export function InvestmentsPage() {
       <PageHeader
         overline="Planejar"
         title="Investimentos"
-        description="Posições importadas do Meu Pluggy. O sistema não calcula cotação em tempo real e não há recomendação de compra, venda, alocação ou ranking."
+        description="Posições importadas do Meu Pluggy."
         actions={
           <Button
             type="button"
@@ -334,7 +334,7 @@ export function InvestmentsPage() {
         open={incomeForm !== null}
         onClose={() => setIncomeForm(null)}
         title={incomeForm === 'new' ? 'Registrar provento manual' : 'Editar provento manual'}
-        description="Proventos manuais complementam o provedor e não entram automaticamente nas receitas do Dashboard."
+        description="Proventos do período."
         width="md"
       >
         {incomeForm ? (

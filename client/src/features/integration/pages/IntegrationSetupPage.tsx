@@ -55,7 +55,7 @@ export function IntegrationSetupPage() {
       <PageHeader
         overline="Configurações"
         title="Integração bancária"
-        description="Conecte sua conta Meu Pluggy para importar contas, cartões, transações e investimentos. Cada pessoa configura a própria aplicação pessoal."
+        description="Conecte sua conta Meu Pluggy para importar dados bancários."
         meta={
           <Badge
             variant={
@@ -143,7 +143,7 @@ export function IntegrationSetupPage() {
       <Card className="p-5 sm:p-6">
         <SectionHeader
           title="Meu Pluggy"
-          description="Credenciais e limites da aplicação pessoal. O Client Secret é write-only e não é exibido novamente."
+          description="Credenciais da aplicação pessoal."
           actions={
             <Badge variant={configured ? 'income' : 'neutral'}>
               {integration
@@ -169,10 +169,15 @@ export function IntegrationSetupPage() {
           </div>
         </dl>
 
-        <p className="mt-4 text-caption leading-relaxed text-ink-muted">
-          As credenciais ficam cifradas no servidor. O Client Secret não é devolvido pela API, não é
-          gravado no localStorage e não aparece em exportações.
-        </p>
+        <details className="mt-4 rounded-control border border-line bg-surface-muted p-3">
+          <summary className="cursor-pointer text-caption font-medium text-ink">
+            Segurança das credenciais
+          </summary>
+          <p className="mt-2 text-caption leading-relaxed text-ink-muted">
+            As credenciais ficam cifradas no servidor. O Client Secret não é devolvido pela API, não
+            é gravado no localStorage e não aparece em exportações.
+          </p>
+        </details>
       </Card>
 
       <CredentialsDialog

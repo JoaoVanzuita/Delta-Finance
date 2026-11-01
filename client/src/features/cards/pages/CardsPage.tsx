@@ -58,7 +58,7 @@ export function CardsPage() {
       <PageHeader
         overline="Meu dinheiro"
         title="Cartões de crédito"
-        description="Faturas, limites e vencimentos separados das contas correntes. Compras entram uma única vez; pagamentos reduzem a dívida."
+        description="Faturas, limites e vencimentos por cartão."
         actions={
           <>
             <Link to="/accounts" className={cn(buttonVariants({ variant: 'secondary' }))}>
@@ -99,7 +99,7 @@ export function CardsPage() {
         <EmptyState
           icon={<CreditCard className="size-5" />}
           title="Nenhum cartão de crédito"
-          description="Adicione uma conexão com cartões para acompanhar faturas, limites e vencimentos. Os dados aparecem separados das contas correntes."
+          description="Adicione uma conexão para acompanhar seus cartões."
           action={
             <Link to="/settings/integration" className={cn(buttonVariants({ variant: 'primary' }))}>
               Configurar integração

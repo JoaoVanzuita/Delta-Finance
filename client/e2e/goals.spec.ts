@@ -196,7 +196,7 @@ test('cria meta, mostra progresso e estados sem mover dinheiro', async ({ page }
   await card.getByRole('button', { name: 'Ver detalhes' }).click()
   let detail = page.getByRole('dialog', { name: 'Reserva de emergência' })
   await expect(detail.getByText(/R\$\s*500,00 do alvo/)).toBeVisible()
-  await expect(detail.getByText(/não são movimentações financeiras reais/)).toBeVisible()
+  await expect(detail.getByRole('heading', { name: 'Alocações planejadas' })).toBeVisible()
   await expect(detail.getByText(/R\$\s*300,00/)).toBeVisible()
   await expect(detail.getByText(/R\$\s*200,00/)).toBeVisible()
   await detail.getByText('Histórico de progresso').click()

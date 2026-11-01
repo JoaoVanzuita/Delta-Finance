@@ -61,7 +61,7 @@ export function GoalsPage() {
       <PageHeader
         overline="Planejar"
         title="Metas"
-        description="Objetivos com regra de progresso transparente. Alocações são planejamento e não movimentam dinheiro."
+        description="Objetivos e progresso por alocação ou patrimônio líquido."
         actions={
           <Button
             type="button"

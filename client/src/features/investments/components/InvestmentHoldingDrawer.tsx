@@ -23,7 +23,7 @@ export function InvestmentHoldingDrawer({
       open={open}
       onClose={onClose}
       title={holding?.name ?? 'Detalhes da posição'}
-      description="Posição importada do provedor. Valores ausentes não são tratados como zero."
+      description="Posição importada do provedor."
       width="lg"
       bodyClassName="space-y-5"
     >

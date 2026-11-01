@@ -269,7 +269,6 @@ test('mostra compras pendentes na fatura aberta', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /Fatura/ })).toBeVisible()
   await expect(page.getByText('Compras pendentes neste ciclo')).toBeVisible()
   await expect(page.getByText('Compra pendente')).toBeVisible()
-  await expect(page.getByText(/ainda não compõem o total/)).toBeVisible()
 })
 
 test('configura ciclo, adiciona item manual e registra pagamento', async ({ page }) => {
@@ -289,9 +288,7 @@ test('configura ciclo, adiciona item manual e registra pagamento', async ({ page
   await page.getByRole('tab', { name: 'Configurações' }).click()
   await page.getByRole('button', { name: 'Salvar ciclo' }).click()
   await expect(
-    page
-      .getByRole('tabpanel', { name: 'Configurações' })
-      .getByText(/Faturas já fechadas ou pagas não são reescritas/),
+    page.getByRole('tabpanel', { name: 'Configurações' }).getByText('Ciclo do cartão atualizado.'),
   ).toBeVisible()
 
   await page.getByRole('tab', { name: 'Histórico' }).click()

@@ -41,8 +41,7 @@ export function InvestmentSummary({ overview }: InvestmentSummaryProps) {
 
       {overview.stale ? (
         <p className="rounded-control border border-warning/40 bg-warning-soft p-3 text-body-sm text-ink">
-          Há posição ativa com referência antiga. O valor é o último informado pelo provedor, não
-          uma cotação em tempo real.
+          Há posição ativa com referência antiga. O valor é o último informado pelo provedor.
         </p>
       ) : null}
 
@@ -54,8 +53,7 @@ export function InvestmentSummary({ overview }: InvestmentSummaryProps) {
             : formatMoney(overview.totalValue, 'BRL')}
         </p>
         <p className="mt-1 text-body-sm text-ink-muted">
-          Último saldo importado das posições ativas. Não é cotação em tempo real nem histórico de
-          rentabilidade.
+          Último saldo importado das posições ativas.
         </p>
       </div>
 

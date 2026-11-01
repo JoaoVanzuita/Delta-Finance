@@ -134,7 +134,7 @@ export function InvoiceItemDialog({
       open
       onClose={onClose}
       title={item ? 'Editar item da fatura' : 'Adicionar item à fatura'}
-      description="O valor é sempre positivo; o efeito define a direção. Correções preservam o histórico."
+      description="O efeito define a direção."
       size="lg"
       busy={save.isPending}
       initialFocusRef={descriptionRef}

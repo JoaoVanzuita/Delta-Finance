@@ -110,8 +110,8 @@ export function InvoiceStatus({ invoice, creditBalance, currency = 'BRL' }: Invo
           Crédito acumulado do cartão para próximas faturas:{' '}
           <span className="numeric font-medium text-ink">
             {formatMoney(creditBalance, currency)}
-          </span>{' '}
-          — não compõe receitas, despesas nem saldo atual.
+          </span>
+          .
         </p>
       ) : null}
     </section>

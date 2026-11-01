@@ -247,7 +247,6 @@ export function CardDetailPage() {
               <Metric
                 label="Limite disponível"
                 value={formatMoney(profile?.availableCreditLimit, currency)}
-                hint="Valor disponível informado oficialmente pelo provedor."
               />
               <Metric
                 label="Utilizado"
@@ -257,12 +256,11 @@ export function CardDetailPage() {
               <Metric
                 label="Próximo vencimento"
                 value={card.nextDueDate ? formatDate(card.nextDueDate) : 'Sem pendência'}
-                hint="Vencimento da fatura pendente mais próxima."
               />
               <Metric
                 label="Crédito acumulado"
                 value={formatMoney(profile?.creditBalance, currency)}
-                hint="Crédito para próximas faturas; não é receita nem saldo em conta."
+                hint="Crédito para próximas faturas."
               />
               <Metric
                 label="Compras não alocadas"
@@ -308,7 +306,6 @@ export function CardDetailPage() {
                 variant="warning"
                 title={`${pendingTransactions.length} compra(s) pendente(s)`}
               >
-                Elas ainda não compõem o total nem o saldo devedor.{' '}
                 <Link
                   to={`/invoices/${openInvoice.id}`}
                   className="font-semibold text-action underline underline-offset-4"
@@ -350,9 +347,6 @@ export function CardDetailPage() {
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
                   <h2 className="text-section-title font-semibold text-ink">Histórico</h2>
-                  <p className="text-caption text-ink-muted">
-                    Faturas fechadas e pagas não são reescritas.
-                  </p>
                 </div>
                 <Link
                   to={`/cards/${accountId}/invoices`}
@@ -488,7 +482,7 @@ function Metric({
 }: {
   readonly label: string
   readonly value: string
-  readonly hint: string
+  readonly hint?: string
 }) {
   return (
     <div className="rounded-card border border-line bg-surface p-4">
@@ -496,7 +490,7 @@ function Metric({
         {label}
       </dt>
       <dd className="numeric mt-2 text-metric-sm font-semibold text-ink">{value}</dd>
-      <dd className="mt-2 text-caption leading-relaxed text-ink-muted">{hint}</dd>
+      {hint ? <dd className="mt-2 text-caption leading-relaxed text-ink-muted">{hint}</dd> : null}
     </div>
   )
 }

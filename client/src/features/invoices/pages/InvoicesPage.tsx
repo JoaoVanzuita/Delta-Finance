@@ -122,7 +122,7 @@ export function InvoicesPage() {
       <PageHeader
         overline="Cartões"
         title={`Faturas · ${account?.alias ?? 'Cartão'}`}
-        description="Faturas organizadas por ciclo local. Compras contam como despesa uma única vez; pagamentos apenas reduzem a dívida."
+        description="Faturas organizadas por ciclo do cartão."
         meta={
           <>
             <Badge variant="neutral">{currency}</Badge>
@@ -176,7 +176,7 @@ export function InvoicesPage() {
                 </h2>
                 <p className="mt-1 text-body-sm text-ink-muted">
                   {invoices.length > 0
-                    ? 'O histórico continua disponível e não é reescrito.'
+                    ? 'O histórico continua disponível.'
                     : account?.cardProfile
                       ? 'Compras efetivadas aparecem aqui quando o ciclo gerar a primeira fatura.'
                       : 'Configure o ciclo do cartão para gerar faturas.'}
@@ -308,7 +308,7 @@ export function InvoicesPage() {
 
               <UnallocatedGroup
                 title="Créditos não alocados"
-                description="Estornos e créditos reduzirão faturas futuras; não são compras."
+                description="Estornos e créditos abatem faturas futuras."
                 icon={<CircleDollarSign aria-hidden="true" className="size-4" />}
                 transactions={unallocatedCredits}
                 currency={currency}
@@ -378,10 +378,6 @@ function CurrentInvoiceSection({
           <Metric label="Crédito aplicado" value={formatMoney(invoice.appliedCredit, currency)} />
         ) : null}
       </dl>
-
-      <p className="text-caption text-ink-muted">
-        Compras pendentes ainda não entram no total nem no saldo devedor.
-      </p>
 
       {invoice.missingPurchases ? (
         <Alert variant="warning" title="Histórico do ciclo incompleto">

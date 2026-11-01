@@ -8,7 +8,7 @@ import type {
   InvestmentHolding,
 } from '@/features/integration/api'
 
-import { assetClassCountLabel, assetClassLabel } from '../labels'
+import { assetClassLabel } from '../labels'
 import { investmentVisual } from '../visuals'
 import { InvestmentClassDrawer } from './InvestmentClassDrawer'
 
@@ -76,9 +76,7 @@ export function InvestmentAllocation({
             {formatMoney(totalValue, 'BRL')}
           </p>
         </div>
-        <p className="text-caption text-ink-muted">
-          {assetClassCountLabel(allocation.length)} · clique para ver as posições
-        </p>
+        <p className="text-caption text-ink-muted">Clique para ver as posições.</p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:items-center">
@@ -97,8 +95,7 @@ export function InvestmentAllocation({
             </div>
           </div>
           <figcaption className="sr-only">
-            Distribuição do valor atual por classe de investimento. A lista e a tabela abaixo
-            repetem os mesmos valores.
+            Distribuição do valor atual por classe de investimento.
           </figcaption>
         </figure>
 

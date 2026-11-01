@@ -20,7 +20,6 @@ export function Brand({ className, rail = false }: BrandProps) {
         <span className="block truncate text-body-sm font-semibold tracking-tight text-ink">
           Delta Finance
         </span>
-        <span className="block truncate text-caption text-ink-muted">Finanças da família</span>
       </span>
     </div>
   )

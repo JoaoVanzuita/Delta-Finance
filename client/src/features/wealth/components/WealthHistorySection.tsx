@@ -65,10 +65,7 @@ export function WealthHistorySection() {
           <h2 id="wealth-history-heading" className="text-section-title font-semibold text-ink">
             Evolução patrimonial
           </h2>
-          <p className="text-caption text-ink-muted">
-            Posições mensais imutáveis. O histórico começa no primeiro snapshot; meses anteriores
-            não são reconstruídos.
-          </p>
+          <p className="text-caption text-ink-muted">Histórico começa no primeiro snapshot.</p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-wrap gap-1" aria-label="Período do histórico">

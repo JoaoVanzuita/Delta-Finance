@@ -87,7 +87,7 @@ export function SyncStatusPanel({ connections, integrationConfigured }: SyncStat
       <Card className="p-5 sm:p-6">
         <SectionHeader
           title="Sincronização"
-          description="A sincronização programada lê os dados atualizados pelo provedor. Consultar agora não força a instituição de origem a atualizar e não promete tempo real."
+          description="A sincronização lê os dados do provedor; consultar agora não atualiza a instituição de origem."
           actions={
             <Button
               variant="secondary"
@@ -216,7 +216,7 @@ export function SyncStatusPanel({ connections, integrationConfigured }: SyncStat
       <Card className="p-5 sm:p-6">
         <SectionHeader
           title="Histórico de sincronizações"
-          description="Cada execução registra o que foi lido, criado e atualizado. Códigos técnicos aparecem apenas nos detalhes."
+          description="Códigos técnicos aparecem apenas nos detalhes."
           actions={
             runs.length > 0 ? (
               <Button
@@ -298,7 +298,7 @@ export function SyncStatusPanel({ connections, integrationConfigured }: SyncStat
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         title="Histórico de sincronizações"
-        description="Execuções ordenadas da mais recente para a mais antiga."
+
         width="lg"
       >
         {runs.length === 0 ? (

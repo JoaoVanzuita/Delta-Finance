@@ -94,7 +94,6 @@ export function CategoryChart({
             {formatMoney(total, 'BRL')}
           </p>
         </div>
-        <p className="text-caption text-ink-muted">{categories.length} categoria(s)</p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:items-center">
@@ -115,8 +114,7 @@ export function CategoryChart({
             </div>
           </div>
           <figcaption className="sr-only">
-            Distribuição percentual das {noun} por categoria. A lista abaixo repete os mesmos
-            valores.
+            Distribuição percentual das {noun} por categoria.
           </figcaption>
         </figure>
 

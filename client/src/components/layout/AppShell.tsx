@@ -124,14 +124,6 @@ function NavigationContent({
         )}
       >
         {showTheme ? <ThemeMenu placement="top" align="start" /> : null}
-        <p
-          className={cn(
-            'text-caption leading-snug text-ink-muted',
-            compact && 'md:sr-only lg:not-sr-only',
-          )}
-        >
-          Instalação privada. Cada pessoa vê somente os próprios dados.
-        </p>
       </div>
     </div>
   )
@@ -188,7 +180,6 @@ export function AppShell({ children, actionCounts }: AppShellProps) {
               open={mobileOpen}
               onClose={() => setMobileOpen(false)}
               title="Navegação"
-              description="Áreas do Delta Finance"
               side="left"
               width="sm"
               bodyClassName="flex min-h-0 flex-col px-0 py-2"
@@ -213,7 +204,7 @@ export function AppShell({ children, actionCounts }: AppShellProps) {
           </main>
 
           <footer className="border-t border-line px-4 py-4 text-caption text-ink-muted sm:px-6 lg:px-10">
-            Delta Finance · dados isolados por usuário · valores em BRL
+            Delta Finance · valores em BRL
           </footer>
         </div>
       </div>

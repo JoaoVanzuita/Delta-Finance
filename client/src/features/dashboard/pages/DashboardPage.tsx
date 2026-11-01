@@ -244,7 +244,7 @@ export function DashboardPage() {
     <PageHeader
       overline="Visão geral"
       title="Dashboard"
-      description="Sua situação financeira no período, com cada total conferível no detalhamento."
+      description="Sua situação financeira no período."
       meta={
         <>
           <Badge variant="neutral">{periodLabel}</Badge>
@@ -336,7 +336,7 @@ export function DashboardPage() {
           <DashboardSection
             id="timeseries"
             title="Evolução financeira"
-            description="Receitas, despesas e resultado por período calendário. Selecione uma série ou um ponto para detalhar."
+            description="Receitas, despesas e resultado por período; selecione uma série ou ponto para detalhar."
           >
             {timeseriesQuery.isLoading ? (
               <p role="status" className="text-body-sm text-ink-muted">
@@ -362,7 +362,7 @@ export function DashboardPage() {
           <DashboardSection
             id="categories"
             title="Categorias"
-            description="Composição de despesas e receitas do período. Categorias usadas nos dois sentidos aparecem como saídas ou entradas conforme a aba. Selecione uma categoria para ver os lançamentos que a compõem."
+            description="Despesas e receitas por categoria. Selecione para detalhar."
           >
             <Tabs
               value={categoryDirection}
@@ -469,7 +469,7 @@ export function DashboardPage() {
         open={recentDrawerOpen}
         onClose={() => setRecentDrawerOpen(false)}
         title="Últimas movimentações"
-        description={`${recentEntries.length} entrada(s) carregada(s) com os filtros atuais.`}
+        description="Movimentações com os filtros atuais."
         entries={recentEntries}
         accountNames={accountNames}
         categoryNames={categoryNames}

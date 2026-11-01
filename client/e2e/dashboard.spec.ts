@@ -272,7 +272,7 @@ test('mostra totais separados, filtra pela URL e detalha categoria sem perder co
   await expect(page.getByText(/R\$\s*500,00/).first()).toBeVisible()
   await expect(page.getByText(/R\$\s*1\.100,00/).first()).toBeVisible()
   await expect(page.getByText(/R\$\s*310,00/).first()).toBeVisible()
-  await expect(page.getByText(/Dívida separada do saldo/)).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Acompanhar cartões' })).toBeVisible()
   await expect(page.getByText(/Total de despesas no período/)).toBeVisible()
   await expect(page.getByRole('img', { name: /Evolução de receitas/i })).toBeVisible()
   await expect(page.getByText('Feira da semana').first()).toBeVisible()

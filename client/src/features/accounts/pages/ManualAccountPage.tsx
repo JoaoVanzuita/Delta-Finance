@@ -182,8 +182,8 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
         title={editing ? 'Editar conta manual' : 'Nova conta manual'}
         description={
           editing
-            ? 'Atualize os dados de referência e o estado da conta. O tipo permanece imutável.'
-            : 'Informe o saldo de referência que você conhece. O saldo atual soma os lançamentos efetivados a partir dessa data.'
+            ? 'Atualize os dados de referência e o estado da conta.'
+            : 'Informe o saldo de referência; o saldo atual soma os lançamentos efetivados a partir dele.'
         }
       />
 
@@ -209,9 +209,7 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
         <Card className="space-y-4 p-5 sm:p-6">
           <div>
             <h2 className="text-section-title font-semibold text-ink">Dados principais</h2>
-            <p className="text-caption text-ink-muted">
-              O tipo define como a conta aparece nos relatórios.
-            </p>
+            <p className="text-caption text-ink-muted">Usado nos relatórios.</p>
           </div>
 
           <Field
@@ -233,12 +231,7 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
             </Select>
           </Field>
 
-          <Field
-            id="manual-account-alias"
-            label="Apelido"
-            hint="Nome exibido nas listas e relatórios."
-            required
-          >
+          <Field id="manual-account-alias" label="Apelido" required>
             <Input
               id="manual-account-alias"
               type="text"
@@ -265,9 +258,7 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
         <Card className="space-y-4 p-5 sm:p-6">
           <div>
             <h2 className="text-section-title font-semibold text-ink">Saldo de referência</h2>
-            <p className="text-caption text-ink-muted">
-              Ponto de partida para calcular o saldo atual. Não é uma movimentação financeira.
-            </p>
+            <p className="text-caption text-ink-muted">Ponto de partida do saldo atual.</p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

@@ -20,7 +20,7 @@ const ACCOUNTS = {
       id: 'acc-cash',
       type: 'CASH',
       origin: 'MANUAL',
-      alias: 'Carteira da família',
+      alias: 'Carteira principal',
       currency: 'BRL',
       currentBalance: '1250.00',
       status: 'ACTIVE',
@@ -91,7 +91,7 @@ async function installStub(page: Page) {
             {
               sourceType: 'ACCOUNT',
               sourceId: 'acc-cash',
-              description: 'Carteira da família',
+              description: 'Carteira principal',
               value: '1250.00',
               included: true,
               referenceDate: '2026-10-24',

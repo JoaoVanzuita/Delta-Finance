@@ -400,9 +400,6 @@ export function DashboardFilters({
 
       {activeChips.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          <span className="text-caption font-medium text-ink-muted">
-            {activeChips.length} filtro(s) ativo(s)
-          </span>
           {activeChips.map((chip) => (
             <FilterChip key={chip.key} onRemove={chip.remove}>
               {chip.label}
@@ -415,7 +412,7 @@ export function DashboardFilters({
         open={advancedOpen}
         onClose={() => setAdvancedOpen(false)}
         title="Filtros do dashboard"
-        description="Conta, categoria, tipo, origem e faixa de valor. O período fica na barra superior."
+        description="Refine por conta, categoria, tipo, origem ou valor."
         width="md"
         footer={
           <div className="flex flex-wrap justify-end gap-2">
@@ -553,7 +550,7 @@ export function DashboardFilters({
               />
             </Field>
 
-            <Field id="advanced-max" label="Valor máximo" hint="Em reais.">
+            <Field id="advanced-max" label="Valor máximo">
               <Input
                 id="advanced-max"
                 inputMode="decimal"

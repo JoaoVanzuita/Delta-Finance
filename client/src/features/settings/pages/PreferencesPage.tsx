@@ -12,25 +12,23 @@ import type { Accent, ThemePreference } from '@/lib/theme/preferences'
 const THEME_OPTIONS: ReadonlyArray<{
   value: ThemePreference
   label: string
-  description: string
+  description?: string
   icon: LucideIcon
 }> = [
   {
     value: 'system',
     label: 'Sistema',
-    description: 'Acompanha a preferência do dispositivo.',
+    description: 'Segue o dispositivo.',
     icon: Monitor,
   },
   {
     value: 'light',
     label: 'Claro',
-    description: 'Superfícies claras em qualquer horário.',
     icon: Sun,
   },
   {
     value: 'dark',
     label: 'Escuro',
-    description: 'Menos brilho para ambientes com pouca luz.',
     icon: Moon,
   },
 ]
@@ -38,31 +36,26 @@ const THEME_OPTIONS: ReadonlyArray<{
 const ACCENT_OPTIONS: ReadonlyArray<{
   value: Accent
   label: string
-  description: string
   swatch: string
 }> = [
   {
     value: 'blue',
     label: 'Azul',
-    description: 'Padrão do Delta Finance.',
     swatch: 'bg-[var(--df-accent-blue)]',
   },
   {
     value: 'green',
     label: 'Verde',
-    description: 'Tonalidade ligada a crescimento.',
     swatch: 'bg-[var(--df-accent-green)]',
   },
   {
     value: 'purple',
     label: 'Roxo',
-    description: 'Alternativa de maior contraste.',
     swatch: 'bg-[var(--df-accent-purple)]',
   },
   {
     value: 'amber',
     label: 'Âmbar',
-    description: 'Alternativa quente, com contraste revisado.',
     swatch: 'bg-[var(--df-accent-amber)]',
   },
 ]
@@ -74,19 +67,14 @@ const ACCENT_OPTIONS: ReadonlyArray<{
  * namespace por usuário. Nenhum dado financeiro ou credencial é gravado.
  */
 export function PreferencesPage() {
-  const { theme, accent, resolvedTheme, setTheme, setAccent } = useTheme()
+  const { theme, accent, setTheme, setAccent } = useTheme()
 
   return (
     <div className="space-y-6">
       <PageHeader
         overline="Configurações"
         title="Preferências"
-        description="Escolha como o Delta Finance aparece para você. A preferência vale apenas neste navegador e não altera os dados financeiros."
-        meta={
-          <Badge variant="neutral">
-            {resolvedTheme === 'dark' ? 'Tema escuro em uso' : 'Tema claro em uso'}
-          </Badge>
-        }
+        description="Escolha o tema e a cor de destaque."
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
@@ -94,9 +82,6 @@ export function PreferencesPage() {
           <Card>
             <fieldset className="p-5 sm:p-6">
               <legend className="text-section-title font-semibold text-ink">Tema</legend>
-              <p className="mt-1 text-body-sm text-ink-muted">
-                “Sistema” acompanha automaticamente a configuração do dispositivo.
-              </p>
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
                 {THEME_OPTIONS.map((option) => {
                   const Icon = option.icon
@@ -131,7 +116,9 @@ export function PreferencesPage() {
                         ) : null}
                       </span>
                       <span className="text-body-sm font-semibold text-ink">{option.label}</span>
-                      <span className="text-caption text-ink-muted">{option.description}</span>
+                      {option.description ? (
+                        <span className="text-caption text-ink-muted">{option.description}</span>
+                      ) : null}
                     </label>
                   )
                 })}
@@ -145,10 +132,6 @@ export function PreferencesPage() {
                 <Palette aria-hidden="true" className="size-5 text-ink-muted" />
                 Cor principal
               </legend>
-              <p className="mt-1 text-body-sm text-ink-muted">
-                A paleta altera a cor de marca, botões e destaques. Receitas, despesas, avisos e
-                erros mantêm sempre o mesmo significado.
-              </p>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {ACCENT_OPTIONS.map((option) => {
                   const selected = accent === option.value
@@ -181,13 +164,8 @@ export function PreferencesPage() {
                       >
                         {selected ? <Check className="size-4 text-white" /> : null}
                       </span>
-                      <span className="min-w-0">
-                        <span className="block text-body-sm font-semibold text-ink">
-                          {option.label}
-                        </span>
-                        <span className="block text-caption text-ink-muted">
-                          {option.description}
-                        </span>
+                      <span className="block min-w-0 text-body-sm font-semibold text-ink">
+                        {option.label}
                       </span>
                     </label>
                   )
@@ -202,13 +180,11 @@ export function PreferencesPage() {
             <h2 id="preview-heading" className="text-section-title font-semibold text-ink">
               Pré-visualização
             </h2>
-            <span className="text-caption text-ink-muted">Valores ilustrativos</span>
           </div>
           <Card className="overflow-hidden">
             <div className="border-b border-line bg-surface-muted px-4 py-3">
-              <p className="overline text-ink-muted">Exemplo de painel</p>
-              <p className="numeric mt-1 text-metric-md font-semibold text-ink">R$ 12.480,00</p>
-              <p className="text-caption text-ink-muted">Saldo em contas · exemplo</p>
+              <p className="numeric text-metric-md font-semibold text-ink">R$ 12.480,00</p>
+              <p className="text-caption text-ink-muted">Saldo em contas</p>
             </div>
             <div className="space-y-4 p-4">
               <div className="grid grid-cols-2 gap-2">
@@ -221,7 +197,7 @@ export function PreferencesPage() {
                   <p className="numeric text-body-sm font-semibold text-expense">R$ 2.140,00</p>
                 </div>
               </div>
-              <Progress value={62} label="Meta de exemplo" tone="primary" />
+              <Progress value={62} label="Meta" tone="primary" />
               <div className="flex flex-wrap gap-2">
                 <Button size="sm">Ação principal</Button>
                 <Badge variant="warning">Atenção</Badge>
@@ -229,9 +205,7 @@ export function PreferencesPage() {
             </div>
           </Card>
           <p className="text-caption leading-relaxed text-ink-muted">
-            A pré-visualização usa as cores do tema ativo. Contraste de texto e foco são mantidos em
-            todas as paletas. As preferências ficam salvas somente neste navegador, separadas por
-            usuário autenticado; não há sincronização entre dispositivos.
+            Preferência salva neste navegador.
           </p>
         </aside>
       </div>

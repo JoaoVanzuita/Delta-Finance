@@ -152,7 +152,6 @@ export function ManualEntryForm({
   }
 
   const effect = expectedEffect(type, validAmount)
-  const targetAccount = accounts.find((account) => account.id === transferAccountId)
 
   const selectedAccount = accounts.find((account) => account.id === accountId)
   const isImportedAccount = selectedAccount?.origin === 'IMPORTED'
@@ -220,9 +219,6 @@ export function ManualEntryForm({
       <Card className="space-y-4 p-5 sm:p-6">
         <div>
           <h2 className="text-section-title font-semibold text-ink">Dados da movimentação</h2>
-          <p className="text-caption text-ink-muted">
-            Conta, valor, data e descrição são obrigatórios.
-          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -324,12 +320,6 @@ export function ManualEntryForm({
                 ))}
             </Select>
           </Field>
-        ) : null}
-
-        {isTransfer && targetAccount ? (
-          <p className="text-caption text-ink-muted">
-            Destino: {targetAccount.alias ?? targetAccount.institutionName ?? 'Conta'}.
-          </p>
         ) : null}
 
         {needsOriginal ? (

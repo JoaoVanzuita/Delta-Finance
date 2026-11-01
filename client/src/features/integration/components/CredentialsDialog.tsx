@@ -104,7 +104,7 @@ export function CredentialsDialog({ open, onClose, integration, onSaved }: Crede
       open={open}
       onClose={closeDialog}
       title="Credenciais do Meu Pluggy"
-      description="Use a aplicação pessoal criada no Meu Pluggy. O Client Secret não é exibido novamente depois de salvo."
+      description="Use a aplicação pessoal criada no Meu Pluggy; o Client Secret não é exibido depois de salvo."
       size="md"
       busy={busy}
     >
@@ -149,7 +149,7 @@ export function CredentialsDialog({ open, onClose, integration, onSaved }: Crede
             label="Client Secret"
             value={clientSecret}
             onChange={setClientSecret}
-            hint="Write-only: não é exibido novamente após salvar e nunca é armazenado no navegador."
+            hint="Não é exibido após salvar."
             autoComplete="off"
             disabled={busy}
           />
