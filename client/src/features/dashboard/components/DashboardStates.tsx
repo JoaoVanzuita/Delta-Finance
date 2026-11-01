@@ -1,130 +1,117 @@
-import { Link } from 'react-router'
+import { RefreshCw, SearchX, WalletCards } from 'lucide-react'
 
-import { formatMoney } from '@/features/accounts/format'
-import type { DashboardSummary } from '@/features/dashboard/api'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Skeleton } from '@/components/ui/skeleton'
 import { formatDateTime, isStale } from '@/features/dashboard/format'
 
 export function DashboardLoading() {
   return (
-    <div role="status" aria-live="polite" className="space-y-3">
-      <div className="h-6 w-48 animate-pulse rounded-card bg-surface-muted" />
+    <div role="status" aria-live="polite" className="space-y-4">
+      <span className="sr-only">Carregando dashboard…</span>
+      <div className="rounded-panel border border-line bg-surface p-6">
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="mt-4 h-12 w-64 max-w-full" />
+        <Skeleton className="mt-3 h-4 w-44" />
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-28 animate-pulse rounded-card bg-surface-muted" />
+          <div key={index} className="rounded-card border border-line bg-surface p-4">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="mt-3 h-7 w-32 max-w-full" />
+            <Skeleton className="mt-3 h-3 w-full" />
+          </div>
         ))}
       </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Skeleton className="h-44 rounded-card" />
+        <Skeleton className="h-44 rounded-card" />
+      </div>
+      <Skeleton className="h-72 rounded-card" />
     </div>
   )
 }
 
 export function DashboardError({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <section
-      role="alert"
-      className="space-y-3 rounded-card border border-expense/30 bg-expense/5 p-5"
-    >
-      <h1 className="text-lg font-semibold text-ink">Não foi possível carregar o dashboard</h1>
-      <p className="text-sm text-ink-muted">{message}</p>
+    <section role="alert" className="rounded-card border border-expense/30 bg-expense-soft p-5">
+      <h2 className="text-section-title font-semibold text-ink">
+        Não foi possível carregar o dashboard
+      </h2>
+      <p className="mt-1 max-w-prose text-body-sm text-ink-muted">{message}</p>
       {onRetry ? (
-        <button
+        <Button
           type="button"
+          className="mt-4"
           onClick={onRetry}
-          className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
+          leadingIcon={<RefreshCw aria-hidden="true" className="size-4" />}
         >
           Tentar novamente
-        </button>
+        </Button>
       ) : null}
     </section>
   )
 }
 
-export function DashboardEmptyPeriod() {
+export function DashboardPartialError({
+  title,
+  message,
+  onRetry,
+}: {
+  title: string
+  message: string
+  onRetry?: () => void
+}) {
   return (
-    <p className="rounded-card border border-line bg-surface-muted p-4 text-sm text-ink-muted">
-      Nenhum lançamento efetivado no período e com os filtros atuais. Ajuste o período ou remova
-      filtros para ver mais dados.
-    </p>
+    <div role="alert" className="rounded-card border border-warning/40 bg-warning-soft p-4">
+      <p className="text-body-sm font-semibold text-ink">{title}</p>
+      <p className="mt-1 text-caption text-ink-muted">{message}</p>
+      {onRetry ? (
+        <Button type="button" variant="secondary" size="sm" className="mt-3" onClick={onRetry}>
+          Tentar novamente
+        </Button>
+      ) : null}
+    </div>
   )
 }
 
-export function SyncState({ lastSuccessfulSyncAt }: { lastSuccessfulSyncAt?: string }) {
-  const hasSync = Boolean(lastSuccessfulSyncAt)
+export function DashboardEmptyPeriod({
+  filtered,
+  onClearFilters,
+}: {
+  readonly filtered: boolean
+  readonly onClearFilters?: () => void
+}) {
   return (
-    <p className="text-xs leading-relaxed text-ink-muted">
-      <span className="font-medium text-ink">Última sincronização relevante:</span>{' '}
-      {hasSync ? formatDateTime(lastSuccessfulSyncAt) : 'sem sincronização no período'}
-    </p>
+    <EmptyState
+      icon={filtered ? <SearchX className="size-5" /> : <WalletCards className="size-5" />}
+      title={filtered ? 'Nenhum resultado para estes filtros' : 'Nenhuma movimentação no período'}
+      description={
+        filtered
+          ? 'Os totais oficiais estão zerados porque nenhuma entrada corresponde aos filtros atuais. Remova os filtros ou amplie o período.'
+          : 'Não há receitas, despesas ou itens de fatura efetivados neste período. Escolha outra semana, mês ou ano para consultar.'
+      }
+      action={
+        filtered && onClearFilters ? (
+          <Button type="button" variant="secondary" onClick={onClearFilters}>
+            Limpar filtros
+          </Button>
+        ) : null
+      }
+    />
   )
 }
 
 export function BalanceReference({ referenceAt }: { referenceAt?: string }) {
   const stale = isStale(referenceAt)
   return (
-    <p className="text-xs leading-relaxed text-ink-muted">
-      <span className="font-medium text-ink">Data de referência do saldo:</span>{' '}
-      {referenceAt ? formatDateTime(referenceAt) : 'não informada'}
+    <span>
+      Referência dos saldos: {referenceAt ? formatDateTime(referenceAt) : 'não informada'}
       {stale ? (
-        <span className="ml-2 inline-flex rounded-card border border-warning/40 bg-warning/5 px-2 py-0.5 text-xs font-medium text-ink">
-          {referenceAt ? 'Saldo desatualizado' : 'Saldo ausente'}
+        <span className="ml-1 inline-flex rounded-pill border border-warning/40 bg-warning-soft px-1.5 py-0.5 font-medium text-ink">
+          {referenceAt ? 'desatualizado' : 'ausente'}
         </span>
       ) : null}
-    </p>
-  )
-}
-
-export function PendingTransactionsBlock({ summary }: { summary: DashboardSummary }) {
-  const count = summary.pendingCount ?? 0
-  return (
-    <section
-      aria-labelledby="pending-heading"
-      className="rounded-card border border-warning/40 bg-warning/5 p-4 sm:p-5"
-    >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="pending-heading" className="text-base font-semibold text-ink">
-          Transações pendentes
-        </h2>
-        <span className="text-xs text-ink-muted">Não compõem os totais oficiais</span>
-      </div>
-      {count === 0 ? (
-        <p className="mt-2 text-sm text-ink-muted">Nenhuma transação pendente no período.</p>
-      ) : (
-        <>
-          <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-            <div>
-              <dt className="text-xs text-ink-muted">Quantidade</dt>
-              <dd className="numeric text-lg font-semibold text-ink">{count}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-ink-muted">Entradas pendentes</dt>
-              <dd className="numeric text-lg font-semibold text-income">
-                {formatMoney(summary.pendingIncome ?? '0.00', 'BRL')}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-ink-muted">Saídas pendentes</dt>
-              <dd className="numeric text-lg font-semibold text-expense">
-                {formatMoney(summary.pendingExpenses ?? '0.00', 'BRL')}
-              </dd>
-            </div>
-          </dl>
-          <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-            Pendentes não possuem total líquido e passam a compor receitas ou despesas uma única vez
-            após a efetivação, mantendo o mesmo registro.
-          </p>
-        </>
-      )}
-    </section>
-  )
-}
-
-export function InternalMatchesNotice({ count }: { count?: number }) {
-  if (!count || count <= 0) return null
-  return (
-    <p className="rounded-card border border-line bg-surface-muted p-4 text-sm text-ink">
-      {count} movimento(s) interno(s) aguardando confirmação.{' '}
-      <Link to="/reconciliation" className="font-semibold text-action underline">
-        Revisar reconciliação
-      </Link>
-    </p>
+    </span>
   )
 }

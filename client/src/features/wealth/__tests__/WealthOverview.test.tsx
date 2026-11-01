@@ -173,10 +173,10 @@ describe('visão patrimonial', () => {
     expect(within(summary).getByText(/não é cotação de mercado/i)).toBeInTheDocument()
 
     const composition = screen.getByRole('region', { name: 'Composição' })
-    expect(within(composition).getByText('Conta Alfa')).toBeInTheDocument()
-    expect(within(composition).getByText('Cartão Alfa')).toBeInTheDocument()
-    expect(within(composition).getByText('Tesouro reserva')).toBeInTheDocument()
-    expect(within(composition).getByText('Empréstimo')).toBeInTheDocument()
+    expect(within(composition).getAllByText('Conta Alfa').length).toBeGreaterThan(0)
+    expect(within(composition).getAllByText('Cartão Alfa').length).toBeGreaterThan(0)
+    expect(within(composition).getAllByText('Tesouro reserva').length).toBeGreaterThan(0)
+    expect(within(composition).getAllByText('Empréstimo').length).toBeGreaterThan(0)
     expect(within(composition).getByText(/Saldo não informado/)).toBeInTheDocument()
     expect(within(composition).getByText('Conta sem saldo')).toBeInTheDocument()
   })
@@ -187,14 +187,16 @@ describe('visão patrimonial', () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })
-    await user.selectOptions(screen.getByLabelText('Natureza'), 'ASSET')
-    await user.type(screen.getByLabelText('Tipo do item'), 'IMOVEL')
-    await user.type(screen.getByLabelText('Descrição'), 'Apartamento')
-    await user.type(screen.getByLabelText('Valor de referência'), '250000.00')
-    fireEvent.change(screen.getByLabelText('Data de referência'), {
+    await user.click(screen.getByRole('button', { name: 'Adicionar item manual' }))
+    const drawer = await screen.findByRole('dialog', { name: 'Novo item manual' })
+    await user.selectOptions(within(drawer).getByLabelText('Natureza'), 'ASSET')
+    await user.type(within(drawer).getByLabelText('Tipo do item'), 'IMOVEL')
+    await user.type(within(drawer).getByLabelText('Descrição'), 'Apartamento')
+    await user.type(within(drawer).getByLabelText('Valor de referência'), '250000.00')
+    fireEvent.change(within(drawer).getByLabelText('Data de referência'), {
       target: { value: '2026-10-22' },
     })
-    await user.click(screen.getByRole('button', { name: 'Adicionar item manual' }))
+    await user.click(within(drawer).getByRole('button', { name: 'Adicionar item manual' }))
 
     await waitFor(() => {
       const post = mock.mock.calls.find(
@@ -218,5 +220,31 @@ describe('visão patrimonial', () => {
 
     await screen.findByRole('heading', { level: 1, name: 'Patrimônio' })
     await expectNoA11yViolations()
+  })
+
+  it('não apresenta zero artificial quando não há dados consolidáveis', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/wealth/overview')) {
+          return jsonResponse({
+            ...OVERVIEW,
+            grossAssets: '0.00',
+            liabilities: '0.00',
+            netWorth: '0.00',
+            completeness: 'PARTIAL',
+            hasData: false,
+            items: [],
+          })
+        }
+        if (url.endsWith('/wealth/manual-items')) return jsonResponse({ items: [] })
+        return jsonResponse({}, 404)
+      }),
+    )
+    renderPage()
+
+    const summary = await screen.findByRole('region', { name: 'Resumo patrimonial' })
+    expect(within(summary).getByText('Sem dados suficientes')).toBeInTheDocument()
+    expect(within(summary).getAllByText('Não consolidado')).toHaveLength(2)
   })
 })

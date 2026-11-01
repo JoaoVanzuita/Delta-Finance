@@ -50,6 +50,25 @@ function stubApi() {
       return jsonResponse(currentAccount)
     }
     if (url.includes('/accounts/acc-1')) return jsonResponse(currentAccount)
+    if (url.includes('/transactions')) {
+      return jsonResponse({
+        items: [
+          {
+            id: 'tx-1',
+            accountId: 'acc-1',
+            source: 'MANUAL',
+            type: 'DEBIT',
+            status: 'POSTED',
+            postedOn: '2026-10-20',
+            amount: '-45.00',
+            currency: 'BRL',
+            description: 'Conta de luz',
+            categoryName: 'Casa',
+          },
+        ],
+        hasMore: false,
+      })
+    }
     return jsonResponse({}, 404)
   })
   vi.stubGlobal('fetch', mock)
@@ -84,8 +103,12 @@ describe('detalhe da conta com nome personalizado', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Conta da Casa' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Nome original no Pluggy: Conta Alfa')).toBeInTheDocument()
+    expect(screen.getAllByText(/Nome original: Conta Alfa/).length).toBeGreaterThan(0)
 
+    await user.click(screen.getByRole('tab', { name: 'Configurações' }))
+    const selectedTabs = screen.getAllByRole('tab', { selected: true })
+    expect(selectedTabs).toHaveLength(1)
+    expect(selectedTabs[0]).toHaveTextContent('Configurações')
     await user.click(screen.getByRole('button', { name: 'Renomear' }))
     const input = screen.getByLabelText('Nome de exibição')
     await user.clear(input)
@@ -107,11 +130,22 @@ describe('detalhe da conta com nome personalizado', () => {
     await user.click(screen.getByRole('button', { name: 'Restaurar nome original do Pluggy' }))
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Conta Alfa' })).toBeInTheDocument()
-    expect(screen.queryByText(/Nome original no Pluggy/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Nome original: Conta Alfa/)).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/accounts/acc-1/display-name'),
       expect.objectContaining({ method: 'DELETE' }),
     )
+  })
+
+  it('mostra movimentações recentes em aba própria', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Conta da Casa' })
+    await user.click(screen.getByRole('tab', { name: 'Movimentações' }))
+    expect(await screen.findByText('Conta de luz')).toBeInTheDocument()
+    expect(screen.getByText(/R\$\s*45,00/)).toBeInTheDocument()
   })
 
   it('mantém o editor fora de contas manuais', async () => {

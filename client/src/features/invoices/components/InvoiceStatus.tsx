@@ -1,3 +1,5 @@
+import { formatDate } from '@/lib/format'
+
 import { formatMoney } from '@/features/accounts/format'
 import type { Invoice } from '@/features/integration/api'
 
@@ -12,10 +14,11 @@ const STATUS_LABELS: Record<string, string> = {
 interface InvoiceStatusProps {
   readonly invoice: Invoice
   readonly creditBalance?: string
+  readonly currency?: string
 }
 
 /** Estado, atraso, progresso de pagamento, ajustes e crédito separado dos totais. */
-export function InvoiceStatus({ invoice, creditBalance }: InvoiceStatusProps) {
+export function InvoiceStatus({ invoice, creditBalance, currency = 'BRL' }: InvoiceStatusProps) {
   const total = Number(invoice.total)
   const paid = Number(invoice.paymentsTotal)
   const percent = total <= 0 ? 100 : Math.min(100, Math.round((paid / total) * 100))
@@ -27,7 +30,10 @@ export function InvoiceStatus({ invoice, creditBalance }: InvoiceStatusProps) {
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="invoice-status-heading" className="text-lg font-semibold text-ink">
+          <h2
+            id="invoice-status-heading"
+            className="text-section-title font-semibold tracking-tight text-ink"
+          >
             Fatura {formatDate(invoice.cycleStart)} a {formatDate(invoice.cycleEnd)}
           </h2>
           <p className="mt-1 text-sm text-ink-muted">
@@ -59,25 +65,25 @@ export function InvoiceStatus({ invoice, creditBalance }: InvoiceStatusProps) {
         <div className="rounded-card border border-line bg-surface-muted p-3">
           <dt className="text-xs text-ink-muted">Total</dt>
           <dd className="numeric mt-1 text-sm font-semibold text-ink">
-            {formatMoney(invoice.total, 'BRL')}
+            {formatMoney(invoice.total, currency)}
           </dd>
         </div>
         <div className="rounded-card border border-line bg-surface-muted p-3">
           <dt className="text-xs text-ink-muted">Pago</dt>
           <dd className="numeric mt-1 text-sm font-semibold text-ink">
-            {formatMoney(invoice.paymentsTotal, 'BRL')}
+            {formatMoney(invoice.paymentsTotal, currency)}
           </dd>
         </div>
         <div className="rounded-card border border-line bg-surface-muted p-3">
           <dt className="text-xs text-ink-muted">Saldo devedor</dt>
           <dd className="numeric mt-1 text-sm font-semibold text-ink">
-            {formatMoney(invoice.outstanding, 'BRL')}
+            {formatMoney(invoice.outstanding, currency)}
           </dd>
         </div>
         <div className="rounded-card border border-line bg-surface-muted p-3">
           <dt className="text-xs text-ink-muted">Crédito aplicado</dt>
           <dd className="numeric mt-1 text-sm font-semibold text-ink">
-            {formatMoney(invoice.appliedCredit, 'BRL')}
+            {formatMoney(invoice.appliedCredit, currency)}
           </dd>
         </div>
       </dl>
@@ -102,19 +108,12 @@ export function InvoiceStatus({ invoice, creditBalance }: InvoiceStatusProps) {
       {creditBalance ? (
         <p className="text-sm text-ink-muted">
           Crédito acumulado do cartão para próximas faturas:{' '}
-          <span className="numeric font-medium text-ink">{formatMoney(creditBalance, 'BRL')}</span>{' '}
+          <span className="numeric font-medium text-ink">
+            {formatMoney(creditBalance, currency)}
+          </span>{' '}
           — não compõe receitas, despesas nem saldo atual.
         </p>
       ) : null}
     </section>
   )
-}
-
-function formatDate(value: string): string {
-  const date = new Date(`${value}T12:00:00Z`)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeZone: 'America/Sao_Paulo',
-  }).format(date)
 }

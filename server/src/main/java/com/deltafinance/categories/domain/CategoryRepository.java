@@ -11,5 +11,7 @@ public interface CategoryRepository extends JpaRepository<Category, UUID> {
 
   Optional<Category> findByIdAndUserId(UUID id, UUID userId);
 
+  Optional<Category> findByUserIdAndPredefinedKey(UUID userId, String predefinedKey);
+
   List<Category> findByUserIdOrderByNameEncAsc(UUID userId);
 }

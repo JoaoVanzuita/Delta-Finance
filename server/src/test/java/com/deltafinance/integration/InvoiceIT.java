@@ -56,6 +56,7 @@ class InvoiceIT extends PostgresTestBase {
   private AuthTestClient alice;
   private String cardId;
   private String bankId;
+  private String usdBankId;
   private String connectionId;
 
   @BeforeEach
@@ -68,6 +69,10 @@ class InvoiceIT extends PostgresTestBase {
     PLUGGY.addAccount(
         "item-alice",
         new AccountFixture("acc-bank", "BANK", "CHECKING_ACCOUNT", "Conta Alfa", "1000.00", null));
+    PLUGGY.addAccount(
+        "item-alice",
+        new AccountFixture(
+            "acc-bank-usd", "BANK", "CHECKING_ACCOUNT", "Conta Dólar", "100.00", null, "USD"));
     PLUGGY.addAccount(
         "item-alice",
         new AccountFixture("acc-card", "CREDIT", "CREDIT_CARD", "Cartão Alfa", "0.00", null));
@@ -99,9 +104,14 @@ class InvoiceIT extends PostgresTestBase {
         cardId = account.path("id").asString();
       }
       if ("BANK".equals(account.path("type").asString())) {
-        bankId = account.path("id").asString();
+        if ("Conta Dólar".equals(account.path("alias").asString())) {
+          usdBankId = account.path("id").asString();
+        } else {
+          bankId = account.path("id").asString();
+        }
       }
     }
+    assertThat(usdBankId).isNotBlank();
     configureCycle(5, 15, "5000.00");
   }
 
@@ -168,6 +178,30 @@ class InvoiceIT extends PostgresTestBase {
     assertThat(detail.path("status").asString()).isEqualTo("PAID");
     assertThat(detail.path("outstanding").asString()).isEqualTo("0.00");
     assertThat(transactions().path("items").size()).isEqualTo(transactionsBefore);
+  }
+
+  @Test
+  void rejeitaPagamentoComCartaoOuMoedaIncompativel() throws Exception {
+    createCardTransaction("DEBIT", "-100.00", "2026-10-20");
+    JsonNode invoice = invoiceForCycle("2026-10-06");
+    String invoiceId = invoice.path("id").asString();
+
+    alice
+        .post(
+            "/api/v1/invoices/" + invoiceId + "/payments",
+            Map.of("paymentAccountId", cardId, "amount", "10.00", "paidOn", "2026-10-21"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PAYMENT_ACCOUNT_INCOMPATIBLE"));
+
+    alice
+        .post(
+            "/api/v1/invoices/" + invoiceId + "/payments",
+            Map.of("paymentAccountId", usdBankId, "amount", "10.00", "paidOn", "2026-10-21"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PAYMENT_CURRENCY_MISMATCH"));
+
+    JsonNode detail = invoiceDetail(invoiceId);
+    assertThat(detail.path("paymentsTotal").asString()).isEqualTo("0.00");
   }
 
   @Test

@@ -3,9 +3,9 @@ import { expect, test, type Page } from '@playwright/test'
 /**
  * E2E do dashboard (T103).
  *
- * Prova que resultado do período e saldo atual aparecem separados, que o
- * drill-down abre as entradas do total e que uma transação pendente entra nos
- * totais uma única vez após a efetivação.
+ * Prova a hierarquia do período, filtros na URL, séries acessíveis, drill-down
+ * contextual e que uma transação pendente entra nos totais uma única vez após a
+ * efetivação. O stub segue o contrato de `/dashboard/*` e `/reports/entries`.
  */
 
 const USER = {
@@ -46,10 +46,11 @@ const CATEGORY_LIST = {
 
 interface StubState {
   summaryCalls: number
+  summaryUrls: string[]
 }
 
 async function installStub(page: Page): Promise<StubState> {
-  const state: StubState = { summaryCalls: 0 }
+  const state: StubState = { summaryCalls: 0, summaryUrls: [] }
 
   await page
     .context()
@@ -82,8 +83,36 @@ async function installStub(page: Page): Promise<StubState> {
         body: JSON.stringify(CATEGORY_LIST),
       })
     }
+    if (path === '/sync/status') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          integrations: [
+            {
+              id: 'integration-1',
+              provider: 'MEU_PLUGGY',
+              status: 'SYNCED',
+              lastSuccessfulSyncAt: '2026-10-23T12:00:00Z',
+              connectionCount: 1,
+            },
+          ],
+          connections: [
+            {
+              id: 'conn-1',
+              institutionName: 'Banco Alfa',
+              status: 'SYNCED',
+              lastSyncAt: '2026-10-23T12:00:00Z',
+              accountCount: 2,
+            },
+          ],
+          pendingJobs: 0,
+        }),
+      })
+    }
     if (path === '/dashboard/summary') {
       state.summaryCalls += 1
+      state.summaryUrls.push(url.search)
       const posted = state.summaryCalls > 1
       return route.fulfill({
         status: 200,
@@ -137,6 +166,14 @@ async function installStub(page: Page): Promise<StubState> {
             income: '1000.00',
             expenses: '500.00',
             result: '500.00',
+          },
+          {
+            label: '08/10',
+            start: '2026-10-08',
+            end: '2026-10-09',
+            income: '0.00',
+            expenses: '30.00',
+            result: '-30.00',
           },
         ]),
       })
@@ -193,36 +230,79 @@ async function installStub(page: Page): Promise<StubState> {
   return state
 }
 
-test('mostra totais separados, abre drill-down e efetiva pendente uma única vez', async ({
-  page,
-}) => {
+test('mantém hierarquia e leitura no tema escuro em 390 px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.addInitScript((userId) => {
+    localStorage.setItem('delta.prefs.active', userId)
+    localStorage.setItem(`delta.prefs.${userId}`, JSON.stringify({ theme: 'dark', accent: 'blue' }))
+  }, USER.id)
   await installStub(page)
 
   await page.goto('/dashboard')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
-  await expect(page.getByRole('heading', { level: 3, name: 'Resultado do período' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Resultado do período' })).toBeVisible()
+  await expect(page.getByRole('img', { name: /Evolução de receitas/i })).toHaveAttribute(
+    'viewBox',
+    '0 0 380 250',
+  )
+  await expect(page.getByRole('button', { name: 'Abrir navegação' })).toBeVisible()
+
+  const overflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }))
+  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1)
+})
+
+test('mostra totais separados, filtra pela URL e detalha categoria sem perder contexto', async ({
+  page,
+}) => {
+  const state = await installStub(page)
+
+  await page.goto('/dashboard')
+  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Resultado do período' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Receitas' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Despesas' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Saldo em contas' })).toBeVisible()
   await expect(
-    page.getByRole('heading', { level: 3, name: 'Saldo atual consolidado' }),
+    page.getByRole('heading', { level: 3, name: 'Saldo devedor de cartões' }),
   ).toBeVisible()
   await expect(page.getByText(/R\$\s*500,00/).first()).toBeVisible()
   await expect(page.getByText(/R\$\s*1\.100,00/).first()).toBeVisible()
   await expect(page.getByText(/R\$\s*310,00/).first()).toBeVisible()
+  await expect(page.getByText(/Dívida separada do saldo/)).toBeVisible()
   await expect(page.getByText(/Total de despesas no período/)).toBeVisible()
-
-  await page.getByRole('button', { name: /Feira/ }).click()
-  await expect(page.getByText('Categoria: Feira')).toBeVisible()
+  await expect(page.getByRole('img', { name: /Evolução de receitas/i })).toBeVisible()
   await expect(page.getByText('Feira da semana').first()).toBeVisible()
 
-  await page.getByRole('button', { name: 'Fechar detalhamento' }).click()
-  await expect(page.getByText('Categoria: Feira')).toBeHidden()
+  await page.getByRole('button', { name: /Feira/ }).first().click()
+  await expect(page.getByRole('dialog', { name: 'Categoria: Feira' })).toBeVisible()
+  await expect(page.getByText(/R\$\s*200,00 em 1 lançamento/)).toBeVisible()
+  await expect(page.getByText('Feira da semana').last()).toBeVisible()
+  await page.getByRole('button', { name: 'Fechar' }).click()
+  await expect(page.getByRole('dialog', { name: 'Categoria: Feira' })).toBeHidden()
+
+  await page.getByRole('button', { name: 'Ano' }).click()
+  await expect(page).toHaveURL(/period=YEAR/)
+  await expect(page.getByText(/R\$\s*470,00/).first()).toBeVisible()
+  await expect(page.getByText(/R\$\s*530,00/).first()).toBeVisible()
+  await expect(page.getByText('Nenhuma pendência crítica')).toBeVisible()
+
+  await page.getByRole('button', { name: /Filtros/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Filtros do dashboard' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('checkbox', { name: 'Carteira' }).check()
+  await dialog.getByRole('button', { name: 'Aplicar filtros' }).click()
+  await expect(page).toHaveURL(/accountId=acc-cash/)
+  await expect(page.getByText('Conta: Carteira')).toBeVisible()
+  expect(state.summaryUrls.some((search) => search.includes('accountId=acc-cash'))).toBe(true)
+
+  await page.goBack()
+  await expect(page).not.toHaveURL(/accountId=acc-cash/)
 
   await page.getByRole('button', { name: 'Atualizar dados' }).click()
   await expect(page.getByText(/R\$\s*470,00/).first()).toBeVisible()
-  await expect(page.getByText(/R\$\s*530,00/).first()).toBeVisible()
-  await expect(page.getByText('Nenhuma transação pendente no período.')).toBeVisible()
-
-  await page.getByRole('button', { name: /Sem categoria/ }).click()
-  await expect(page.getByRole('row', { name: /Pendente efetivada/ })).toHaveCount(1)
-  await expect(page.getByRole('row', { name: /R\$\s*30,00/ }).first()).toBeVisible()
   await expect(page.getByText(/fluxo de caixa/i)).toHaveCount(0)
 })

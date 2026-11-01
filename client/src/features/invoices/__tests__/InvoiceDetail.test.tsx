@@ -46,6 +46,17 @@ const INVOICE = {
       occurredOn: '2026-10-02',
       correctionCount: 2,
     },
+    {
+      id: 'item-3',
+      invoiceId: 'invoice-1',
+      kind: 'CREDIT',
+      reportingEffect: 'EXPENSE_DECREASE',
+      source: 'MANUAL',
+      description: 'Estorno',
+      amount: '30.00',
+      occurredOn: '2026-10-03',
+      correctionCount: 0,
+    },
   ],
   payments: [
     {
@@ -86,6 +97,24 @@ const ACCOUNTS = {
         creditLimit: '5000.00',
         creditBalance: '35.00',
       },
+    },
+    {
+      id: 'acc-inactive',
+      type: 'BANK',
+      origin: 'MANUAL',
+      alias: 'Conta Inativa',
+      currency: 'BRL',
+      currentBalance: '0.00',
+      status: 'INACTIVE',
+    },
+    {
+      id: 'acc-usd',
+      type: 'BANK',
+      origin: 'IMPORTED',
+      alias: 'Conta Dólar',
+      currency: 'USD',
+      currentBalance: '0.00',
+      status: 'ACTIVE',
     },
   ],
 }
@@ -164,9 +193,12 @@ describe('detalhe da fatura', () => {
     expect(screen.getByText('1 ajuste(s)')).toBeInTheDocument()
     expect(screen.getByText('Compra importada')).toBeInTheDocument()
     expect(screen.getByText('Juros')).toBeInTheDocument()
+    expect(screen.getByText('Estorno')).toBeInTheDocument()
+    expect(screen.getByText(/Reduz a fatura/)).toBeInTheDocument()
+    expect(screen.getByText(/−R\$\s*30,00/)).toBeInTheDocument()
     expect(screen.getByText(/Crédito acumulado do cartão/)).toBeInTheDocument()
     expect(screen.getByText(/R\$\s*35,00/)).toBeInTheDocument()
-    expect(screen.getByText('2026-10-20 · Confirmado · Manual')).toBeInTheDocument()
+    expect(screen.getByText('20/10/2026 · Confirmado · Manual')).toBeInTheDocument()
   })
 
   it('adiciona item manual e abre histórico de correções', async () => {
@@ -218,7 +250,7 @@ describe('detalhe da fatura', () => {
     expect(screen.queryByRole('button', { name: 'Remover' })).not.toBeInTheDocument()
   })
 
-  it('mostra a Bill oficial, o pagamento mínimo e as divergências', async () => {
+  it('mostra o total informado pelo provedor, o pagamento mínimo e as divergências', async () => {
     stubApi({
       ...INVOICE,
       providerBill: {
@@ -244,18 +276,18 @@ describe('detalhe da fatura', () => {
     })
     renderPage()
 
-    expect(await screen.findByText('Bill oficial do provedor')).toBeInTheDocument()
+    expect(await screen.findByText('Total informado pelo provedor')).toBeInTheDocument()
     expect(screen.getByText('Divergente')).toBeInTheDocument()
     expect(screen.getByText('Total oficial')).toBeInTheDocument()
     expect(screen.getByText('Pagamento mínimo')).toBeInTheDocument()
     expect(screen.getByText('Pagamentos oficiais')).toBeInTheDocument()
     expect(screen.getByText('Diferença de total (local − oficial)')).toBeInTheDocument()
-    expect(screen.getByText('20/10/2026 · PIX · PARTIAL_PAYMENT')).toBeInTheDocument()
+    expect(screen.getByText('20/10/2026 · Pix · Pagamento parcial')).toBeInTheDocument()
     expect(screen.getByText(/O ajuste de conciliação é sempre explícito/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Conciliar fatura' })).toBeInTheDocument()
   })
 
-  it('registra ajuste de conciliação com a Bill oficial', async () => {
+  it('registra ajuste de conciliação com o total informado pelo provedor', async () => {
     const fetchMock = stubApi({
       ...INVOICE,
       providerBill: {

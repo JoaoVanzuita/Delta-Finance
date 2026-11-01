@@ -91,9 +91,9 @@ describe('painel de sincronização', () => {
   })
 
   it('exibe estado, última tentativa, sucesso e fila sem prometer tempo real', async () => {
-    renderWithProviders(<SyncStatusPanel connections={[CONNECTION]} />)
+    renderWithProviders(<SyncStatusPanel connections={[CONNECTION]} integrationConfigured />)
 
-    expect(await screen.findByText('Sincronizada')).toBeInTheDocument()
+    expect((await screen.findAllByText('Atualizado')).length).toBeGreaterThan(0)
     expect(screen.getByText(/não força a instituição de origem a atualizar/i)).toBeInTheDocument()
 
     const queue = screen.getByText('Consultas na fila').closest('div')
@@ -139,7 +139,7 @@ describe('painel de sincronização', () => {
       },
     })
 
-    renderWithProviders(<SyncStatusPanel connections={[expiredConnection]} />)
+    renderWithProviders(<SyncStatusPanel connections={[expiredConnection]} integrationConfigured />)
 
     expect(await screen.findByText('Ação necessária')).toBeInTheDocument()
     expect(screen.getAllByText(/consentimento bancário expirou/i).length).toBeGreaterThan(0)
@@ -149,13 +149,15 @@ describe('painel de sincronização', () => {
 
   it('exibe estado vazio de histórico e erro de carregamento', async () => {
     stubApi({ runs: { items: [], hasMore: false } })
-    const { unmount } = renderWithProviders(<SyncStatusPanel connections={[]} />)
+    const { unmount } = renderWithProviders(
+      <SyncStatusPanel connections={[]} integrationConfigured={false} />,
+    )
 
-    expect(await screen.findByText('Nenhuma sincronização registrada ainda.')).toBeInTheDocument()
+    expect(await screen.findByText('Nenhuma sincronização registrada')).toBeInTheDocument()
     unmount()
 
     stubApi({ fail: true })
-    renderWithProviders(<SyncStatusPanel connections={[]} />)
+    renderWithProviders(<SyncStatusPanel connections={[]} integrationConfigured={false} />)
     await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0))
   })
 })

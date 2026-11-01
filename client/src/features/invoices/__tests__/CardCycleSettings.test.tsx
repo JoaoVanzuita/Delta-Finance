@@ -101,4 +101,49 @@ describe('configuração do ciclo do cartão', () => {
     expect(screen.getByLabelText('Dia de vencimento')).toHaveValue(20)
     expect(screen.getByLabelText('Limite (R$)')).toHaveValue('2500.00')
   })
+
+  it('hidrata quando o perfil chega depois da montagem', () => {
+    const { rerender } = renderWithProviders(<CardCycleSettings accountId="acc-1" profile={null} />)
+
+    expect(screen.getByLabelText('Dia de fechamento')).toHaveValue(1)
+    expect(screen.getByLabelText('Dia de vencimento')).toHaveValue(1)
+
+    rerender(
+      <CardCycleSettings
+        accountId="acc-1"
+        profile={{
+          accountId: 'acc-1',
+          closingDay: 12,
+          dueDay: 25,
+          creditLimit: '3200.00',
+          creditBalance: '0.00',
+        }}
+      />,
+    )
+
+    expect(screen.getByLabelText('Dia de fechamento')).toHaveValue(12)
+    expect(screen.getByLabelText('Dia de vencimento')).toHaveValue(25)
+    expect(screen.getByLabelText('Limite (R$)')).toHaveValue('3200.00')
+  })
+
+  it('não sobrescreve edição do usuário em refetch com o mesmo perfil', async () => {
+    const user = userEvent.setup()
+    const profile = {
+      accountId: 'acc-1',
+      closingDay: 10,
+      dueDay: 20,
+      creditLimit: '2500.00',
+      creditBalance: '15.00',
+    }
+    const { rerender } = renderWithProviders(
+      <CardCycleSettings accountId="acc-1" profile={profile} />,
+    )
+
+    await user.clear(screen.getByLabelText('Dia de fechamento'))
+    await user.type(screen.getByLabelText('Dia de fechamento'), '7')
+
+    rerender(<CardCycleSettings accountId="acc-1" profile={{ ...profile }} />)
+
+    expect(screen.getByLabelText('Dia de fechamento')).toHaveValue(7)
+  })
 })

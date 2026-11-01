@@ -1,5 +1,8 @@
 import { useId } from 'react'
 
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+
 interface SecretFieldProps {
   readonly label: string
   readonly value: string
@@ -27,20 +30,10 @@ export function SecretField({
   autoComplete = 'off',
 }: SecretFieldProps) {
   const id = useId()
-  const hintId = `${id}-hint`
-  const errorId = `${id}-error`
 
   return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-ink">
-        {label}
-      </label>
-      {hint ? (
-        <p id={hintId} className="mt-1 text-xs text-ink-muted">
-          {hint}
-        </p>
-      ) : null}
-      <input
+    <Field id={id} label={label} hint={hint} error={error}>
+      <Input
         id={id}
         type="password"
         value={value}
@@ -48,14 +41,10 @@ export function SecretField({
         autoComplete={autoComplete}
         disabled={disabled}
         aria-invalid={Boolean(error)}
-        aria-describedby={[hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ')}
-        className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm outline-none transition-colors focus:border-focus disabled:opacity-60"
+        aria-describedby={[hint ? `${id}-hint` : null, error ? `${id}-error` : null]
+          .filter(Boolean)
+          .join(' ')}
       />
-      {error ? (
-        <p id={errorId} className="mt-1 text-sm text-expense">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    </Field>
   )
 }

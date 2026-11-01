@@ -59,6 +59,7 @@ class WealthIT extends PostgresTestBase {
   private AuthTestClient bob;
   private String bankId;
   private String cardId;
+  private String usdCardId;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -73,6 +74,10 @@ class WealthIT extends PostgresTestBase {
     PLUGGY.addAccount(
         "item-alice",
         new AccountFixture("acc-card", "CREDIT", "CREDIT_CARD", "Cartão Alfa", "0.00", null));
+    PLUGGY.addAccount(
+        "item-alice",
+        new AccountFixture(
+            "acc-card-usd", "CREDIT", "CREDIT_CARD", "Cartão Dólar", "0.00", null, "USD"));
 
     alice = new AuthTestClient(mockMvc, jsonMapper).csrf();
     bob = new AuthTestClient(mockMvc, jsonMapper).csrf();
@@ -90,13 +95,19 @@ class WealthIT extends PostgresTestBase {
 
     for (JsonNode account : accounts().path("items")) {
       if ("CREDIT".equals(account.path("type").asString())) {
-        cardId = account.path("id").asString();
+        String alias = account.path("alias").asString();
+        if ("Cartão Dólar".equals(alias)) {
+          usdCardId = account.path("id").asString();
+        } else if ("Cartão Alfa".equals(alias)) {
+          cardId = account.path("id").asString();
+        }
       }
       if ("BANK".equals(account.path("type").asString())) {
         bankId = account.path("id").asString();
       }
     }
     assertThat(cardId).isNotBlank();
+    assertThat(usdCardId).isNotBlank();
     assertThat(bankId).isNotBlank();
 
     alice
@@ -104,8 +115,15 @@ class WealthIT extends PostgresTestBase {
             "/api/v1/cards/" + cardId + "/profile",
             Map.of("closingDay", 5, "dueDay", 15, "creditLimit", "5000.00"))
         .andExpect(status().isOk());
+    alice
+        .put(
+            "/api/v1/cards/" + usdCardId + "/profile",
+            Map.of("closingDay", 5, "dueDay", 15, "creditLimit", "1000.00"))
+        .andExpect(status().isOk());
     createCardTransaction("-100.00", "2026-10-03");
+    createCardTransaction(usdCardId, "-50.00", "2026-10-03");
     alice.get("/api/v1/cards/" + cardId + "/invoices").andExpect(status().isOk());
+    alice.get("/api/v1/cards/" + usdCardId + "/invoices").andExpect(status().isOk());
   }
 
   @Test
@@ -122,9 +140,12 @@ class WealthIT extends PostgresTestBase {
     assertThat(overview.path("referenceDate").asString()).isEqualTo(today().toString());
 
     JsonNode items = overview.path("items");
-    assertThat(items).hasSize(4);
+    assertThat(items).hasSize(5);
     assertThat(find(items, "ACCOUNT", bankId).path("value").asString()).isEqualTo("1000.00");
     assertThat(find(items, "CARD", cardId).path("value").asString()).isEqualTo("100.00");
+    assertThat(find(items, "CARD", usdCardId).path("included").asBoolean()).isFalse();
+    assertThat(find(items, "CARD", usdCardId).path("exclusionReason").asString())
+        .contains("Moeda diferente de BRL");
     assertThat(find(items, "MANUAL_ASSET", null).path("value").asString()).isEqualTo("500.00");
     assertThat(find(items, "MANUAL_LIABILITY", null).path("value").asString()).isEqualTo("200.00");
 
@@ -145,6 +166,33 @@ class WealthIT extends PostgresTestBase {
     assertThat(assetSum.toPlainString()).isEqualTo("1500.00");
     assertThat(liabilitySum.toPlainString()).isEqualTo("300.00");
     assertThat(items.toString()).doesNotContain("1100.00");
+  }
+
+  @Test
+  void naoConsolidaCartaoEmMoedaEstrangeira() throws Exception {
+    JsonNode overview = overview(alice);
+    assertThat(overview.path("grossAssets").asString()).isEqualTo("1000.00");
+    assertThat(overview.path("liabilities").asString()).isEqualTo("100.00");
+    assertThat(overview.path("netWorth").asString()).isEqualTo("900.00");
+
+    JsonNode usdCard = find(overview.path("items"), "CARD", usdCardId);
+    assertThat(usdCard.path("included").asBoolean()).isFalse();
+    assertThat(usdCard.path("exclusionReason").asString())
+        .isEqualTo("Moeda diferente de BRL não compõe o passivo consolidado.");
+
+    JsonNode summary =
+        json(
+            alice
+                .get(
+                    "/api/v1/dashboard/summary?from="
+                        + today().withDayOfMonth(1)
+                        + "&to="
+                        + today())
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(summary.path("cardOutstandingBalance").asString()).isEqualTo("100.00");
   }
 
   @Test
@@ -327,8 +375,13 @@ class WealthIT extends PostgresTestBase {
   }
 
   private void createCardTransaction(String amount, String postedOn) throws Exception {
+    createCardTransaction(cardId, amount, postedOn);
+  }
+
+  private void createCardTransaction(String accountId, String amount, String postedOn)
+      throws Exception {
     Map<String, Object> request = new LinkedHashMap<>();
-    request.put("accountId", cardId);
+    request.put("accountId", accountId);
     request.put("type", "DEBIT");
     request.put("postedOn", postedOn);
     request.put("amount", amount);

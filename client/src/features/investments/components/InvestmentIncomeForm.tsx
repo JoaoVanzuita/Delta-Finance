@@ -33,6 +33,7 @@ interface InvestmentIncomeFormProps {
   readonly initial?: InvestmentIncomeItem
   readonly onSaved: () => void
   readonly onCancel?: () => void
+  readonly embedded?: boolean
 }
 
 /** Formulário de provento manual vinculado a uma posição importada. */
@@ -41,6 +42,7 @@ export function InvestmentIncomeForm({
   initial,
   onSaved,
   onCancel,
+  embedded = false,
 }: InvestmentIncomeFormProps) {
   const baseId = useId()
   const [targetKey, setTargetKey] = useState(initial?.investmentId ?? '')
@@ -102,28 +104,32 @@ export function InvestmentIncomeForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-card border border-line bg-surface p-4"
-      aria-labelledby={`${baseId}-title`}
+      className={
+        embedded ? 'space-y-3' : 'space-y-3 rounded-card border border-line bg-surface p-4'
+      }
+      aria-labelledby={embedded ? undefined : `${baseId}-title`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 id={`${baseId}-title`} className="text-sm font-semibold text-ink">
-            {initial ? 'Editar provento manual' : 'Registrar provento manual'}
-          </h3>
-          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-            Use quando o provedor não informar dividendos, JCP, aluguel de FII ou cupons.
-          </p>
+      {!embedded ? (
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 id={`${baseId}-title`} className="text-sm font-semibold text-ink">
+              {initial ? 'Editar provento manual' : 'Registrar provento manual'}
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+              Use quando o provedor não informar dividendos, JCP, aluguel de FII ou cupons.
+            </p>
+          </div>
+          {initial && onCancel ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex min-h-11 items-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink hover:bg-surface-muted"
+            >
+              Cancelar edição
+            </button>
+          ) : null}
         </div>
-        {initial && onCancel ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="inline-flex min-h-11 items-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink hover:bg-surface-muted"
-          >
-            Cancelar edição
-          </button>
-        ) : null}
-      </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs font-medium text-ink-muted sm:col-span-2">
@@ -193,10 +199,19 @@ export function InvestmentIncomeForm({
         <button
           type="submit"
           disabled={save.isPending}
-          className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface hover:bg-primary-hover disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-on-primary hover:bg-primary-hover disabled:opacity-60"
         >
           {initial ? 'Salvar provento' : 'Registrar provento'}
         </button>
+        {embedded && onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-line bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-muted"
+          >
+            Cancelar
+          </button>
+        ) : null}
       </div>
       {error ? (
         <p role="alert" className="text-sm text-expense">

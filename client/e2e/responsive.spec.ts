@@ -224,6 +224,7 @@ for (const viewport of [
       '/investments',
       '/wealth',
       '/goals',
+      '/settings/preferences',
       '/settings/privacy',
     ]) {
       await page.goto(path)
@@ -240,15 +241,23 @@ test('alvos de toque e navegação alcançáveis em 360 px', async ({ page }) =>
   await page.goto('/dashboard')
   await page.waitForLoadState('networkidle')
 
+  await page.getByRole('button', { name: 'Abrir navegação' }).click()
   const nav = page.getByRole('navigation', { name: 'Navegação principal' })
   await expect(nav).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Navegação' })).toBeVisible()
+
   const targets = await nav.getByRole('link').all()
   for (const target of targets) {
     const box = await target.boundingBox()
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
   }
 
+  for (const group of ['Meu dinheiro', 'Planejar', 'Organizar', 'Configurações']) {
+    await expect(nav.getByText(group, { exact: true })).toBeVisible()
+  }
+
   await nav.getByRole('link', { name: 'Privacidade', exact: true }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Privacidade e dados' })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Navegação' })).toBeHidden()
   await expectNoHorizontalOverflow(page)
 })

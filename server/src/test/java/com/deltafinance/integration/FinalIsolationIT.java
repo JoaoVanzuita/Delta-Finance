@@ -52,6 +52,8 @@ class FinalIsolationIT extends PostgresTestBase {
   @DynamicPropertySource
   static void pluggyProperties(DynamicPropertyRegistry registry) {
     registry.add("delta.pluggy.base-url", PLUGGY::baseUrl);
+    // A remoção na origem usa a janela diária; mantenha as datas fixas do teste cobertas.
+    registry.add("delta.sync.daily-window-days", () -> "3650");
   }
 
   @AfterAll

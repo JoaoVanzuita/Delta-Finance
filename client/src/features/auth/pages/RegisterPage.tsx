@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/problem'
 
 import { FormErrorSummary, type FormIssue } from '../components/FormErrorSummary'
 import { useRegister } from '../hooks/useSession'
 import { registerSchema, type RegisterFormValues } from '../validation'
 
-const inputClass =
-  'mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm outline-none transition-colors focus:border-focus'
-
 export function RegisterPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as { from?: string } | null)?.from
   const registerMutation = useRegister()
   const [issues, setIssues] = useState<FormIssue[]>([])
   const summaryRef = useRef<HTMLDivElement>(null)
@@ -49,7 +52,7 @@ export function RegisterPage() {
     try {
       await registerMutation.mutateAsync(parsed.data)
       navigate('/login', {
-        state: { registered: true, username: parsed.data.username },
+        state: { registered: true, username: parsed.data.username, from },
       })
     } catch (error) {
       if (error instanceof ApiError) {
@@ -81,19 +84,19 @@ export function RegisterPage() {
     }
   })
 
+  const busy = isSubmitting || registerMutation.isPending
+
   return (
-    <div className="mx-auto w-full max-w-md">
+    <div className="mx-auto w-full max-w-[var(--form-max)]">
       <header className="mb-6 space-y-2">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
-          Conta pessoal
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Criar conta</h1>
-        <p className="text-sm leading-relaxed text-ink-muted">
+        <p className="overline text-ink-muted">Conta pessoal</p>
+        <h1 className="text-page-title font-bold tracking-tight text-ink">Criar conta</h1>
+        <p className="text-body-sm text-ink-muted">
           Sua conta é individual: apenas você verá as suas contas, transações e conexões.
         </p>
       </header>
 
-      <section className="rounded-card border border-line bg-surface p-5 sm:p-6">
+      <Card className="p-5 sm:p-6">
         <form noValidate onSubmit={onSubmit} className="space-y-5">
           <FormErrorSummary
             id="register-errors"
@@ -102,14 +105,13 @@ export function RegisterPage() {
             title="Revise os dados do cadastro"
           />
 
-          <div>
-            <label htmlFor="register-username" className="block text-sm font-medium text-ink">
-              Nome de usuário
-            </label>
-            <p id="register-username-hint" className="mt-1 text-xs text-ink-muted">
-              Entre 3 e 40 caracteres. Pode ser um apelido.
-            </p>
-            <input
+          <Field
+            id="register-username"
+            label="Nome de usuário"
+            hint="Entre 3 e 40 caracteres. Pode ser um apelido."
+            error={errors.username?.message}
+          >
+            <Input
               id="register-username"
               type="text"
               autoComplete="username"
@@ -119,24 +121,17 @@ export function RegisterPage() {
                   ? 'register-username-hint register-username-error'
                   : 'register-username-hint'
               }
-              className={inputClass}
               {...register('username')}
             />
-            {errors.username ? (
-              <p id="register-username-error" className="mt-1 text-sm text-expense">
-                {errors.username.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor="register-password" className="block text-sm font-medium text-ink">
-              Senha
-            </label>
-            <p id="register-password-hint" className="mt-1 text-xs text-ink-muted">
-              Pelo menos 12 caracteres. Frases-senha são bem-vindas.
-            </p>
-            <input
+          <Field
+            id="register-password"
+            label="Senha"
+            hint="Pelo menos 12 caracteres. Frases-senha são bem-vindas."
+            error={errors.password?.message}
+          >
+            <Input
               id="register-password"
               type="password"
               autoComplete="new-password"
@@ -146,29 +141,29 @@ export function RegisterPage() {
                   ? 'register-password-hint register-password-error'
                   : 'register-password-hint'
               }
-              className={inputClass}
               {...register('password')}
             />
-            {errors.password ? (
-              <p id="register-password-error" className="mt-1 text-sm text-expense">
-                {errors.password.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <button
+          <Button
             type="submit"
-            disabled={isSubmitting || registerMutation.isPending}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            fullWidth
+            loading={busy}
+            loadingLabel="Criando conta…"
+            disabled={busy}
           >
-            {registerMutation.isPending ? 'Criando conta…' : 'Criar conta'}
-          </button>
+            Criar conta
+          </Button>
         </form>
-      </section>
+      </Card>
 
-      <p className="mt-4 text-sm text-ink-muted">
+      <p className="mt-4 text-body-sm text-ink-muted">
         Já tem conta?{' '}
-        <Link to="/login" className="font-medium text-action underline underline-offset-2">
+        <Link
+          to="/login"
+          state={{ from }}
+          className="font-medium text-action underline underline-offset-4"
+        >
           Entrar
         </Link>
       </p>

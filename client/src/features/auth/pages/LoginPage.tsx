@@ -3,14 +3,17 @@ import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useLocation, useNavigate } from 'react-router'
 
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/problem'
 
 import { FormErrorSummary, type FormIssue } from '../components/FormErrorSummary'
 import { useLogin } from '../hooks/useSession'
+import { safeRedirectDestination } from '../redirect'
 import { loginSchema, type LoginFormValues } from '../validation'
-
-const inputClass =
-  'mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm outline-none transition-colors focus:border-focus'
 
 interface LoginLocationState {
   readonly registered?: boolean
@@ -56,7 +59,7 @@ export function LoginPage() {
 
     try {
       await loginMutation.mutateAsync(parsed.data)
-      navigate(state?.from ?? '/account', { replace: true })
+      navigate(safeRedirectDestination(state?.from), { replace: true })
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.fieldErrors.length > 0) {
@@ -80,28 +83,23 @@ export function LoginPage() {
     }
   })
 
+  const busy = isSubmitting || loginMutation.isPending
+
   return (
-    <div className="mx-auto w-full max-w-md">
+    <div className="mx-auto w-full max-w-[var(--form-max)]">
       <header className="mb-6 space-y-2">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
-          Conta pessoal
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Entrar</h1>
-        <p className="text-sm leading-relaxed text-ink-muted">
-          Acesse o seu espaço financeiro privado.
-        </p>
+        <p className="overline text-ink-muted">Conta pessoal</p>
+        <h1 className="text-page-title font-bold tracking-tight text-ink">Entrar</h1>
+        <p className="text-body-sm text-ink-muted">Acesse o seu espaço financeiro privado.</p>
       </header>
 
       {state?.registered ? (
-        <p
-          role="status"
-          className="mb-4 rounded-card border border-income/30 bg-income/5 p-3 text-sm text-ink"
-        >
+        <Alert variant="success" className="mb-4">
           Conta criada. Entre com suas credenciais para continuar.
-        </p>
+        </Alert>
       ) : null}
 
-      <section className="rounded-card border border-line bg-surface p-5 sm:p-6">
+      <Card className="p-5 sm:p-6">
         <form noValidate onSubmit={onSubmit} className="space-y-5">
           <FormErrorSummary
             id="login-errors"
@@ -110,59 +108,41 @@ export function LoginPage() {
             title="Não foi possível entrar"
           />
 
-          <div>
-            <label htmlFor="login-username" className="block text-sm font-medium text-ink">
-              Nome de usuário
-            </label>
-            <input
+          <Field id="login-username" label="Nome de usuário" error={errors.username?.message}>
+            <Input
               id="login-username"
               type="text"
               autoComplete="username"
               aria-invalid={Boolean(errors.username)}
               aria-describedby={errors.username ? 'login-username-error' : undefined}
-              className={inputClass}
               {...register('username')}
             />
-            {errors.username ? (
-              <p id="login-username-error" className="mt-1 text-sm text-expense">
-                {errors.username.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor="login-password" className="block text-sm font-medium text-ink">
-              Senha
-            </label>
-            <input
+          <Field id="login-password" label="Senha" error={errors.password?.message}>
+            <Input
               id="login-password"
               type="password"
               autoComplete="current-password"
               aria-invalid={Boolean(errors.password)}
               aria-describedby={errors.password ? 'login-password-error' : undefined}
-              className={inputClass}
               {...register('password')}
             />
-            {errors.password ? (
-              <p id="login-password-error" className="mt-1 text-sm text-expense">
-                {errors.password.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <button
-            type="submit"
-            disabled={isSubmitting || loginMutation.isPending}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loginMutation.isPending ? 'Entrando…' : 'Entrar'}
-          </button>
+          <Button type="submit" fullWidth loading={busy} loadingLabel="Entrando…" disabled={busy}>
+            Entrar
+          </Button>
         </form>
-      </section>
+      </Card>
 
-      <p className="mt-4 text-sm text-ink-muted">
+      <p className="mt-4 text-body-sm text-ink-muted">
         Ainda não tem conta?{' '}
-        <Link to="/register" className="font-medium text-action underline underline-offset-2">
+        <Link
+          to="/register"
+          state={{ from: state?.from }}
+          className="font-medium text-action underline underline-offset-4"
+        >
           Criar conta
         </Link>
       </p>

@@ -168,6 +168,9 @@ async function login(page: Page, user: StubUser): Promise<void> {
   await page.getByLabel('Nome de usuário').fill(user.username)
   await page.getByLabel('Senha').fill(user.password)
   await page.getByRole('button', { name: 'Entrar' }).click()
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
+  await page.goto('/account')
   await expect(page.getByRole('heading', { name: 'Configurações da conta' })).toBeVisible()
 }
 
@@ -211,7 +214,7 @@ test.describe('isolamento entre dois usuários', () => {
     await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible()
 
     await page.goto('/rota-que-nao-existe')
-    await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Não encontramos este endereço' })).toBeVisible()
   })
 
   test('login inválido mantém mensagem genérica', async ({ page }) => {

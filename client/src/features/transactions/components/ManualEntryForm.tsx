@@ -1,8 +1,19 @@
 import { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChevronDown, Info } from 'lucide-react'
 
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/problem'
+import { formatMoney } from '@/lib/format'
+import { invalidateTransactionViews } from '@/lib/invalidation'
+import { queryKeys } from '@/lib/query-keys'
 
 import { financeApi, type ManualTransactionInput } from '@/features/integration/api'
 
@@ -30,8 +41,9 @@ interface ManualEntryFormProps {
 /**
  * Formulário de lançamento manual.
  *
- * Receitas/despesas, transferência em duas pernas, reembolso/chargeback vinculado e ajuste com
- * motivo explícito. Contas inativas permanecem visíveis, mas não podem ser selecionadas.
+ * O tipo vem primeiro e define o efeito esperado. Campos condicionais aparecem só
+ * quando aplicáveis; observações ficam em divulgação progressiva. A semântica dos
+ * tipos e o sinal do valor não são alterados.
  */
 export function ManualEntryForm({
   initialType = 'DEBIT',
@@ -56,10 +68,13 @@ export function ManualEntryForm({
   const needsOriginal = type === 'REFUND' || type === 'CHARGEBACK'
   const isAdjustment = type === 'ADJUSTMENT'
 
-  const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
-  const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: financeApi.categories })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: financeApi.accounts })
+  const categoriesQuery = useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: financeApi.categories,
+  })
   const transactionsQuery = useQuery({
-    queryKey: ['transactions', 'refund-originals', accountId],
+    queryKey: [...queryKeys.transactions, 'refund-originals', accountId],
     queryFn: () =>
       financeApi.transactions({ limit: 100, accountId, type: 'DEBIT', status: 'POSTED' }),
     enabled: needsOriginal && Boolean(accountId),
@@ -68,10 +83,13 @@ export function ManualEntryForm({
   const accounts = accountsQuery.data?.items ?? []
   const categories = (categoriesQuery.data?.items ?? []).filter((category) => category.active)
   const originCandidates = transactionsQuery.data?.items ?? []
+  const parsedAmount = Number(amount.replace(',', '.'))
+  const validAmount = amount.trim() && Number.isFinite(parsedAmount) ? parsedAmount : null
+  const amountPreview = amount.trim().startsWith('-') ? amount.trim().slice(1) : amount.trim()
 
   const create = useMutation({
     mutationFn: (input: ManualTransactionInput) => financeApi.createTransaction(input),
-    onSuccess: () => {
+    onSuccess: async () => {
       setMessage('Lançamento registrado.')
       setError(null)
       setAmount('')
@@ -79,14 +97,7 @@ export function ManualEntryForm({
       setNotes('')
       setAdjustmentReason('')
       setRelatedTransactionId('')
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void queryClient.invalidateQueries({ queryKey: ['internalMatches'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
-      void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
+      await invalidateTransactionViews(queryClient)
       onCreated?.()
     },
     onError: (caught) => {
@@ -108,8 +119,7 @@ export function ManualEntryForm({
       setError('Informe a descrição.')
       return
     }
-    const parsed = Number(amount.replace(',', '.'))
-    if (!amount.trim() || Number.isNaN(parsed) || parsed === 0) {
+    if (!amount.trim() || validAmount === null || validAmount === 0) {
       setError('Informe um valor diferente de zero.')
       return
     }
@@ -141,78 +151,163 @@ export function ManualEntryForm({
     })
   }
 
+  const effect = expectedEffect(type, validAmount)
+  const targetAccount = accounts.find((account) => account.id === transferAccountId)
+
+  const selectedAccount = accounts.find((account) => account.id === accountId)
+  const isImportedAccount = selectedAccount?.origin === 'IMPORTED'
+
   return (
     <form
       noValidate
-      className="space-y-4"
+      className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault()
         submit()
       }}
     >
       {message ? (
-        <p
-          role="status"
-          className="rounded-card border border-income/30 bg-income/5 p-3 text-sm text-ink"
-        >
+        <Alert variant="success" role="status">
           {message}
-        </p>
+        </Alert>
       ) : null}
       {error ? (
-        <p
-          role="alert"
-          className="rounded-card border border-expense/30 bg-expense/5 p-3 text-sm text-ink"
-        >
+        <Alert variant="danger" role="alert">
           {error}
-        </p>
+        </Alert>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Tipo</span>
-          <select
+      <Card className="space-y-4 p-5 sm:p-6">
+        <div>
+          <p className="overline text-ink-muted">Primeiro passo</p>
+          <h2 className="mt-1 text-section-title font-semibold text-ink">Tipo de movimentação</h2>
+        </div>
+        <Field
+          id="manual-entry-type"
+          label="Tipo"
+          hint="O tipo define o efeito nos relatórios e os campos seguintes."
+        >
+          <Select
+            id="manual-entry-type"
             value={type}
             onChange={(event) => {
               setType(event.target.value as ManualType)
               setRelatedTransactionId('')
             }}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
           >
             {TYPE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
 
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Conta</span>
-          <select
-            value={accountId}
-            onChange={(event) => {
-              setAccountId(event.target.value)
-              setRelatedTransactionId('')
-            }}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-          >
-            <option value="">Selecione</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id} disabled={account.status !== 'ACTIVE'}>
-                {account.alias ?? account.institutionName ?? account.id}
-                {account.status !== 'ACTIVE' ? ' (inativa)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex items-start gap-3 rounded-control border border-primary/25 bg-primary-soft p-3">
+          {effect.icon}
+          <div>
+            <p className="text-body-sm font-semibold text-ink">{effect.label}</p>
+            <p className="text-caption text-ink-muted">
+              {effect.description}
+              {validAmount !== null && effect.kind !== 'transfer'
+                ? ` Valor: ${formatMoney(amountPreview, 'BRL')}.`
+                : ''}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="space-y-4 p-5 sm:p-6">
+        <div>
+          <h2 className="text-section-title font-semibold text-ink">Dados da movimentação</h2>
+          <p className="text-caption text-ink-muted">
+            Conta, valor, data e descrição são obrigatórios.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field id="manual-entry-account" label="Conta">
+            <Select
+              id="manual-entry-account"
+              value={accountId}
+              onChange={(event) => {
+                setAccountId(event.target.value)
+                setRelatedTransactionId('')
+              }}
+            >
+              <option value="">Selecione</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id} disabled={account.status !== 'ACTIVE'}>
+                  {account.alias ?? account.institutionName ?? account.id}
+                  {account.status !== 'ACTIVE' ? ' (inativa)' : ''}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field id="manual-entry-amount" label="Valor (R$)">
+            <Input
+              id="manual-entry-amount"
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+            />
+          </Field>
+
+          <Field id="manual-entry-date" label="Data">
+            <Input
+              id="manual-entry-date"
+              type="date"
+              value={postedOn}
+              onChange={(event) => setPostedOn(event.target.value)}
+            />
+          </Field>
+
+          <Field id="manual-entry-description" label="Descrição">
+            <Input
+              id="manual-entry-description"
+              type="text"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              maxLength={500}
+            />
+          </Field>
+
+          <Field id="manual-entry-category" label="Categoria" className="sm:col-span-2">
+            <Select
+              id="manual-entry-category"
+              value={categoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+            >
+              <option value="">Sem categoria</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        {isImportedAccount ? (
+          <Alert variant="neutral">
+            Esta conta é importada. O lançamento entra no histórico e nos relatórios, mas o saldo
+            atual continua sendo o informado pela instituição; o saldo do provedor não é ajustado
+            por lançamentos manuais.
+          </Alert>
+        ) : null}
 
         {isTransfer ? (
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Conta de destino</span>
-            <select
+          <Field
+            id="manual-entry-transfer-account"
+            label="Conta de destino"
+            hint="A transferência cria duas pernas e não é receita nem despesa."
+          >
+            <Select
+              id="manual-entry-transfer-account"
               value={transferAccountId}
               onChange={(event) => setTransferAccountId(event.target.value)}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
             >
               <option value="">Selecione</option>
               {accounts
@@ -227,17 +322,26 @@ export function ManualEntryForm({
                     {account.status !== 'ACTIVE' ? ' (inativa)' : ''}
                   </option>
                 ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
+        ) : null}
+
+        {isTransfer && targetAccount ? (
+          <p className="text-caption text-ink-muted">
+            Destino: {targetAccount.alias ?? targetAccount.institutionName ?? 'Conta'}.
+          </p>
         ) : null}
 
         {needsOriginal ? (
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Transação original</span>
-            <select
+          <Field
+            id="manual-entry-original"
+            label="Transação original"
+            hint="Opcional. O vínculo permite reembolso parcial e limita a redução ao valor da despesa original."
+          >
+            <Select
+              id="manual-entry-original"
               value={relatedTransactionId}
               onChange={(event) => setRelatedTransactionId(event.target.value)}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
             >
               <option value="">Correspondência automática</option>
               {originCandidates.map((transaction) => (
@@ -245,93 +349,91 @@ export function ManualEntryForm({
                   {transaction.description ?? transaction.id} · {transaction.postedOn}
                 </option>
               ))}
-            </select>
-            <span className="mt-1 block text-xs text-ink-muted">
-              O vínculo permite reembolso parcial sem alterar a despesa original.
-            </span>
-          </label>
+            </Select>
+          </Field>
         ) : null}
 
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Valor (R$)</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-          />
-        </label>
-
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Data</span>
-          <input
-            type="date"
-            value={postedOn}
-            onChange={(event) => setPostedOn(event.target.value)}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-          />
-        </label>
-
-        <label className="block text-sm sm:col-span-2">
-          <span className="font-medium text-ink">Descrição</span>
-          <input
-            type="text"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            maxLength={500}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-          />
-        </label>
-
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Categoria</span>
-          <select
-            value={categoryId}
-            onChange={(event) => setCategoryId(event.target.value)}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-          >
-            <option value="">Sem categoria</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
         {isAdjustment ? (
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Motivo do ajuste</span>
-            <input
+          <Field
+            id="manual-entry-adjustment-reason"
+            label="Motivo do ajuste"
+            hint="O motivo fica registrado para auditoria."
+          >
+            <Input
+              id="manual-entry-adjustment-reason"
               type="text"
               value={adjustmentReason}
               onChange={(event) => setAdjustmentReason(event.target.value)}
               maxLength={500}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
             />
-          </label>
+          </Field>
         ) : null}
+      </Card>
 
-        <label className="block text-sm sm:col-span-2">
-          <span className="font-medium text-ink">Observações</span>
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            maxLength={2000}
-            rows={3}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-          />
-        </label>
-      </div>
+      <details className="group rounded-card border border-line bg-surface">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-5 py-3 text-body-sm font-semibold text-ink marker:content-none">
+          <span className="inline-flex items-center gap-2">
+            <Info aria-hidden="true" className="size-4 text-ink-muted" />
+            Observações
+          </span>
+          <span className="inline-flex items-center gap-1 text-caption font-normal text-ink-muted">
+            Opcional
+            <ChevronDown
+              aria-hidden="true"
+              className="size-4 transition-transform group-open:rotate-180"
+            />
+          </span>
+        </summary>
+        <div className="border-t border-line p-5">
+          <Field id="manual-entry-notes" label="Observações">
+            <Textarea
+              id="manual-entry-notes"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              maxLength={2000}
+              rows={3}
+            />
+          </Field>
+        </div>
+      </details>
 
-      <button
-        type="submit"
-        disabled={create.isPending}
-        className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:opacity-60"
-      >
-        {create.isPending ? 'Registrando…' : 'Registrar lançamento'}
-      </button>
+      <Button type="submit" loading={create.isPending} loadingLabel="Registrando…">
+        Registrar lançamento
+      </Button>
     </form>
   )
+}
+
+function expectedEffect(type: ManualType, amount: number | null) {
+  if (type === 'TRANSFER') {
+    return {
+      kind: 'transfer' as const,
+      label: 'Transferência',
+      description: 'Sai de uma conta e entra em outra; não altera receitas ou despesas.',
+      icon: <ArrowLeftRight aria-hidden="true" className="size-5 text-primary" />,
+    }
+  }
+  if (type === 'CREDIT' || type === 'REFUND' || type === 'CHARGEBACK') {
+    return {
+      kind: 'income' as const,
+      label: 'Entrada',
+      description:
+        'Aumenta o saldo da conta e pode compor receitas ou reduzir despesas vinculadas.',
+      icon: <ArrowDownLeft aria-hidden="true" className="size-5 text-income" />,
+    }
+  }
+  if (type === 'ADJUSTMENT' && amount !== null && amount > 0) {
+    return {
+      kind: 'income' as const,
+      label: 'Entrada por ajuste',
+      description: 'Ajuste positivo com motivo explícito.',
+      icon: <ArrowDownLeft aria-hidden="true" className="size-5 text-income" />,
+    }
+  }
+  return {
+    kind: 'expense' as const,
+    label: 'Saída',
+    description: 'Reduz o saldo da conta e pode compor despesas.',
+    icon: <ArrowUpRight aria-hidden="true" className="size-5 text-expense" />,
+  }
 }

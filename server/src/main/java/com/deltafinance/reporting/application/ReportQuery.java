@@ -14,4 +14,5 @@ public record ReportQuery(
     String type,
     String origin,
     String minAmount,
-    String maxAmount) {}
+    String maxAmount,
+    String direction) {}

@@ -1,9 +1,12 @@
 package com.deltafinance.transactions.application;
 
 import com.deltafinance.accounts.domain.AccountStatus;
+import com.deltafinance.accounts.domain.AccountType;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
 import com.deltafinance.categories.application.CategoryService;
+import com.deltafinance.categories.application.CategoryTaxonomy;
+import com.deltafinance.categories.domain.CategoryKind;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
@@ -83,7 +86,7 @@ public class ManualTransactionService {
     String description = requireDescription(request.description());
     BigDecimal amount = parseAmount(request.amount());
     LocalDate postedOn = request.postedOn() == null ? clock.today() : request.postedOn();
-    UUID categoryId = validateCategory(userId, request.categoryId());
+    UUID categoryId = validateCategory(userId, request.categoryId(), type, account);
 
     if (type == TransactionType.TRANSFER) {
       return createTransfer(userId, request, account, description, amount, postedOn, categoryId);
@@ -349,11 +352,20 @@ public class ManualTransactionService {
     return account;
   }
 
-  private UUID validateCategory(UUID userId, UUID categoryId) {
+  private UUID validateCategory(
+      UUID userId, UUID categoryId, TransactionType type, FinancialAccount account) {
     if (categoryId == null) {
       return null;
     }
-    return categoryService.requireActiveCategory(userId, categoryId).getId();
+    var category = categoryService.requireActiveCategory(userId, categoryId);
+    // Mesma regra do import: um crédito bancário não deve ficar sob categoria de despesa;
+    // sem isso, o gráfico mostraria a despesa e o drill-down misturaria os sentidos.
+    if (type == TransactionType.CREDIT
+        && account.getType() != AccountType.CREDIT
+        && category.getKind() == CategoryKind.EXPENSE) {
+      return categoryService.canonicalCategoryId(userId, CategoryTaxonomy.OUTROS);
+    }
+    return category.getId();
   }
 
   private static TransactionType parseType(String value) {

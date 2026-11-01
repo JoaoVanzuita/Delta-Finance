@@ -32,11 +32,14 @@ describe('proventos manuais e custo informado', () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
-    await user.click(await screen.findByText('Registrar provento manual', { selector: 'summary' }))
-    await user.selectOptions(screen.getByLabelText('Posição'), 'holding-1')
-    await user.type(screen.getByLabelText('Valor (BRL)'), '7.50')
-    await user.type(screen.getByLabelText('Descrição (opcional)'), 'Dividendo manual')
-    await user.click(screen.getByRole('button', { name: 'Registrar provento' }))
+    await screen.findByRole('tab', { name: 'Proventos' })
+    await user.click(screen.getByRole('tab', { name: 'Proventos' }))
+    await user.click(await screen.findByRole('button', { name: 'Registrar provento' }))
+    const createDialog = await screen.findByRole('dialog', { name: 'Registrar provento manual' })
+    await user.selectOptions(within(createDialog).getByLabelText('Posição'), 'holding-1')
+    await user.type(within(createDialog).getByLabelText('Valor (BRL)'), '7.50')
+    await user.type(within(createDialog).getByLabelText('Descrição (opcional)'), 'Dividendo manual')
+    await user.click(within(createDialog).getByRole('button', { name: 'Registrar provento' }))
 
     await waitFor(() => {
       const post = mock.mock.calls.find(
@@ -58,11 +61,11 @@ describe('proventos manuais e custo informado', () => {
     const manualRow = within(income).getByRole('cell', { name: 'Dividendo' }).closest('tr')
     expect(manualRow).not.toBeNull()
     await user.click(within(manualRow as HTMLElement).getByRole('button', { name: 'Editar' }))
-    expect(await screen.findByText('Editar provento manual')).toBeInTheDocument()
-    const amount = screen.getByLabelText('Valor (BRL)')
+    const editDialog = await screen.findByRole('dialog', { name: 'Editar provento manual' })
+    const amount = within(editDialog).getByLabelText('Valor (BRL)')
     await user.clear(amount)
     await user.type(amount, '8.00')
-    await user.click(screen.getByRole('button', { name: 'Salvar provento' }))
+    await user.click(within(editDialog).getByRole('button', { name: 'Salvar provento' }))
 
     await waitFor(() => {
       const patch = mock.mock.calls.find(
@@ -102,12 +105,15 @@ describe('proventos manuais e custo informado', () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    await screen.findByRole('tab', { name: 'Posições' })
+    await user.click(screen.getByRole('tab', { name: 'Posições' }))
     const card = (await screen.findByRole('heading', { level: 3, name: 'FII Alfa' })).closest(
       'li',
     ) as HTMLElement
-    await user.click(within(card).getByText('Detalhes do provedor'))
-    await user.type(within(card).getByLabelText('Custo informado (BRL)'), '900.00')
-    await user.click(within(card).getByRole('button', { name: 'Salvar custo' }))
+    await user.click(within(card).getByRole('button', { name: 'Ver detalhes' }))
+    const drawer = await screen.findByRole('dialog', { name: 'FII Alfa' })
+    await user.type(within(drawer).getByLabelText('Custo informado (BRL)'), '900.00')
+    await user.click(within(drawer).getByRole('button', { name: 'Salvar custo' }))
 
     await waitFor(() => {
       const patch = mock.mock.calls.find(
@@ -117,10 +123,10 @@ describe('proventos manuais e custo informado', () => {
       expect(patch).toBeDefined()
       expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ costBasis: '900.00' })
     })
-    expect(await within(card).findByText('Custo informado atualizado.')).toBeInTheDocument()
+    expect(await within(drawer).findByText('Custo informado atualizado.')).toBeInTheDocument()
 
-    await user.selectOptions(within(card).getByLabelText('Classificação'), 'ACAO')
-    await user.click(within(card).getByRole('button', { name: 'Salvar classificação' }))
+    await user.selectOptions(within(drawer).getByLabelText('Classificação'), 'ACAO')
+    await user.click(within(drawer).getByRole('button', { name: 'Salvar classificação' }))
     await waitFor(() => {
       const patch = mock.mock.calls.find(
         ([url, init]) =>

@@ -210,9 +210,9 @@ test('reconciliação exige confirmação explícita', async ({ page }) => {
   ]
 
   await page.goto('/reconciliation')
-  await expect(page.getByRole('heading', { name: 'Movimentos internos' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reconciliação' })).toBeVisible()
   await expect(page.getByText('Transferência entre contas')).toBeVisible()
-  await page.getByRole('button', { name: 'Confirmar' }).click()
+  await page.getByRole('button', { name: 'Confirmar correspondência' }).click()
 
   await expect(page.getByText(/Nenhuma sugestão pendente/)).toBeVisible()
 })

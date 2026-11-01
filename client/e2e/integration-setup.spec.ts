@@ -122,6 +122,61 @@ async function installStub(page: Page): Promise<StubState> {
       })
       return
     }
+    if (path === '/sync/status' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          integrations: [
+            {
+              id: 'integration-1',
+              provider: 'MEU_PLUGGY',
+              clientIdMasked: state.configured ? 'clie…lice' : undefined,
+              status: state.configured ? 'SYNCED' : 'INCOMPLETE',
+              lastSyncAttemptAt: '2026-10-22T12:00:00Z',
+              lastSuccessfulSyncAt: state.configured ? '2026-10-22T12:00:00Z' : undefined,
+              connectionCount: state.connections.length,
+              connectionLimit: 5,
+              connectionLimitCheckedAt: '2026-10-22',
+            },
+          ],
+          connections: state.connections,
+          pendingJobs: 0,
+        }),
+      })
+      return
+    }
+    if (path === '/sync/runs' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: state.configured
+            ? [
+                {
+                  id: 'run-1',
+                  status: 'SUCCESS',
+                  startedAt: '2026-10-22T12:00:00Z',
+                  finishedAt: '2026-10-22T12:00:05Z',
+                  readCount: 12,
+                  createdCount: 3,
+                  updatedCount: 4,
+                },
+              ]
+            : [],
+          hasMore: false,
+        }),
+      })
+      return
+    }
+    if (path.endsWith('/sync') && method === 'POST') {
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({ accepted: true }),
+      })
+      return
+    }
     if (path === '/connections' && method === 'POST') {
       const connection = {
         id: 'connection-1',
@@ -141,7 +196,9 @@ async function installStub(page: Page): Promise<StubState> {
       return
     }
     if (path.startsWith('/connections/') && method === 'DELETE') {
-      state.connections = []
+      if (url.searchParams.get('deleteHistory') === 'true') {
+        state.connections = []
+      }
       await route.fulfill({ status: 204 })
       return
     }
@@ -309,21 +366,21 @@ test.describe('configuração da integração', () => {
     await expect(page.getByRole('heading', { name: 'Meu Pluggy' })).toBeVisible()
     await expect(page.getByText(/Connect Token/i)).toHaveCount(0)
 
+    await page.getByRole('button', { name: 'Configurar credenciais' }).click()
     await page.getByLabel('Client ID').fill('client-alice')
     await page.getByLabel('Client Secret').fill('secret-alice')
     await page.getByRole('button', { name: 'Salvar credenciais' }).click()
 
     await expect(page.getByText('Credenciais validadas e salvas.')).toBeVisible()
-    await expect(page.getByText('clie…lice')).toBeVisible()
-    await expect(page.getByLabel('Client Secret')).toHaveValue('')
-    await expect(page.getByText(/0 de 5 conexões/)).toBeVisible()
+    await expect(page.getByText('clie…lice').first()).toBeVisible()
+    await expect(page.getByText(/0 de 5 conexões configuradas/)).toBeVisible()
 
     await page.getByLabel('itemId da conexão').fill('item-1')
     await page.getByRole('button', { name: 'Adicionar conexão' }).click()
 
-    await expect(page.getByText('Banco Alfa')).toBeVisible()
-    await expect(page.getByText(/item…-001/)).toBeVisible()
-    await expect(page.getByText(/1 de 5 conexões/)).toBeVisible()
+    await expect(page.getByText('Banco Alfa').first()).toBeVisible()
+    await expect(page.getByText(/item…-001/).first()).toBeVisible()
+    await expect(page.getByText(/1 de 5 conexões configuradas/)).toBeVisible()
     expect(state.connections).toHaveLength(1)
   })
 
@@ -331,6 +388,7 @@ test.describe('configuração da integração', () => {
     await installStub(page)
     await page.goto('/settings/integration')
 
+    await page.getByRole('button', { name: 'Configurar credenciais' }).click()
     await page.getByLabel('Client ID').fill('client-alice')
     await page.getByLabel('Client Secret').fill('secret-alice')
     await page.getByRole('button', { name: 'Validar sem salvar' }).click()
@@ -344,12 +402,14 @@ test.describe('configuração da integração', () => {
     const state = await installStub(page)
     await page.goto('/settings/integration')
 
+    await page.getByRole('button', { name: 'Configurar credenciais' }).click()
     await page.getByLabel('Client ID').fill('client-alice')
     await page.getByLabel('Client Secret').fill('secret-alice')
     await page.getByRole('button', { name: 'Salvar credenciais' }).click()
-    await expect(page.getByText('clie…lice')).toBeVisible()
+    await expect(page.getByText('clie…lice').first()).toBeVisible()
 
     state.invalidNextUpdate = true
+    await page.getByRole('button', { name: 'Atualizar credenciais' }).click()
     await page.getByLabel('Client ID').fill('client-invalido')
     await page.getByLabel('Client Secret').fill('segredo-invalido')
     await page.getByRole('button', { name: 'Salvar credenciais' }).click()
@@ -357,12 +417,48 @@ test.describe('configuração da integração', () => {
     await expect(
       page.getByText('Não foi possível validar as credenciais com o provedor.'),
     ).toBeVisible()
-    await expect(page.getByText('clie…lice')).toBeVisible()
+    await expect(page.getByText('clie…lice').first()).toBeVisible()
+  })
+
+  test('sincroniza e remove conexão separando ações destrutivas', async ({ page }) => {
+    const state = await installStub(page)
+    await page.goto('/settings/integration')
+    await page.getByRole('button', { name: 'Configurar credenciais' }).click()
+    await page.getByLabel('Client ID').fill('client-alice')
+    await page.getByLabel('Client Secret').fill('secret-alice')
+    await page.getByRole('button', { name: 'Salvar credenciais' }).click()
+    await page.getByLabel('itemId da conexão').fill('item-1')
+    await page.getByRole('button', { name: 'Adicionar conexão' }).click()
+
+    await page.getByRole('button', { name: 'Sincronizar agora' }).click()
+    await expect(
+      page.getByText('Consulta enfileirada. O resultado aparece no histórico em instantes.'),
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: 'Remover', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Remover conexão' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Desativar e manter dados' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Excluir conexão e dados' })).toBeVisible()
+    await dialog.getByRole('button', { name: 'Desativar e manter dados' }).click()
+
+    await expect(
+      page.getByText(/Conexão desativada. O histórico importado foi preservado/),
+    ).toBeVisible()
+    expect(state.connections).toHaveLength(1)
+    await page.getByRole('button', { name: 'Remover', exact: true }).click()
+    await page
+      .getByRole('dialog', { name: 'Remover conexão' })
+      .getByRole('button', { name: 'Excluir conexão e dados' })
+      .click()
+    await expect(page.getByText(/Conexão e dados importados removidos/)).toBeVisible()
+    expect(state.connections).toHaveLength(0)
   })
 
   test('lista contas e transações importadas com sinais de moeda e pendência', async ({ page }) => {
     await installStub(page)
     await page.goto('/settings/integration')
+    await page.getByRole('button', { name: 'Configurar credenciais' }).click()
     await page.getByLabel('Client ID').fill('client-alice')
     await page.getByLabel('Client Secret').fill('secret-alice')
     await page.getByRole('button', { name: 'Salvar credenciais' }).click()
@@ -371,6 +467,7 @@ test.describe('configuração da integração', () => {
     await page.goto('/accounts')
     await expect(page.getByRole('heading', { name: 'Contas', exact: true })).toBeVisible()
     await expect(page.getByText('Conta Alfa')).toBeVisible()
+    await page.getByText('Outras contas').click()
     await expect(page.getByText('Conta Dólar')).toBeVisible()
     await expect(page.getByText(/Moeda USD/)).toBeVisible()
     await expect(page.getByText('Cartão Alfa')).toHaveCount(0)

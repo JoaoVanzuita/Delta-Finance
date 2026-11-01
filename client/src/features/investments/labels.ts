@@ -48,3 +48,11 @@ export function assetClassLabel(value: string | null | undefined): string {
   if (!value) return 'Outros'
   return ASSET_CLASS_LABELS[value] ?? value
 }
+
+export function positionCountLabel(count: number): string {
+  return count === 1 ? '1 posição' : `${count} posições`
+}
+
+export function assetClassCountLabel(count: number): string {
+  return count === 1 ? '1 classe' : `${count} classes`
+}

@@ -124,13 +124,15 @@ describe('painel de cartões', () => {
     expect(await screen.findByText('R$ 8.000,00')).toBeInTheDocument()
 
     expect(screen.getAllByText('R$ 180,00').length).toBeGreaterThan(0)
-    expect(screen.getByText('2,3%')).toBeInTheDocument()
+    expect(screen.getAllByText('3,6%').length).toBeGreaterThan(0)
 
     const cardHeading = screen.getByRole('heading', { level: 3, name: 'Cartão Alfa' })
     const card = cardHeading.closest('article')
     expect(card).not.toBeNull()
     expect(within(card as HTMLElement).getAllByText('R$ 180,00').length).toBeGreaterThan(0)
     expect(within(card as HTMLElement).getByText('Fechada')).toBeInTheDocument()
+    expect(within(card as HTMLElement).getByText('Última fatura')).toBeInTheDocument()
+    expect(within(card as HTMLElement).queryByText('Fatura atual')).not.toBeInTheDocument()
     expect(within(card as HTMLElement).getByRole('progressbar')).toHaveAttribute(
       'aria-valuenow',
       '3.6',

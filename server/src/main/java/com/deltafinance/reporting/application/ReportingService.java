@@ -4,6 +4,7 @@ import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
 import com.deltafinance.categories.application.CategoryService;
 import com.deltafinance.categories.application.CategoryView;
+import com.deltafinance.categories.domain.CategoryKind;
 import com.deltafinance.connections.application.SyncQueryService;
 import com.deltafinance.invoices.application.InvoiceReportingService;
 import com.deltafinance.invoices.application.InvoiceReportingService.InvoiceReportItem;
@@ -94,7 +95,7 @@ public class ReportingService {
   public DashboardSummaryView summary(UUID userId, ReportQuery query) {
     Resolved resolved = resolve(userId, query);
     List<ReportEntry> entries = entries(userId, resolved);
-    Map<UUID, CategoryAggregate> categories = categoriesOf(entries);
+    Map<UUID, CategoryAggregate> categories = categoriesOf(entries, false, resolved);
     BigDecimal income = incomeOf(entries);
     BigDecimal expenses = expensesOf(categories);
     BigDecimal periodResult = income.subtract(expenses);
@@ -118,9 +119,11 @@ public class ReportingService {
         MoneyAggregator.format(cardOutstanding));
   }
 
-  public List<DashboardCategoryView> categories(UUID userId, ReportQuery query) {
+  public List<DashboardCategoryView> categories(
+      UUID userId, ReportQuery query, boolean incomeOnly) {
     Resolved resolved = resolve(userId, query);
-    Map<UUID, CategoryAggregate> aggregates = categoriesOf(entries(userId, resolved));
+    Map<UUID, CategoryAggregate> aggregates =
+        categoriesOf(entries(userId, resolved), incomeOnly, resolved);
     return aggregates.entrySet().stream()
         .filter(entry -> entry.getValue().count > 0)
         .sorted(
@@ -394,6 +397,16 @@ public class ReportingService {
               Direction.EXPENSE_REDUCTION));
     }
 
+    String direction = resolved.direction();
+    if (direction != null && !direction.isBlank()) {
+      if ("INCOME".equalsIgnoreCase(direction)) {
+        entries.removeIf(entry -> entry.direction() != Direction.INCOME);
+      } else if ("EXPENSE".equalsIgnoreCase(direction)) {
+        entries.removeIf(entry -> entry.direction() == Direction.INCOME);
+      } else {
+        throw new ValidationException("direction", "Direção deve ser EXPENSE ou INCOME.");
+      }
+    }
     entries.sort(Comparator.comparing(ReportEntry::occurredOn).thenComparing(ReportEntry::id));
     return entries;
   }
@@ -616,9 +629,28 @@ public class ReportingService {
     return false;
   }
 
-  private Map<UUID, CategoryAggregate> categoriesOf(List<ReportEntry> entries) {
+  private Map<UUID, CategoryAggregate> categoriesOf(
+      List<ReportEntry> entries, boolean incomeOnly, Resolved resolved) {
     Map<UUID, CategoryAggregate> aggregates = new LinkedHashMap<>();
     for (ReportEntry entry : entries) {
+      if (incomeOnly) {
+        if (entry.direction() != Direction.INCOME) {
+          continue;
+        }
+        UUID key = entry.categoryId() == null ? UNCATEGORIZED_ID : entry.categoryId();
+        // Salvaguarda para dados antigos ou lançamentos manuais: uma receita não pode
+        // aparecer sob uma categoria de despesa. O valor continua no total de receitas,
+        // mas é agrupado em Outros.
+        if (resolved.categoryKinds().get(key) == CategoryKind.EXPENSE) {
+          key =
+              resolved.outrosCategoryId() == null ? UNCATEGORIZED_ID : resolved.outrosCategoryId();
+        }
+        CategoryAggregate aggregate =
+            aggregates.computeIfAbsent(key, ignored -> new CategoryAggregate());
+        aggregate.amount = aggregate.amount.add(entry.amount().abs());
+        aggregate.count++;
+        continue;
+      }
       if (entry.direction() == Direction.INCOME) {
         continue;
       }
@@ -724,6 +756,9 @@ public class ReportingService {
       if (!accountIncluded(resolved, account.id())) {
         continue;
       }
+      if (!"BRL".equalsIgnoreCase(account.currency())) {
+        continue;
+      }
       cardIds.add(account.id());
     }
     return invoiceReportingService.outstandingBalance(userId, cardIds);
@@ -780,13 +815,20 @@ public class ReportingService {
     }
 
     Map<UUID, String> categoryNames = new HashMap<>();
+    Map<UUID, CategoryKind> categoryKinds = new HashMap<>();
     Set<UUID> transferCategoryIds = new HashSet<>();
+    UUID outrosCategoryId = null;
     for (CategoryView category : categoryService.listExisting(userId)) {
       categoryNames.put(category.id(), category.name());
-      if ("TRANSFER".equals(category.kind())) {
+      CategoryKind kind = CategoryKind.valueOf(category.kind());
+      categoryKinds.put(category.id(), kind);
+      if (kind == CategoryKind.TRANSFER) {
         // Categorias do tipo transferência (inclusive as criadas a partir de "Same person
         // transfer" e "Transfer - Internal" do provedor) não compõem receitas nem despesas.
         transferCategoryIds.add(category.id());
+      }
+      if ("Outros".equals(category.name())) {
+        outrosCategoryId = category.id();
       }
     }
     if (query.categoryId() != null
@@ -815,9 +857,12 @@ public class ReportingService {
         origin,
         minAmount,
         maxAmount,
+        query.direction(),
         accounts,
         categoryNames,
+        categoryKinds,
         transferCategoryIds,
+        outrosCategoryId,
         accountQueryService.connectionIdsByAccount(userId));
   }
 
@@ -916,9 +961,12 @@ public class ReportingService {
       TransactionSource origin,
       BigDecimal minAmount,
       BigDecimal maxAmount,
+      String direction,
       List<AccountView> accounts,
       Map<UUID, String> categoryNames,
+      Map<UUID, CategoryKind> categoryKinds,
       Set<UUID> transferCategoryIds,
+      UUID outrosCategoryId,
       Map<UUID, UUID> connectionIdsByAccount) {}
 
   private enum ReportPeriod {

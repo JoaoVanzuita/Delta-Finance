@@ -278,14 +278,23 @@ test('configura ciclo, adiciona item manual e registra pagamento', async ({ page
   await page.goto('/cards/card-1/invoices')
   await expect(page.getByRole('heading', { name: /Faturas/ })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Fatura atual' })).toBeVisible()
-  await expect(page.getByText('Compra pendente')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Abrir fatura atual' })).toHaveAttribute(
     'href',
     '/invoices/invoice-open',
   )
-  await page.getByRole('button', { name: 'Salvar ciclo' }).click()
-  await expect(page.getByText(/Faturas já fechadas ou pagas não são reescritas/)).toBeVisible()
 
+  await page.getByRole('tab', { name: 'Compras pendentes' }).click()
+  await expect(page.getByText('Compra pendente')).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Configurações' }).click()
+  await page.getByRole('button', { name: 'Salvar ciclo' }).click()
+  await expect(
+    page
+      .getByRole('tabpanel', { name: 'Configurações' })
+      .getByText(/Faturas já fechadas ou pagas não são reescritas/),
+  ).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Histórico' }).click()
   await page.getByRole('link', { name: /2026/ }).first().click()
   await expect(page.getByText('Compra importada')).toBeVisible()
 

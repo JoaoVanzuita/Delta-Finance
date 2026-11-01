@@ -1,55 +1,76 @@
-import { formatDateTime, formatMoney } from '@/features/accounts/format'
+import { formatDateTime, formatMoney } from '@/lib/format'
 import type { InvestmentOverview } from '@/features/integration/api'
 
 import { formatReferenceDate } from '../format'
-import { formatPercentage } from '@/features/dashboard/format'
 
 interface InvestmentSummaryProps {
   readonly overview: InvestmentOverview
 }
 
-/** Resumo do topo do dashboard de investimentos. */
+function incomeSourceLabel(source: InvestmentOverview['incomeSource']): string {
+  if (source === 'PROVIDER') return 'proventos informados pelo provedor'
+  if (source === 'MANUAL') return 'proventos manuais'
+  if (source === 'MIXED') return 'provedor e manuais'
+  return 'origem não informada'
+}
+
+/** Resumo do topo: valor atual em destaque e indicadores secundários sem equivalência. */
 export function InvestmentSummary({ overview }: InvestmentSummaryProps) {
   const profitHint =
     overview.profitReported == null
-      ? 'O provedor não informou lucro/prejuízo para as posições ativas.'
+      ? 'O provedor não informou resultado para as posições ativas.'
       : overview.profitCoverageCount < overview.activeCount
         ? `Informado para ${overview.profitCoverageCount} de ${overview.activeCount} posições ativas.`
-        : 'Resultado informado pelo provedor para todas as posições ativas.'
+        : 'Informado pelo provedor para todas as posições ativas.'
 
   return (
-    <section aria-labelledby="investment-summary-heading" className="space-y-3">
+    <section aria-labelledby="investment-summary-heading" className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="investment-summary-heading" className="text-lg font-semibold text-ink">
-          Resumo
-        </h2>
-        <p className="text-xs text-ink-muted">
-          Referência: {formatReferenceDate(overview.referenceDate)}
+        <div>
+          <h2 id="investment-summary-heading" className="text-section-title font-semibold text-ink">
+            Resumo
+          </h2>
+          <p className="text-caption text-ink-muted">
+            Referência do provedor: {formatReferenceDate(overview.referenceDate)}
+          </p>
+        </div>
+        <p className="text-caption text-ink-muted">
+          {overview.activeCount} posição(ões) ativa(s) · {overview.closedCount} encerrada(s)
         </p>
       </div>
+
       {overview.stale ? (
-        <p className="rounded-card border border-warning/40 bg-warning/5 p-3 text-sm text-ink">
-          Há posição ativa com data de referência antiga. O valor é o último informado pelo
-          provedor, não uma cotação em tempo real.
+        <p className="rounded-control border border-warning/40 bg-warning-soft p-3 text-body-sm text-ink">
+          Há posição ativa com referência antiga. O valor é o último informado pelo provedor, não
+          uma cotação em tempo real.
         </p>
       ) : null}
-      <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+
+      <div className="rounded-panel border border-primary/25 bg-primary-soft p-5 sm:p-6">
+        <p className="overline text-ink-muted">Valor atual</p>
+        <p className="numeric mt-2 text-metric-xl font-bold tracking-tight text-ink">
+          {overview.activeCount === 0
+            ? 'Sem posições ativas'
+            : formatMoney(overview.totalValue, 'BRL')}
+        </p>
+        <p className="mt-1 text-body-sm text-ink-muted">
+          Último saldo importado das posições ativas. Não é cotação em tempo real nem histórico de
+          rentabilidade.
+        </p>
+      </div>
+
+      <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryTile
-          label="Valor atual"
-          value={formatMoney(overview.totalValue, 'BRL')}
-          hint={`${overview.activeCount} posição(ões) importada(s) ativa(s) em BRL.`}
-        />
-        <SummaryTile
-          label="Proventos (12 meses)"
-          value={formatMoney(overview.incomeLast12Months, 'BRL')}
-          hint={
-            overview.incomeSource === 'PROVIDER'
-              ? 'Proventos INTEREST informados pelo provedor.'
-              : 'O provedor não informou proventos no período.'
+          label="Proventos recebidos (12 meses)"
+          value={
+            overview.incomeSource === 'UNAVAILABLE'
+              ? 'Não informado'
+              : formatMoney(overview.incomeLast12Months, 'BRL')
           }
+          hint={`Inclui ${incomeSourceLabel(overview.incomeSource)}. Não são receita do Dashboard.`}
         />
         <SummaryTile
-          label="Resultado do provedor"
+          label="Resultado informado pelo provedor"
           value={formatMoney(overview.profitReported, 'BRL')}
           hint={profitHint}
         />
@@ -59,29 +80,21 @@ export function InvestmentSummary({ overview }: InvestmentSummaryProps) {
           hint={
             overview.estimatedProfit == null
               ? 'Informe o custo de uma posição para estimar o resultado.'
-              : `Calculado com custo e proventos para ${overview.estimatedProfitCoverageCount} de ${overview.activeCount} posição(ões) ativa(s).`
+              : `Estimativa com custo e proventos, cobertura de ${overview.estimatedProfitCoverageCount} de ${overview.activeCount} posição(ões) ativa(s).`
           }
         />
         <SummaryTile
-          label="Posições encerradas"
-          value={String(overview.closedCount)}
-          hint={`${overview.unavailableCount} indisponível(is) na última leitura.`}
+          label="Posições não disponíveis"
+          value={String(overview.unavailableCount)}
+          hint="Posições que o provedor não devolveu na última leitura. Não são tratadas como saldo zero."
         />
       </dl>
-      <p className="text-xs leading-relaxed text-ink-muted">
+
+      <p className="text-caption text-ink-muted">
         Última sincronização:{' '}
-        <span className="font-medium text-ink">{formatDateTime(overview.lastSyncedAt)}</span>.
-        Percentuais de alocação usam apenas posições importadas ativas.
+        <span className="font-medium text-ink">{formatDateTime(overview.lastSyncedAt)}</span>. O
+        resultado estimado não é rendimento realizado e não substitui o resultado do provedor.
       </p>
-      {overview.profitReported != null && overview.activeCount > 0 ? (
-        <p className="text-xs text-ink-muted">
-          Cobertura do resultado:{' '}
-          <span className="numeric font-medium text-ink">
-            {formatPercentage(String(overview.profitCoverageCount), overview.activeCount)}%
-          </span>{' '}
-          das posições ativas.
-        </p>
-      ) : null}
     </section>
   )
 }
@@ -97,11 +110,11 @@ function SummaryTile({
 }) {
   return (
     <div className="rounded-card border border-line bg-surface p-4">
-      <dt className="text-xs font-semibold tracking-[0.08em] text-ink-muted uppercase">{label}</dt>
-      <dd className="mt-2">
-        <span className="numeric block text-xl font-semibold text-ink">{value}</span>
-        <span className="mt-2 block text-xs leading-relaxed text-ink-muted">{hint}</span>
-      </dd>
+      <dt className="text-caption font-semibold tracking-[0.04em] text-ink-muted uppercase">
+        {label}
+      </dt>
+      <dd className="numeric mt-2 text-metric-sm font-semibold text-ink">{value}</dd>
+      <dd className="mt-2 text-caption leading-relaxed text-ink-muted">{hint}</dd>
     </div>
   )
 }

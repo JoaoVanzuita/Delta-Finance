@@ -7,11 +7,13 @@ export type DashboardBucket = components['schemas']['DashboardBucket']
 export type ReportEntry = components['schemas']['ReportEntry']
 export type ReportEntryPage = components['schemas']['ReportEntryPage']
 
+export type DashboardPeriod = 'WEEK' | 'MONTH' | 'YEAR'
+
 /** Categoria sintética devolvida pelo servidor para lançamentos sem categoria. */
 export const UNCATEGORIZED_CATEGORY_ID = '00000000-0000-0000-0000-000000000000'
 
 export interface DashboardFilters {
-  readonly period?: 'WEEK' | 'MONTH' | 'YEAR'
+  readonly period?: DashboardPeriod
   readonly from?: string
   readonly to?: string
   readonly accountIds?: readonly string[]
@@ -20,6 +22,8 @@ export interface DashboardFilters {
   readonly origin?: string
   readonly minAmount?: string
   readonly maxAmount?: string
+  /** Usado no drill-down para manter o mesmo sentido do gráfico de categoria. */
+  readonly direction?: 'EXPENSE' | 'INCOME'
 }
 
 function queryString(filters: DashboardFilters, extra: Record<string, string> = {}): string {
@@ -33,6 +37,7 @@ function queryString(filters: DashboardFilters, extra: Record<string, string> = 
   if (filters.origin) params.set('origin', filters.origin)
   if (filters.minAmount) params.set('minAmount', filters.minAmount)
   if (filters.maxAmount) params.set('maxAmount', filters.maxAmount)
+  if (filters.direction) params.set('direction', filters.direction)
   for (const [key, value] of Object.entries(extra)) {
     if (value) params.set(key, value)
   }
@@ -43,8 +48,8 @@ function queryString(filters: DashboardFilters, extra: Record<string, string> = 
 export const dashboardApi = {
   summary: (filters: DashboardFilters) =>
     api.get<DashboardSummary>(`/dashboard/summary${queryString(filters)}`),
-  categories: (filters: DashboardFilters) =>
-    api.get<DashboardCategory[]>(`/dashboard/categories${queryString(filters)}`),
+  categories: (filters: DashboardFilters, direction: 'EXPENSE' | 'INCOME' = 'EXPENSE') =>
+    api.get<DashboardCategory[]>(`/dashboard/categories${queryString(filters, { direction })}`),
   timeseries: (filters: DashboardFilters) =>
     api.get<DashboardBucket[]>(`/dashboard/timeseries${queryString(filters)}`),
   entries: (filters: DashboardFilters, cursor?: string, limit = 25) =>

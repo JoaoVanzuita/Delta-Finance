@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -171,24 +171,51 @@ describe('detalhe do cartão', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Cartão Alfa' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Nome original no Pluggy: Cartão Original')).toBeInTheDocument()
+    expect(screen.getAllByText(/Nome original: Cartão Original/).length).toBeGreaterThan(0)
     expect(screen.getByText('Banco Alfa · VISA · PLATINUM · •••• 1234')).toBeInTheDocument()
     expect(screen.getByText('R$ 4.820,00')).toBeInTheDocument()
     expect(screen.getAllByText('R$ 50,00').length).toBeGreaterThan(0)
-    expect(screen.getByText('Compra recente')).toBeInTheDocument()
+    expect(screen.getAllByText('Fatura atual').length).toBeGreaterThan(0)
 
-    const current = screen.getByRole('region', { name: 'Fatura atual' })
-    expect(within(current).getByRole('link', { name: 'Abrir fatura atual' })).toHaveAttribute(
-      'href',
-      '/invoices/invoice-open',
-    )
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: 'Transações' }))
+    expect(await screen.findByText('Compra recente')).toBeInTheDocument()
 
-    const history = screen.getByRole('region', { name: 'Histórico de faturas' })
-    expect(within(history).getByText('Histórico incompleto')).toBeInTheDocument()
-    expect(within(history).getByRole('link', { name: /06\/09\/2026/ })).toHaveAttribute(
+    await user.click(screen.getByRole('tab', { name: 'Faturas' }))
+    expect(screen.getByText('Histórico')).toBeInTheDocument()
+    expect(screen.getByText('Histórico incompleto')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /06\/09\/2026/ })).toHaveAttribute(
       'href',
       '/invoices/invoice-closed',
     )
+  })
+
+  it('não chama de fatura atual uma fatura fechada ou paga', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/accounts/card-1')) return jsonResponse(currentAccount)
+        if (url.includes('/cards/overview')) {
+          return jsonResponse({
+            ...OVERVIEW,
+            items: [{ ...OVERVIEW.items[0], currentInvoice: CLOSED_INVOICE }],
+          })
+        }
+        if (url.includes('/cards/card-1/invoices')) {
+          return jsonResponse({ items: [CLOSED_INVOICE], hasMore: false })
+        }
+        if (url.includes('/transactions')) return jsonResponse({ items: [], hasMore: false })
+        return jsonResponse({}, 404)
+      }),
+    )
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Cartão Alfa' })
+    expect(screen.queryByText('Fatura atual')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Faturas' }))
+    expect(await screen.findByText(/Nenhuma fatura aberta no ciclo atual/)).toBeInTheDocument()
+    expect(screen.getByText('Histórico')).toBeInTheDocument()
   })
 
   it('permite renomear o cartão sem alterar o nome original', async () => {
@@ -208,6 +235,6 @@ describe('detalhe do cartão', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Cartão Novo' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Nome original no Pluggy: Cartão Original')).toBeInTheDocument()
+    expect(screen.getAllByText(/Nome original: Cartão Original/).length).toBeGreaterThan(0)
   })
 })

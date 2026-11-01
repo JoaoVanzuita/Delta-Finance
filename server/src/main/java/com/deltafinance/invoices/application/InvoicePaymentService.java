@@ -1,6 +1,7 @@
 package com.deltafinance.invoices.application;
 
 import com.deltafinance.accounts.domain.AccountStatus;
+import com.deltafinance.accounts.domain.AccountType;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
 import com.deltafinance.invoices.api.InvoicePaymentRequest;
@@ -57,6 +58,19 @@ public class InvoicePaymentService {
             .orElseThrow(NotFoundException::new);
     if (account.getStatus() != AccountStatus.ACTIVE) {
       throw new ConflictException("ACCOUNT_INACTIVE", "A conta de pagamento está inativa.");
+    }
+    FinancialAccount cardAccount =
+        accountRepository
+            .findByIdAndUserId(invoice.getCardAccountId(), userId)
+            .orElseThrow(NotFoundException::new);
+    if (account.getType() == AccountType.CREDIT) {
+      throw new ConflictException(
+          "PAYMENT_ACCOUNT_INCOMPATIBLE",
+          "A conta de pagamento não pode ser um cartão de crédito.");
+    }
+    if (!account.getCurrency().equalsIgnoreCase(cardAccount.getCurrency())) {
+      throw new ConflictException(
+          "PAYMENT_CURRENCY_MISMATCH", "A conta de pagamento deve usar a mesma moeda da fatura.");
     }
     BigDecimal amount = parseAmount(request.amount());
     UUID id = UUID.randomUUID();

@@ -1,386 +1,439 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 
+import { Alert } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog } from '@/components/ui/dialog'
+import { Drawer } from '@/components/ui/drawer'
+import { PageHeader } from '@/components/ui/page-header'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError } from '@/lib/api/problem'
+import { invalidateWealthViews } from '@/lib/invalidation'
+import { queryKeys } from '@/lib/query-keys'
+import { cn } from '@/lib/cn'
 
 import {
   financeApi,
-  type WealthItem,
   type WealthManualItem,
   type WealthManualItemInput,
   type WealthOverview,
 } from '@/features/integration/api'
 
 import { ManualItemForm } from '../components/ManualItemForm'
-import {
-  COMPLETENESS_LABELS,
-  ORIGIN_LABELS,
-  SOURCE_LABELS,
-  formatDate,
-  formatMoney,
-} from '../format'
-
-const OVERVIEW_KEY = ['wealth', 'overview'] as const
-const MANUAL_KEY = ['wealth', 'manual-items'] as const
+import { WealthComposition } from '../components/WealthComposition'
+import { COMPLETENESS_LABELS, formatDate, formatMoney } from '../format'
 
 function messageFrom(caught: unknown, fallback: string): string {
   return caught instanceof ApiError ? caught.message : fallback
 }
 
 /**
- * Visão patrimonial consolidada.
- *
- * <p>Mostra a composição com lacunas explícitas e valores de referência. Nunca apresenta valor
- * manual como cotação de mercado.
+ * Patrimônio consolidado em ativos, passivos e patrimônio líquido.
+ * Itens manuais são cadastrados/editados em drawer e nunca viram cotação.
  */
 export function WealthPage() {
   const queryClient = useQueryClient()
   const overviewQuery = useQuery({
-    queryKey: OVERVIEW_KEY,
+    queryKey: queryKeys.wealthOverview,
     queryFn: () => financeApi.wealthOverview(),
   })
   const manualQuery = useQuery({
-    queryKey: MANUAL_KEY,
+    queryKey: queryKeys.wealthManualItems,
     queryFn: () => financeApi.wealthManualItems(),
   })
 
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [formVersion, setFormVersion] = useState(0)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [form, setForm] = useState<'new' | WealthManualItem | null>(null)
+  const [deleting, setDeleting] = useState<WealthManualItem | null>(null)
 
-  const invalidateWealth = () => {
-    void queryClient.invalidateQueries({ queryKey: OVERVIEW_KEY })
-    void queryClient.invalidateQueries({ queryKey: MANUAL_KEY })
-  }
+  const manualItems = useMemo(() => manualQuery.data?.items ?? [], [manualQuery.data])
+  const assets = useMemo(() => manualItems.filter((item) => item.kind === 'ASSET'), [manualItems])
+  const liabilities = useMemo(
+    () => manualItems.filter((item) => item.kind === 'LIABILITY'),
+    [manualItems],
+  )
 
-  const createManual = useMutation({
-    mutationFn: (input: WealthManualItemInput) => financeApi.createWealthManualItem(input),
-    onSuccess: () => {
+  const save = useMutation({
+    mutationFn: (input: WealthManualItemInput) =>
+      form && form !== 'new'
+        ? financeApi.updateWealthManualItem(form.id, input)
+        : financeApi.createWealthManualItem(input),
+    onSuccess: async () => {
       setError(null)
-      setMessage('Item manual adicionado.')
-      setFormVersion((version) => version + 1)
-      invalidateWealth()
+      setFormError(null)
+      setMessage(form === 'new' ? 'Item manual adicionado.' : 'Item manual atualizado.')
+      setForm(null)
+      await invalidateWealthViews(queryClient)
     },
     onError: (caught) => {
       setMessage(null)
-      setError(messageFrom(caught, 'Não foi possível adicionar o item manual.'))
+      setFormError(messageFrom(caught, 'Não foi possível salvar o item manual.'))
     },
   })
 
-  const manualItems = manualQuery.data?.items ?? []
+  const remove = useMutation({
+    mutationFn: (item: WealthManualItem) => financeApi.deleteWealthManualItem(item.id),
+    onSuccess: async () => {
+      setDeleting(null)
+      setDeleteError(null)
+      setError(null)
+      setMessage('Item manual excluído.')
+      await invalidateWealthViews(queryClient)
+    },
+    onError: (caught) => {
+      setDeleteError(messageFrom(caught, 'Não foi possível excluir o item manual.'))
+    },
+  })
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-8">
-      <header className="space-y-2">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
-          Fase posterior
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Patrimônio</h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-ink-muted">
-          Patrimônio bruto, passivos e patrimônio líquido consolidados a partir de contas, cartões,
-          investimentos e itens manuais, sem dupla contagem.
-        </p>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        overline="Planejar"
+        title="Patrimônio"
+        description="Ativos, passivos e patrimônio líquido a partir de contas, cartões, investimentos e itens manuais, sem dupla contagem."
+        actions={
+          <Button
+            type="button"
+            onClick={() => {
+              setFormError(null)
+              setForm('new')
+            }}
+            leadingIcon={<Plus className="size-4" />}
+          >
+            Adicionar item manual
+          </Button>
+        }
+      />
 
       {message ? (
-        <p
-          role="status"
-          aria-live="polite"
-          className="rounded-card border border-income/30 bg-income/5 p-3 text-sm text-ink"
-        >
+        <Alert variant="success" role="status">
           {message}
-        </p>
+        </Alert>
       ) : null}
       {error ? (
-        <p
-          role="alert"
-          className="rounded-card border border-expense/30 bg-expense/5 p-3 text-sm text-ink"
-        >
+        <Alert variant="danger" role="alert">
           {error}
-        </p>
+        </Alert>
       ) : null}
 
       {overviewQuery.isLoading ? (
-        <p role="status" aria-live="polite" className="text-sm text-ink-muted">
-          Carregando patrimônio…
-        </p>
+        <div className="space-y-4" role="status" aria-live="polite">
+          <span className="sr-only">Carregando patrimônio…</span>
+          <Skeleton className="h-44 rounded-panel" />
+          <Skeleton className="h-64 rounded-card" />
+        </div>
       ) : null}
       {overviewQuery.isError ? (
-        <p
-          role="alert"
-          className="rounded-card border border-expense/30 bg-expense/5 p-4 text-sm text-ink"
-        >
-          {messageFrom(overviewQuery.error, 'Não foi possível carregar o patrimônio.')}
-        </p>
+        <Alert variant="danger" title="Não foi possível carregar o patrimônio">
+          {messageFrom(overviewQuery.error, 'Tente novamente em instantes.')}
+        </Alert>
       ) : null}
-      {overviewQuery.data ? <OverviewSections overview={overviewQuery.data} /> : null}
+      {overviewQuery.data ? <WealthOverviewSections overview={overviewQuery.data} /> : null}
 
-      <section
-        aria-labelledby="wealth-manual-heading"
-        className="space-y-4 rounded-card border border-line bg-surface p-4 sm:p-5"
-      >
-        <div className="space-y-1">
-          <h2 id="wealth-manual-heading" className="text-lg font-semibold text-ink">
-            Ativos e passivos manuais
-          </h2>
-          <p className="text-sm leading-relaxed text-ink-muted">
-            Informe o valor e a data de referência. O valor é uma referência do usuário e não uma
-            cotação de mercado.
-          </p>
+      <section aria-labelledby="wealth-manual-heading" className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 id="wealth-manual-heading" className="text-section-title font-semibold text-ink">
+              Itens manuais
+            </h2>
+            <p className="text-caption text-ink-muted">
+              Valores de referência informados por você. Não são cotação de mercado.
+            </p>
+          </div>
         </div>
 
-        <ManualItemForm
-          key={formVersion}
-          pending={createManual.isPending}
-          submitLabel="Adicionar item manual"
-          onSubmit={(input) => createManual.mutate(input)}
-        />
-
         {manualQuery.isLoading ? (
-          <p role="status" aria-live="polite" className="text-sm text-ink-muted">
+          <p role="status" className="text-body-sm text-ink-muted">
             Carregando itens manuais…
           </p>
         ) : null}
         {manualQuery.isError ? (
-          <p role="alert" className="text-sm text-expense">
+          <Alert variant="danger" title="Itens manuais indisponíveis">
             {messageFrom(manualQuery.error, 'Não foi possível carregar os itens manuais.')}
-          </p>
+          </Alert>
         ) : null}
         {manualQuery.isSuccess && manualItems.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nenhum ativo ou passivo manual registrado.</p>
+          <p className="rounded-card border border-dashed border-line-strong bg-surface p-4 text-body-sm text-ink-muted">
+            Nenhum ativo ou passivo manual registrado. Use “Novo item” para complementar a visão.
+          </p>
         ) : null}
+
         {manualItems.length > 0 ? (
-          <ul className="space-y-3">
-            {manualItems.map((item) => (
-              <ManualItemRow key={item.id} item={item} onChanged={invalidateWealth} />
-            ))}
-          </ul>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ManualGroup
+              title="Ativos manuais"
+              items={assets}
+              onEdit={(item) => {
+                setFormError(null)
+                setForm(item)
+              }}
+              onDelete={(item) => {
+                setDeleteError(null)
+                setDeleting(item)
+              }}
+            />
+            <ManualGroup
+              title="Passivos manuais"
+              items={liabilities}
+              onEdit={(item) => {
+                setFormError(null)
+                setForm(item)
+              }}
+              onDelete={(item) => {
+                setDeleteError(null)
+                setDeleting(item)
+              }}
+            />
+          </div>
         ) : null}
       </section>
+
+      <Drawer
+        open={form !== null}
+        onClose={() => setForm(null)}
+        title={form === 'new' || form === null ? 'Novo item manual' : 'Editar item manual'}
+        description="O valor é uma referência informada por você, não uma cotação de mercado."
+        width="md"
+        busy={save.isPending}
+      >
+        {formError ? (
+          <Alert variant="danger" className="mb-4">
+            {formError}
+          </Alert>
+        ) : null}
+        {form ? (
+          <ManualItemForm
+            key={form === 'new' ? 'new' : form.id}
+            initial={form === 'new' ? undefined : form}
+            pending={save.isPending}
+            submitLabel={form === 'new' ? 'Adicionar item manual' : 'Salvar item'}
+            onSubmit={(input) => save.mutate(input)}
+            onCancel={() => setForm(null)}
+          />
+        ) : null}
+      </Drawer>
+
+      <Dialog
+        open={deleting !== null}
+        onClose={() => {
+          setDeleting(null)
+          setDeleteError(null)
+        }}
+        title={`Excluir “${deleting?.description ?? 'item'}”`}
+        description="O item deixará de compor o patrimônio. Esta ação não apaga transações."
+        size="sm"
+        busy={remove.isPending}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setDeleting(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              loading={remove.isPending}
+              loadingLabel="Excluindo…"
+              onClick={() => {
+                if (deleting) remove.mutate(deleting)
+              }}
+            >
+              Confirmar exclusão
+            </Button>
+          </div>
+        }
+      >
+        {deleteError ? <Alert variant="danger">{deleteError}</Alert> : null}
+        <p className="text-body-sm text-ink-muted">
+          {deleting
+            ? `${deleting.description} · ${deleting.kind === 'ASSET' ? 'Ativo' : 'Passivo'} · ${formatMoney(deleting.referenceValue)}.`
+            : null}
+        </p>
+      </Dialog>
     </div>
   )
 }
 
-function OverviewSections({ overview }: { readonly overview: WealthOverview }) {
+function WealthOverviewSections({ overview }: { readonly overview: WealthOverview }) {
   return (
-    <>
-      <section
-        aria-labelledby="wealth-summary-heading"
-        className="space-y-4 rounded-card border border-line bg-surface p-4 sm:p-5"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-6">
+      <section aria-labelledby="wealth-summary-heading" className="space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 id="wealth-summary-heading" className="text-lg font-semibold text-ink">
+            <h2 id="wealth-summary-heading" className="text-section-title font-semibold text-ink">
               Resumo patrimonial
             </h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              Data de referência: {formatDate(overview.referenceDate)}
+            <p className="text-caption text-ink-muted">
+              Referência: {formatDate(overview.referenceDate)}
             </p>
           </div>
-          <span className="rounded-card border border-line bg-surface-muted px-3 py-1 text-sm font-semibold text-ink">
+          <Badge
+            variant={
+              overview.completeness === 'COMPLETE'
+                ? 'income'
+                : overview.completeness === 'PARTIAL'
+                  ? 'warning'
+                  : 'info'
+            }
+          >
             {COMPLETENESS_LABELS[overview.completeness] ?? overview.completeness}
-          </span>
+          </Badge>
         </div>
 
-        <dl className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-card border border-line bg-surface-muted p-3">
-            <dt className="text-xs text-ink-muted">Patrimônio bruto</dt>
-            <dd className="numeric mt-1 text-lg font-semibold text-ink">
-              {formatMoney(overview.grossAssets)}
-            </dd>
-          </div>
-          <div className="rounded-card border border-line bg-surface-muted p-3">
-            <dt className="text-xs text-ink-muted">Passivos</dt>
-            <dd className="numeric mt-1 text-lg font-semibold text-ink">
-              {formatMoney(overview.liabilities)}
-            </dd>
-          </div>
-          <div className="rounded-card border border-line bg-surface-muted p-3">
-            <dt className="text-xs text-ink-muted">Patrimônio líquido</dt>
-            <dd className="numeric mt-1 text-lg font-semibold text-ink">
-              {formatMoney(overview.netWorth)}
-            </dd>
-          </div>
+        <div className="rounded-panel border border-primary/25 bg-primary-soft p-5 sm:p-6">
+          <p className="overline text-ink-muted">Patrimônio líquido</p>
+          <p className="numeric mt-2 text-metric-xl font-bold tracking-tight text-ink">
+            {overview.hasData ? formatMoney(overview.netWorth) : 'Sem dados suficientes'}
+          </p>
+          <p className="mt-1 text-body-sm text-ink-muted">
+            Ativos brutos menos passivos. O valor de referência não é cotação de mercado.
+          </p>
+        </div>
+
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <Metric
+            label="Ativos brutos"
+            value={overview.hasData ? formatMoney(overview.grossAssets) : 'Não consolidado'}
+            tone="asset"
+          />
+          <Metric
+            label="Passivos"
+            value={overview.hasData ? formatMoney(overview.liabilities) : 'Não consolidado'}
+            tone="liability"
+          />
         </dl>
 
         {!overview.hasData ? (
-          <p className="text-sm text-ink-muted">
-            Sem dados suficientes para consolidar o patrimônio. Cadastre itens manuais ou importe
-            contas.
-          </p>
+          <Alert variant="warning" title="Visão não consolidada">
+            Cadastre um item manual ou importe contas para consolidar o patrimônio.
+          </Alert>
         ) : null}
         {overview.completeness === 'PARTIAL' ? (
-          <p className="text-sm text-ink">
-            Alguns itens não compõem os totais. Veja os motivos na composição abaixo.
-          </p>
+          <Alert variant="warning" title="Visão parcial">
+            Alguns itens não compõem os totais. Veja os motivos em “Fora do cálculo”.
+          </Alert>
         ) : null}
         {overview.completeness === 'ESTIMATED' ? (
-          <p className="text-sm text-ink">
-            Há valores de referência com mais de 30 dias; a visão é estimada.
-          </p>
+          <Alert variant="info" title="Visão estimada">
+            Há valores de referência com mais de 30 dias. A visão é uma referência, não cotação.
+          </Alert>
         ) : null}
-        <p className="text-xs leading-relaxed text-ink-muted">
-          Cada valor é uma referência informada por você e não é cotação de mercado. Saldos de
-          cartão entram como passivos e não são contados novamente como despesa.
-        </p>
       </section>
 
-      <section
-        aria-labelledby="wealth-composition-heading"
-        className="space-y-3 rounded-card border border-line bg-surface p-4 sm:p-5"
-      >
-        <h2 id="wealth-composition-heading" className="text-lg font-semibold text-ink">
-          Composição
-        </h2>
-        {overview.items.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nenhuma fonte patrimonial disponível.</p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {overview.items.map((item) => (
-              <CompositionRow key={`${item.sourceType}-${item.sourceId}`} item={item} />
-            ))}
-          </ul>
-        )}
-      </section>
-    </>
+      <WealthComposition items={overview.items} />
+    </div>
   )
 }
 
-function CompositionRow({ item }: { readonly item: WealthItem }) {
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  readonly label: string
+  readonly value: string
+  readonly tone: 'asset' | 'liability'
+}) {
   return (
-    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="space-y-1">
-        <p className="font-medium text-ink">
-          {item.description}
-          <span className="ml-2 text-xs font-normal text-ink-muted">
-            {SOURCE_LABELS[item.sourceType] ?? item.sourceType} ·{' '}
-            {ORIGIN_LABELS[item.origin] ?? item.origin}
-          </span>
-        </p>
-        <p className="text-sm text-ink-muted">
-          Data de referência: {formatDate(item.referenceDate)}
-          {item.stale ? ' · referência antiga' : ''}
-        </p>
-        {!item.included ? (
-          <p className="text-sm text-expense">Não incluído: {item.exclusionReason}</p>
-        ) : null}
+    <div className="rounded-card border border-line bg-surface p-4">
+      <dt className="text-caption font-semibold tracking-[0.04em] text-ink-muted uppercase">
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          'numeric mt-2 text-metric-lg font-semibold',
+          tone === 'asset' ? 'text-ink' : 'text-expense',
+        )}
+      >
+        {value}
+      </dd>
+    </div>
+  )
+}
+
+function ManualGroup({
+  title,
+  items,
+  onEdit,
+  onDelete,
+}: {
+  readonly title: string
+  readonly items: readonly WealthManualItem[]
+  readonly onEdit: (item: WealthManualItem) => void
+  readonly onDelete: (item: WealthManualItem) => void
+}) {
+  return (
+    <section className="rounded-card border border-line bg-surface p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-body-sm font-semibold text-ink">{title}</h3>
+        <Badge variant="neutral">{items.length}</Badge>
       </div>
-      <p className="numeric text-sm font-semibold text-ink">{formatMoney(item.value)}</p>
-    </li>
+      {items.length === 0 ? (
+        <p className="mt-2 text-caption text-ink-muted">Nenhum item nesta natureza.</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-line">
+          {items.map((item) => (
+            <ManualItemRow key={item.id} item={item} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 
 function ManualItemRow({
   item,
-  onChanged,
+  onEdit,
+  onDelete,
 }: {
   readonly item: WealthManualItem
-  readonly onChanged: () => void
+  readonly onEdit: (item: WealthManualItem) => void
+  readonly onDelete: (item: WealthManualItem) => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const update = useMutation({
-    mutationFn: (input: WealthManualItemInput) => financeApi.updateWealthManualItem(item.id, input),
-    onSuccess: () => {
-      setEditing(false)
-      setError(null)
-      onChanged()
-    },
-    onError: (caught) => {
-      setError(messageFrom(caught, 'Não foi possível salvar o item manual.'))
-    },
-  })
-
-  const remove = useMutation({
-    mutationFn: () => financeApi.deleteWealthManualItem(item.id),
-    onSuccess: () => {
-      setConfirming(false)
-      setError(null)
-      onChanged()
-    },
-    onError: (caught) => {
-      setError(messageFrom(caught, 'Não foi possível excluir o item manual.'))
-    },
-  })
-
   return (
-    <li className="space-y-2 rounded-card border border-line bg-surface-muted p-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <p className="font-medium text-ink">
-            {item.description}
-            <span className="ml-2 text-xs font-normal text-ink-muted">
-              {item.kind === 'ASSET' ? 'Ativo' : 'Passivo'} · {item.type}
-            </span>
+    <li className="space-y-2 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-body-sm font-medium text-ink">{item.description}</p>
+          <p className="text-caption text-ink-muted">
+            {item.type} · {formatDate(item.referenceDate)}
           </p>
-          <p className="text-sm text-ink-muted">
-            Data de referência: {formatDate(item.referenceDate)}
-          </p>
-          {item.notes ? <p className="text-sm text-ink">{item.notes}</p> : null}
         </div>
-        <div className="flex flex-col items-start gap-2 sm:items-end">
-          <p className="numeric text-sm font-semibold text-ink">
-            {formatMoney(item.referenceValue)}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setEditing((value) => !value)
-                setConfirming(false)
-              }}
-              className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink hover:bg-surface-muted"
-            >
-              {editing ? 'Cancelar edição' : 'Editar'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setConfirming((value) => !value)
-                setEditing(false)
-              }}
-              className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink hover:bg-surface-muted"
-            >
-              {confirming ? 'Cancelar exclusão' : 'Excluir'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {editing ? (
-        <ManualItemForm
-          initial={item}
-          pending={update.isPending}
-          submitLabel="Salvar item"
-          onSubmit={(input) => update.mutate(input)}
-          onCancel={() => setEditing(false)}
-        />
-      ) : null}
-
-      {confirming ? (
-        <div className="space-y-2 rounded-card border border-warning/40 bg-warning/5 p-3">
-          <p className="text-sm text-ink">
-            Excluir este item manual? Ele deixará de compor o patrimônio.
-          </p>
-          <button
-            type="button"
-            disabled={remove.isPending}
-            onClick={() => remove.mutate()}
-            className="inline-flex min-h-11 items-center justify-center rounded-card border border-expense/50 bg-expense/5 px-3 text-sm font-semibold text-expense disabled:opacity-60"
-          >
-            Confirmar exclusão
-          </button>
-        </div>
-      ) : null}
-
-      {error ? (
-        <p role="alert" className="text-sm text-expense">
-          {error}
+        <p
+          className={cn(
+            'numeric shrink-0 text-body-sm font-semibold',
+            item.kind === 'LIABILITY' ? 'text-expense' : 'text-ink',
+          )}
+        >
+          {formatMoney(item.referenceValue)}
         </p>
-      ) : null}
+      </div>
+      {item.notes ? <p className="text-caption text-ink-muted">{item.notes}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => onEdit(item)}
+          leadingIcon={<Pencil className="size-3.5" />}
+        >
+          Editar
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onDelete(item)}
+          leadingIcon={<Trash2 className="size-3.5" />}
+        >
+          Excluir
+        </Button>
+      </div>
     </li>
   )
 }

@@ -4,9 +4,8 @@ import com.deltafinance.accounts.domain.AccountStatus;
 import com.deltafinance.accounts.domain.AccountType;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
-import com.deltafinance.categories.domain.Category;
-import com.deltafinance.categories.domain.CategoryKind;
-import com.deltafinance.categories.domain.CategoryRepository;
+import com.deltafinance.categories.application.CategoryService;
+import com.deltafinance.categories.application.CategoryTaxonomy;
 import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
@@ -74,26 +73,10 @@ public class TransactionImportService {
    * despesas, mesmo quando não há uma perna correspondente importada (ex.: cofrinho ou conta de
    * outra instituição não conectada).
    */
-  private static final Set<String> INTERNAL_TRANSFER_CATEGORIES =
-      Set.of(
-          "same person transfer",
-          "transfer - internal",
-          "internal transfer",
-          "credit card payment",
-          "pagamento de cartao de credito",
-          "pagamento de cartão de crédito",
-          "pagamento de fatura",
-          "transferencia - interna",
-          "transferência - interna",
-          "transferencia entre contas",
-          "transferência entre contas",
-          "transferencia mesma titularidade",
-          "transferência mesma titularidade",
-          "mesma titularidade");
-
   private final TransactionRepository transactionRepository;
+
   private final FinancialAccountRepository accountRepository;
-  private final CategoryRepository categoryRepository;
+  private final CategoryService categoryService;
   private final ExternalIdentityHistoryRepository identityRepository;
   private final RefundMatcher refundMatcher;
   private final PluggyAuthClient authClient;
@@ -108,7 +91,7 @@ public class TransactionImportService {
   public TransactionImportService(
       TransactionRepository transactionRepository,
       FinancialAccountRepository accountRepository,
-      CategoryRepository categoryRepository,
+      CategoryService categoryService,
       ExternalIdentityHistoryRepository identityRepository,
       RefundMatcher refundMatcher,
       PluggyAuthClient authClient,
@@ -121,7 +104,7 @@ public class TransactionImportService {
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
-    this.categoryRepository = categoryRepository;
+    this.categoryService = categoryService;
     this.identityRepository = identityRepository;
     this.refundMatcher = refundMatcher;
     this.authClient = authClient;
@@ -535,40 +518,26 @@ public class TransactionImportService {
         && (providerCategory == null || providerCategory.isBlank())) {
       return existing.getCategoryId();
     }
-    if (providerCategory == null || providerCategory.isBlank()) {
-      return null;
+    String canonicalKey =
+        providerCategory == null || providerCategory.isBlank()
+            ? CategoryTaxonomy.OUTROS
+            : CategoryTaxonomy.canonicalKey(providerCategory);
+    // Aporte e resgate são movimentos patrimoniais, não receita/despesa. O Pluggy usa a mesma
+    // família de categorias ("Investments" e filhos) para os dois sentidos; a direção separa.
+    if (CategoryTaxonomy.isInvestmentKey(canonicalKey)) {
+      canonicalKey =
+          type == TransactionType.CREDIT ? CategoryTaxonomy.RESGATES : CategoryTaxonomy.APORTES;
     }
-    String normalized = normalize(providerCategory);
-    boolean internalTransfer = INTERNAL_TRANSFER_CATEGORIES.contains(normalized);
-    byte[] hash = hmacService.hmac("category", normalized);
-    var found = categoryRepository.findByUserIdAndNormalizedNameHash(userId, hash);
-    if (found.isPresent()) {
-      Category category = found.get();
-      if (internalTransfer && category.getKind() != CategoryKind.TRANSFER) {
-        // Corrige categorias já criadas por versões anteriores, mantendo a escolha do usuário
-        // para todas as demais categorias.
-        category.changeKind(CategoryKind.TRANSFER);
-        categoryRepository.save(category);
-      }
-      return category.getId();
+    // Em conta bancária, um crédito numa categoria de despesa é uma entrada atípica (reembolso,
+    // devolução ou categorização incorreta do provedor). Ele não pode aparecer como “despesa” no
+    // gráfico de receitas; vai para Outros e o usuário pode recategorizar depois. No cartão, o
+    // crédito é estorno e deve permanecer na categoria original para reduzir a despesa correta.
+    if (type == TransactionType.CREDIT
+        && account.getType() != AccountType.CREDIT
+        && CategoryTaxonomy.isExpenseKey(canonicalKey)) {
+      canonicalKey = CategoryTaxonomy.OUTROS;
     }
-    UUID categoryId = UUID.randomUUID();
-    CategoryKind kind =
-        internalTransfer
-            ? CategoryKind.TRANSFER
-            : type == TransactionType.CREDIT || type == TransactionType.REFUND
-                ? CategoryKind.INCOME
-                : CategoryKind.EXPENSE;
-    Category category =
-        new Category(
-            categoryId,
-            userId,
-            cryptoService.encrypt(
-                providerCategory, new CryptoContext(userId, "category", "name", categoryId)),
-            hash,
-            kind,
-            null);
-    return categoryRepository.save(category).getId();
+    return categoryService.canonicalCategoryId(userId, canonicalKey);
   }
 
   private byte[] encrypt(UUID userId, String column, UUID recordId, BigDecimal amount) {

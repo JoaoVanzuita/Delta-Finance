@@ -44,7 +44,27 @@ describe('dashboard de investimentos', () => {
     const allocation = await region('Alocação')
     expect(within(allocation).getAllByText('Fundos imobiliários').length).toBeGreaterThan(0)
     expect(within(allocation).getAllByText('Renda fixa').length).toBeGreaterThan(0)
-    expect(within(allocation).getAllByText(/85\.71%/).length).toBeGreaterThan(0)
+    expect(within(allocation).getAllByText(/85,7%/).length).toBeGreaterThan(0)
+  })
+
+  it('abre as posições da classe ao clicar na fatia da alocação', async () => {
+    stubInvestmentsApi()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    const allocation = await region('Alocação')
+    expect(
+      within(allocation).getByRole('img', { name: /Alocação por classe de investimento/i }),
+    ).toBeInTheDocument()
+
+    await user.click(within(allocation).getByRole('button', { name: /Fundos imobiliários:/ }))
+    const classDialog = await screen.findByRole('dialog', { name: 'Fundos imobiliários' })
+    expect(within(classDialog).getByText('FII Alfa')).toBeInTheDocument()
+    expect(within(classDialog).getByText('FII Beta')).toBeInTheDocument()
+
+    await user.click(within(classDialog).getByRole('button', { name: /FII Alfa/ }))
+    expect(await screen.findByRole('dialog', { name: 'FII Alfa' })).toBeInTheDocument()
   })
 
   it('filtra posições ativas e encerradas', async () => {
@@ -53,6 +73,8 @@ describe('dashboard de investimentos', () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    await screen.findByRole('tab', { name: 'Posições' })
+    await user.click(screen.getByRole('tab', { name: 'Posições' }))
     const holdings = await region('Posições importadas')
     expect(await within(holdings).findByText('FII Alfa')).toBeInTheDocument()
     expect(within(holdings).getByText('CDB Alfa')).toBeInTheDocument()
@@ -69,12 +91,16 @@ describe('dashboard de investimentos', () => {
 
   it('mostra proventos do provedor por mês e por ativo', async () => {
     stubInvestmentsApi()
+    const user = userEvent.setup()
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    await screen.findByRole('tab', { name: 'Proventos' })
+    await user.click(screen.getByRole('tab', { name: 'Proventos' }))
     const income = await region('Proventos')
     expect(within(income).getAllByText(/R\$\s*12,50/).length).toBeGreaterThan(0)
-    expect(within(income).getByText('2026-10')).toBeInTheDocument()
+    expect(within(income).getAllByText('2026-10').length).toBeGreaterThan(0)
+    expect(within(income).getByRole('img', { name: /Proventos mensais/i })).toBeInTheDocument()
     expect(within(income).getAllByText('FII Alfa').length).toBeGreaterThan(0)
   })
 
@@ -88,9 +114,12 @@ describe('dashboard de investimentos', () => {
         items: [],
       },
     })
+    const user = userEvent.setup()
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
+    await screen.findByRole('tab', { name: 'Proventos' })
+    await user.click(screen.getByRole('tab', { name: 'Proventos' }))
     expect(
       within(await region('Proventos')).getByText(/nenhum provento informado pelo provedor/i),
     ).toBeInTheDocument()
@@ -101,7 +130,11 @@ describe('dashboard de investimentos', () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Investimentos' })
-    expect(screen.queryByRole('region', { name: 'Cobertura das conexões' })).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Cobertura da importação' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Compartilha investimentos')).toBeInTheDocument()
+    expect(screen.getByText('Não compartilha investimentos')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Posições manuais' })).not.toBeInTheDocument()
   })
 })

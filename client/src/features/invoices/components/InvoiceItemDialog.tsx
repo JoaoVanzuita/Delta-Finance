@@ -1,8 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Dialog } from '@/components/ui/dialog'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { ApiError } from '@/lib/api/problem'
+import { invalidateInvoiceViews } from '@/lib/invalidation'
 
 import { financeApi, type InvoiceItem, type InvoiceItemInput } from '@/features/integration/api'
 
@@ -20,7 +27,7 @@ const KINDS = [
 const EFFECTS = [
   { value: 'EXPENSE_INCREASE', label: 'Aumenta a despesa' },
   { value: 'EXPENSE_DECREASE', label: 'Reduz a despesa' },
-  { value: 'NONE', label: 'Sem efeito (espelho)' },
+  { value: 'NONE', label: 'Sem efeito no total' },
 ] as const
 
 type Kind = (typeof KINDS)[number]['value']
@@ -39,7 +46,7 @@ interface InvoiceItemDialogProps {
   readonly onClose: () => void
 }
 
-/** Item manual ou espelho de transação, com efeito obrigatório e histórico auditado. */
+/** Item manual ou vínculo de transação, com efeito obrigatório e histórico auditado. */
 export function InvoiceItemDialog({
   invoiceId,
   cardAccountId,
@@ -62,6 +69,7 @@ export function InvoiceItemDialog({
     item?.totalInstallments ? String(item.totalInstallments) : '',
   )
   const [error, setError] = useState<string | null>(null)
+  const descriptionRef = useRef<HTMLInputElement>(null)
 
   const transactionsQuery = useQuery({
     queryKey: ['transactions', 'invoice-items', cardAccountId],
@@ -83,15 +91,8 @@ export function InvoiceItemDialog({
       item
         ? financeApi.updateInvoiceItem(item.id, input)
         : financeApi.addInvoiceItem(invoiceId, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] })
-      void queryClient.invalidateQueries({ queryKey: ['invoices'] })
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
-      void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
+    onSuccess: async () => {
+      await invalidateInvoiceViews(queryClient, invoiceId)
       onClose()
     },
     onError: (caught) => {
@@ -129,180 +130,156 @@ export function InvoiceItemDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="invoice-item-heading"
-        className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-card border border-line bg-surface p-5 shadow-xl"
+    <Dialog
+      open
+      onClose={onClose}
+      title={item ? 'Editar item da fatura' : 'Adicionar item à fatura'}
+      description="O valor é sempre positivo; o efeito define a direção. Correções preservam o histórico."
+      size="lg"
+      busy={save.isPending}
+      initialFocusRef={descriptionRef}
+    >
+      {error ? (
+        <Alert variant="danger" className="mb-4">
+          {error}
+        </Alert>
+      ) : null}
+
+      <form
+        noValidate
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault()
+          submit()
+        }}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 id="invoice-item-heading" className="text-lg font-semibold text-ink">
-              {item ? 'Editar item da fatura' : 'Adicionar item à fatura'}
-            </h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              O valor é sempre positivo; o efeito define a direção. Correções preservam o histórico.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink"
-          >
-            Fechar
-          </button>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field id="invoice-item-kind" label="Tipo">
+            <Select
+              id="invoice-item-kind"
+              value={kind}
+              onChange={(event) => {
+                const value = event.target.value as Kind
+                setKind(value)
+                setReportingEffect(defaultEffect(value))
+              }}
+            >
+              {KINDS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field id="invoice-item-effect" label="Efeito">
+            <Select
+              id="invoice-item-effect"
+              value={reportingEffect}
+              onChange={(event) => setReportingEffect(event.target.value as Effect)}
+            >
+              {EFFECTS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
 
-        {error ? (
-          <p
-            role="alert"
-            className="mt-3 rounded-card border border-expense/30 bg-expense/5 p-3 text-sm text-ink"
+        <Field id="invoice-item-description" label="Descrição">
+          <Input
+            ref={descriptionRef}
+            id="invoice-item-description"
+            type="text"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            maxLength={500}
+          />
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            id="invoice-item-amount"
+            label={Number(totalInstallments) > 1 ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}
           >
-            {error}
+            <Input
+              id="invoice-item-amount"
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+            />
+          </Field>
+          <Field id="invoice-item-date" label="Data">
+            <Input
+              id="invoice-item-date"
+              type="date"
+              value={occurredOn}
+              onChange={(event) => setOccurredOn(event.target.value)}
+            />
+          </Field>
+        </div>
+
+        {requiresTransaction ? (
+          <Field
+            id="invoice-item-transaction"
+            label="Transação vinculada"
+            hint="A compra original não é alterada; o item apenas registra a compra na fatura."
+          >
+            <Select
+              id="invoice-item-transaction"
+              value={transactionId}
+              onChange={(event) => setTransactionId(event.target.value)}
+            >
+              <option value="">Selecione</option>
+              {candidates.map((transaction) => (
+                <option key={transaction.id} value={transaction.id}>
+                  {transaction.description ?? transaction.id} · {transaction.postedOn} ·{' '}
+                  {transaction.amount}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field id="invoice-item-installment" label="Parcela">
+            <Input
+              id="invoice-item-installment"
+              type="number"
+              min={1}
+              value={installmentNumber}
+              onChange={(event) => setInstallmentNumber(event.target.value)}
+            />
+          </Field>
+          <Field id="invoice-item-total-installments" label="Total de parcelas">
+            <Input
+              id="invoice-item-total-installments"
+              type="number"
+              min={1}
+              value={totalInstallments}
+              onChange={(event) => setTotalInstallments(event.target.value)}
+            />
+          </Field>
+        </div>
+        {!item && Number(totalInstallments) > 1 ? (
+          <p className="rounded-card border border-line bg-surface-muted p-3 text-caption text-ink-muted">
+            Serão criadas {totalInstallments} parcelas, uma por ciclo. A primeira fica nesta fatura
+            e as seguintes nas faturas futuras.
           </p>
         ) : null}
 
-        <form
-          noValidate
-          className="mt-4 space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            submit()
-          }}
-        >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="font-medium text-ink">Tipo</span>
-              <select
-                value={kind}
-                onChange={(event) => {
-                  const value = event.target.value as Kind
-                  setKind(value)
-                  setReportingEffect(defaultEffect(value))
-                }}
-                className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-              >
-                {KINDS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block text-sm">
-              <span className="font-medium text-ink">Efeito</span>
-              <select
-                value={reportingEffect}
-                onChange={(event) => setReportingEffect(event.target.value as Effect)}
-                className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-              >
-                {EFFECTS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Descrição</span>
-            <input
-              type="text"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              maxLength={500}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-          </label>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="font-medium text-ink">
-                {Number(totalInstallments) > 1 ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}
-              </span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-ink">Data</span>
-              <input
-                type="date"
-                value={occurredOn}
-                onChange={(event) => setOccurredOn(event.target.value)}
-                className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-              />
-            </label>
-          </div>
-
-          {requiresTransaction ? (
-            <label className="block text-sm">
-              <span className="font-medium text-ink">Transação vinculada</span>
-              <select
-                value={transactionId}
-                onChange={(event) => setTransactionId(event.target.value)}
-                className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-              >
-                <option value="">Selecione</option>
-                {candidates.map((transaction) => (
-                  <option key={transaction.id} value={transaction.id}>
-                    {transaction.description ?? transaction.id} · {transaction.postedOn} ·{' '}
-                    {transaction.amount}
-                  </option>
-                ))}
-              </select>
-              <span className="mt-1 block text-xs text-ink-muted">
-                A compra original não é alterada; o item é um espelho na fatura.
-              </span>
-            </label>
-          ) : null}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="font-medium text-ink">Parcela</span>
-              <input
-                type="number"
-                min={1}
-                value={installmentNumber}
-                onChange={(event) => setInstallmentNumber(event.target.value)}
-                className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-ink">Total de parcelas</span>
-              <input
-                type="number"
-                min={1}
-                value={totalInstallments}
-                onChange={(event) => setTotalInstallments(event.target.value)}
-                className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-              />
-            </label>
-          </div>
-          {!item && Number(totalInstallments) > 1 ? (
-            <p className="rounded-card border border-line bg-surface-muted p-3 text-xs text-ink-muted">
-              Serão criadas {totalInstallments} parcelas, uma por ciclo. A primeira fica nesta
-              fatura e as seguintes nas faturas futuras.
-            </p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={save.isPending}
-            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface disabled:opacity-60"
-          >
-            {save.isPending ? 'Salvando…' : 'Salvar item'}
-          </button>
-        </form>
-      </div>
-    </div>
+        <div className="flex flex-wrap justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={save.isPending} loadingLabel="Salvando…">
+            Salvar item
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   )
 }
 

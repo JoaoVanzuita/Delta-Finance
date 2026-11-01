@@ -25,6 +25,15 @@ const ACCOUNTS = {
       alias: 'Conta Casa',
       status: 'ACTIVE',
     },
+    {
+      id: 'acc-3',
+      type: 'BANK',
+      origin: 'IMPORTED',
+      currency: 'BRL',
+      currentBalance: '900.00',
+      alias: 'Conta Banco',
+      status: 'ACTIVE',
+    },
   ],
 }
 
@@ -103,6 +112,19 @@ describe('formulário de lançamento manual', () => {
     })
   })
 
+  it('avisa que conta importada não ajusta o saldo do provedor', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    renderWithProviders(<ManualEntryForm />)
+
+    await screen.findAllByRole('option', { name: 'Carteira' })
+    await user.selectOptions(screen.getByLabelText('Conta'), 'acc-3')
+
+    expect(
+      await screen.findByText(/o saldo do provedor não é ajustado por lançamentos manuais/i),
+    ).toBeInTheDocument()
+  })
+
   it('exige conta de destino diferente na transferência', async () => {
     stubApi()
     const user = userEvent.setup()
@@ -148,5 +170,19 @@ describe('formulário de lançamento manual', () => {
         screen.getByText('A conta está inativa e não recebe novos lançamentos.'),
       ).toBeInTheDocument(),
     )
+  })
+
+  it('mostra o efeito esperado e revela campos condicionais', async () => {
+    stubApi()
+    const user = userEvent.setup()
+    renderWithProviders(<ManualEntryForm initialType="TRANSFER" />)
+
+    expect(await screen.findByText('Transferência')).toBeInTheDocument()
+    expect(screen.getByText(/não altera receitas ou despesas/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Conta de destino')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Tipo'), 'ADJUSTMENT')
+    expect(await screen.findByLabelText('Motivo do ajuste')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Conta de destino')).not.toBeInTheDocument()
   })
 })

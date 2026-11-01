@@ -1,10 +1,19 @@
 import { useState } from 'react'
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { PageHeader } from '@/components/ui/page-header'
+import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/problem'
+import { invalidateAccountViews } from '@/lib/invalidation'
+import { queryKeys } from '@/lib/query-keys'
 
 import {
   financeApi,
@@ -29,19 +38,20 @@ function todayReference(): string {
  * Criação/edição de conta manual.
  *
  * O tipo é imutável após a criação; desativar impede novos lançamentos e preserva o histórico.
+ * Dados principais e saldo ficam visíveis; observações ficam em divulgação progressiva.
  */
 export function ManualAccountPage() {
   const { id } = useParams<{ id: string }>()
   const editing = Boolean(id)
   const accountQuery = useQuery({
-    queryKey: ['account', id],
+    queryKey: queryKeys.account(id ?? ''),
     queryFn: () => financeApi.account(id ?? ''),
     enabled: editing,
   })
 
   if (editing && accountQuery.isLoading) {
     return (
-      <p role="status" className="text-sm text-ink-muted">
+      <p role="status" className="text-body-sm text-ink-muted">
         Carregando conta…
       </p>
     )
@@ -49,26 +59,20 @@ export function ManualAccountPage() {
 
   if (editing && accountQuery.isError) {
     return (
-      <p
-        role="alert"
-        className="rounded-card border border-expense/30 bg-expense/5 p-4 text-sm text-ink"
-      >
+      <Alert variant="danger" title="Não foi possível carregar a conta">
         {accountQuery.error instanceof ApiError
           ? accountQuery.error.message
-          : 'Não foi possível carregar a conta.'}
-      </p>
+          : 'Tente novamente em instantes.'}
+      </Alert>
     )
   }
 
   if (editing && accountQuery.data && accountQuery.data.origin !== 'MANUAL') {
     return (
-      <p
-        role="alert"
-        className="rounded-card border border-warning/40 bg-warning/5 p-4 text-sm text-ink"
-      >
-        Contas importadas não podem ser editadas manualmente. Use “Renomear” na tela de detalhes
-        para alterar apenas o nome de exibição; os dados bancários continuam vindo do Pluggy.
-      </p>
+      <Alert variant="warning" title="Conta importada não pode ser editada manualmente">
+        Use “Renomear” na tela de detalhes para alterar apenas o nome de exibição. Os dados
+        bancários continuam vindo do provedor.
+      </Alert>
     )
   }
 
@@ -106,8 +110,8 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
 
   const create = useMutation({
     mutationFn: (input: ManualAccountInput) => financeApi.createAccount(input),
-    onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    onSuccess: async (created) => {
+      await invalidateAccountViews(queryClient)
       navigate(`/accounts/${created.id}`)
     },
     onError: (caught) => {
@@ -117,11 +121,11 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
 
   const update = useMutation({
     mutationFn: (input: AccountUpdateInput) => financeApi.updateAccount(account?.id ?? '', input),
-    onSuccess: (updated) => {
+    onSuccess: async (updated) => {
       setMessage('Conta atualizada.')
       setError(null)
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      void queryClient.invalidateQueries({ queryKey: ['account', updated.id] })
+      queryClient.setQueryData(queryKeys.account(updated.id), updated)
+      await invalidateAccountViews(queryClient)
     },
     onError: (caught) => {
       setMessage(null)
@@ -136,7 +140,8 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
       setError('Informe o apelido da conta.')
       return
     }
-    const parsed = Number(referenceBalance.replace(',', '.'))
+    const normalizedBalance = referenceBalance.replace(',', '.')
+    const parsed = Number(normalizedBalance)
     if (Number.isNaN(parsed)) {
       setError('Saldo de referência inválido.')
       return
@@ -144,7 +149,7 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
     if (editing) {
       update.mutate({
         alias: alias.trim(),
-        referenceBalance: referenceBalance.replace(',', '.'),
+        referenceBalance: normalizedBalance,
         referenceDate,
         status,
         notes,
@@ -153,7 +158,7 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
       create.mutate({
         type,
         alias: alias.trim(),
-        referenceBalance: referenceBalance.replace(',', '.'),
+        referenceBalance: normalizedBalance,
         referenceDate,
         currency: 'BRL',
         notes,
@@ -165,38 +170,32 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6">
-      <Link to="/accounts" className="text-sm font-medium text-action underline underline-offset-2">
-        ← Contas e cartões
+      <Link
+        to={editing && account ? `/accounts/${account.id}` : '/accounts'}
+        className="inline-flex min-h-11 items-center text-body-sm font-medium text-action underline underline-offset-4 hover:text-action-hover"
+      >
+        ← {editing ? 'Voltar para a conta' : 'Contas'}
       </Link>
 
-      <header className="space-y-2">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
-          Dinheiro e carteiras
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          {editing ? 'Editar conta manual' : 'Nova conta manual'}
-        </h1>
-        <p className="max-w-xl text-sm leading-relaxed text-ink-muted">
-          Use o saldo e a data de referência informados por você. O saldo atual soma os lançamentos
-          efetivados a partir dessa data. O tipo não pode ser alterado depois da criação.
-        </p>
-      </header>
+      <PageHeader
+        overline="Conta manual"
+        title={editing ? 'Editar conta manual' : 'Nova conta manual'}
+        description={
+          editing
+            ? 'Atualize os dados de referência e o estado da conta. O tipo permanece imutável.'
+            : 'Informe o saldo de referência que você conhece. O saldo atual soma os lançamentos efetivados a partir dessa data.'
+        }
+      />
 
       {message ? (
-        <p
-          role="status"
-          className="rounded-card border border-income/30 bg-income/5 p-3 text-sm text-ink"
-        >
+        <Alert variant="success" role="status">
           {message}
-        </p>
+        </Alert>
       ) : null}
       {error ? (
-        <p
-          role="alert"
-          className="rounded-card border border-expense/30 bg-expense/5 p-3 text-sm text-ink"
-        >
+        <Alert variant="danger" role="alert">
           {error}
-        </p>
+        </Alert>
       ) : null}
 
       <form
@@ -205,99 +204,127 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
           event.preventDefault()
           submit()
         }}
-        className="space-y-4 rounded-card border border-line bg-surface p-5 sm:p-6"
+        className="space-y-4"
       >
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Tipo</span>
-          <select
-            value={type}
-            onChange={(event) => setType(event.target.value as ManualType)}
-            disabled={editing}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"
+        <Card className="space-y-4 p-5 sm:p-6">
+          <div>
+            <h2 className="text-section-title font-semibold text-ink">Dados principais</h2>
+            <p className="text-caption text-ink-muted">
+              O tipo define como a conta aparece nos relatórios.
+            </p>
+          </div>
+
+          <Field
+            id="manual-account-type"
+            label="Tipo"
+            hint={editing ? 'O tipo é imutável após a criação.' : undefined}
           >
-            {TYPES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {editing ? (
-            <span className="mt-1 block text-xs text-ink-muted">
-              O tipo é imutável após a criação.
-            </span>
-          ) : null}
-        </label>
-
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Apelido</span>
-          <input
-            type="text"
-            value={alias}
-            onChange={(event) => setAlias(event.target.value)}
-            maxLength={120}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-          />
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Saldo de referência (R$)</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={referenceBalance}
-              onChange={(event) => setReferenceBalance(event.target.value)}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Data de referência</span>
-            <input
-              type="date"
-              value={referenceDate.slice(0, 10)}
-              onChange={(event) =>
-                setReferenceDate(
-                  event.target.value ? `${event.target.value}T12:00:00Z` : todayReference(),
-                )
-              }
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-          </label>
-        </div>
-
-        <label className="block text-sm">
-          <span className="font-medium text-ink">Observações</span>
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            maxLength={500}
-            rows={3}
-            className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-          />
-        </label>
-
-        {editing ? (
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Estado</span>
-            <select
-              value={status}
-              onChange={(event) => setStatus(event.target.value as 'ACTIVE' | 'INACTIVE')}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
+            <Select
+              id="manual-account-type"
+              value={type}
+              onChange={(event) => setType(event.target.value as ManualType)}
+              disabled={editing}
             >
-              <option value="ACTIVE">Ativa</option>
-              <option value="INACTIVE">Inativa (não recebe novos lançamentos)</option>
-            </select>
-          </label>
-        ) : null}
+              {TYPES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:opacity-60"
-        >
-          {busy ? 'Salvando…' : editing ? 'Salvar alterações' : 'Criar conta manual'}
-        </button>
+          <Field
+            id="manual-account-alias"
+            label="Apelido"
+            hint="Nome exibido nas listas e relatórios."
+            required
+          >
+            <Input
+              id="manual-account-alias"
+              type="text"
+              value={alias}
+              onChange={(event) => setAlias(event.target.value)}
+              maxLength={120}
+            />
+          </Field>
+
+          {editing ? (
+            <Field id="manual-account-status" label="Estado">
+              <Select
+                id="manual-account-status"
+                value={status}
+                onChange={(event) => setStatus(event.target.value as 'ACTIVE' | 'INACTIVE')}
+              >
+                <option value="ACTIVE">Ativa</option>
+                <option value="INACTIVE">Inativa (não recebe novos lançamentos)</option>
+              </Select>
+            </Field>
+          ) : null}
+        </Card>
+
+        <Card className="space-y-4 p-5 sm:p-6">
+          <div>
+            <h2 className="text-section-title font-semibold text-ink">Saldo de referência</h2>
+            <p className="text-caption text-ink-muted">
+              Ponto de partida para calcular o saldo atual. Não é uma movimentação financeira.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="manual-account-balance" label="Saldo de referência (R$)">
+              <Input
+                id="manual-account-balance"
+                type="text"
+                inputMode="decimal"
+                value={referenceBalance}
+                onChange={(event) => setReferenceBalance(event.target.value)}
+              />
+            </Field>
+
+            <Field id="manual-account-date" label="Data de referência">
+              <Input
+                id="manual-account-date"
+                type="date"
+                value={referenceDate.slice(0, 10)}
+                onChange={(event) =>
+                  setReferenceDate(
+                    event.target.value ? `${event.target.value}T12:00:00Z` : todayReference(),
+                  )
+                }
+              />
+            </Field>
+          </div>
+        </Card>
+
+        <details className="group rounded-card border border-line bg-surface">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-5 py-3 text-body-sm font-semibold text-ink marker:content-none">
+            Observações e detalhes
+            <span className="text-caption font-normal text-ink-muted">Opcional</span>
+          </summary>
+          <div className="border-t border-line p-5">
+            <Field id="manual-account-notes" label="Observações">
+              <Textarea
+                id="manual-account-notes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                maxLength={500}
+                rows={3}
+              />
+            </Field>
+          </div>
+        </details>
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" loading={busy} loadingLabel="Salvando…">
+            {editing ? 'Salvar alterações' : 'Criar conta manual'}
+          </Button>
+          <Link
+            to={editing && account ? `/accounts/${account.id}` : '/accounts'}
+            className="inline-flex min-h-11 items-center justify-center rounded-control border border-line-strong bg-surface px-4 text-body-sm font-semibold text-ink hover:bg-surface-muted"
+          >
+            Cancelar
+          </Link>
+        </div>
       </form>
     </div>
   )

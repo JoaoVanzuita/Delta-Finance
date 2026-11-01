@@ -1,7 +1,9 @@
+import { Suspense } from 'react'
+
 import { Outlet } from 'react-router'
 
-import { AppShell } from '@/components/layout/AppShell'
-import { SessionExpiredBanner } from '@/features/auth/components/SessionExpiredBanner'
+import { RouteLoading } from '@/components/layout/RouteLoading'
+
 import { useSessionExpiryListener } from '@/features/auth/hooks/useSession'
 
 function SessionExpiryListener() {
@@ -9,13 +11,21 @@ function SessionExpiryListener() {
   return null
 }
 
-/** Raiz de todas as rotas: aplica o layout sem duplicar a navegação. */
+/**
+ * Raiz de todas as rotas.
+ *
+ * Apenas efeitos globais de sessão; cada rota escolhe explicitamente entre o
+ * layout público e o layout autenticado. O `Suspense` é a última barreira para
+ * páginas carregadas sob demanda; os layouts internos têm fallback próprio para
+ * preservar a navegação.
+ */
 export function RootLayout() {
   return (
-    <AppShell>
+    <>
       <SessionExpiryListener />
-      <SessionExpiredBanner />
-      <Outlet />
-    </AppShell>
+      <Suspense fallback={<RouteLoading />}>
+        <Outlet />
+      </Suspense>
+    </>
   )
 }

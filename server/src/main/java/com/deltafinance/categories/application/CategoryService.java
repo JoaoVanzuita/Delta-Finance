@@ -46,8 +46,12 @@ public class CategoryService {
           new Predefined("compras", "Compras", CategoryKind.EXPENSE),
           new Predefined("servicos", "Serviços", CategoryKind.EXPENSE),
           new Predefined("salario", "Salário", CategoryKind.INCOME),
+          new Predefined("rendimentos", "Rendimentos de investimentos", CategoryKind.INCOME),
           new Predefined("investimentos", "Investimentos", CategoryKind.OTHER),
+          new Predefined("aportes", "Aportes", CategoryKind.TRANSFER),
+          new Predefined("resgates", "Resgates", CategoryKind.TRANSFER),
           new Predefined("transferencias", "Transferências", CategoryKind.TRANSFER),
+          new Predefined("transferencias_externas", "Transferências externas", CategoryKind.OTHER),
           new Predefined("outros", "Outros", CategoryKind.OTHER));
 
   private final CategoryRepository categoryRepository;
@@ -172,6 +176,16 @@ public class CategoryService {
       throw new ValidationException("categoryId", "A categoria está inativa.");
     }
     return category;
+  }
+
+  /** Resolve uma chave da taxonomia para a categoria predefinida do usuário. */
+  public UUID canonicalCategoryId(UUID userId, String key) {
+    ensurePredefined(userId);
+    return categoryRepository
+        .findByUserIdAndPredefinedKey(userId, key)
+        .map(Category::getId)
+        .orElseThrow(
+            () -> new ValidationException("category", "Categoria canônica não encontrada: " + key));
   }
 
   private Category requireCategory(UUID userId, UUID categoryId) {

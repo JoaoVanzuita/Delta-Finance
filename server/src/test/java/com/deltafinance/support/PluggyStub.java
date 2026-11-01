@@ -32,7 +32,19 @@ public final class PluggyStub {
       String subtype,
       String name,
       String balance,
-      Map<String, Object> creditData) {}
+      Map<String, Object> creditData,
+      String currency) {
+
+    public AccountFixture(
+        String externalId,
+        String type,
+        String subtype,
+        String name,
+        String balance,
+        Map<String, Object> creditData) {
+      this(externalId, type, subtype, name, balance, creditData, "BRL");
+    }
+  }
 
   public record TransactionFixture(
       String externalId,
@@ -517,7 +529,7 @@ public final class PluggyStub {
           body.put("number", accountNumbers.getOrDefault(account.externalId(), "4242"));
         }
         body.put("balance", account.balance());
-        body.put("currencyCode", "BRL");
+        body.put("currencyCode", account.currency());
         if (account.creditData() != null) {
           body.put("creditData", account.creditData());
         }

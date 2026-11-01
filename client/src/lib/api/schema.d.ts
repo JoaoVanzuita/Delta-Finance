@@ -3343,6 +3343,8 @@ export interface operations {
                 origin?: components["parameters"]["Origin"];
                 minAmount?: components["parameters"]["MinAmount"];
                 maxAmount?: components["parameters"]["MaxAmount"];
+                /** @description Direção da distribuição. O padrão é EXPENSE para compatibilidade. */
+                direction?: "EXPENSE" | "INCOME";
             };
             header?: never;
             path?: never;
@@ -3423,6 +3425,8 @@ export interface operations {
                 origin?: components["parameters"]["Origin"];
                 minAmount?: components["parameters"]["MinAmount"];
                 maxAmount?: components["parameters"]["MaxAmount"];
+                /** @description Filtra entradas de receita ou despesa. Ausente inclui as duas direções. */
+                direction?: "EXPENSE" | "INCOME";
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];
             };

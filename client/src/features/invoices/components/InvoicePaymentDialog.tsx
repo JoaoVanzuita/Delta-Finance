@@ -1,15 +1,24 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Dialog } from '@/components/ui/dialog'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { ApiError } from '@/lib/api/problem'
 
-import { formatMoney } from '@/features/accounts/format'
+import { formatMoney } from '@/lib/format'
+import { invalidateInvoiceViews } from '@/lib/invalidation'
+
 import { financeApi, type InvoicePaymentInput } from '@/features/integration/api'
 
 interface InvoicePaymentDialogProps {
   readonly invoiceId: string
   readonly outstanding: string
+  readonly currency?: string
   readonly onClose: () => void
 }
 
@@ -17,6 +26,7 @@ interface InvoicePaymentDialogProps {
 export function InvoicePaymentDialog({
   invoiceId,
   outstanding,
+  currency = 'BRL',
   onClose,
 }: InvoicePaymentDialogProps) {
   const queryClient = useQueryClient()
@@ -25,20 +35,18 @@ export function InvoicePaymentDialog({
   const [amount, setAmount] = useState(outstanding)
   const [paidOn, setPaidOn] = useState(today())
   const [error, setError] = useState<string | null>(null)
+  const accountRef = useRef<HTMLSelectElement>(null)
   const parsedAmount = Number(amount.replace(',', '.'))
   const exceedsOutstanding = Number.isFinite(parsedAmount) && parsedAmount > Number(outstanding)
+  const paymentAccounts = (accountsQuery.data?.items ?? []).filter(
+    (account) =>
+      account.status === 'ACTIVE' && account.type !== 'CREDIT' && account.currency === currency,
+  )
 
   const save = useMutation({
     mutationFn: (input: InvoicePaymentInput) => financeApi.addInvoicePayment(invoiceId, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] })
-      void queryClient.invalidateQueries({ queryKey: ['invoices'] })
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
-      void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
-      void queryClient.invalidateQueries({ queryKey: ['cards', 'overview'] })
+    onSuccess: async () => {
+      await invalidateInvoiceViews(queryClient, invoiceId)
       onClose()
     },
     onError: (caught) => {
@@ -67,104 +75,100 @@ export function InvoicePaymentDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="invoice-payment-heading"
-        className="w-full max-w-md rounded-card border border-line bg-surface p-5 shadow-xl"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 id="invoice-payment-heading" className="text-lg font-semibold text-ink">
-              Registrar pagamento
-            </h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              O pagamento reduz o saldo devedor e não cria nova despesa. O valor acima do saldo vira
-              crédito para faturas futuras.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink"
-          >
-            Fechar
-          </button>
-        </div>
+    <Dialog
+      open
+      onClose={onClose}
+      title="Registrar pagamento"
+      description="O pagamento reduz o saldo devedor e não cria nova despesa. O valor acima do saldo vira crédito para faturas futuras."
+      size="sm"
+      busy={save.isPending}
+      initialFocusRef={accountRef}
+    >
+      {error ? (
+        <Alert variant="danger" className="mb-4">
+          {error}
+        </Alert>
+      ) : null}
 
-        {error ? (
-          <p
-            role="alert"
-            className="mt-3 rounded-card border border-expense/30 bg-expense/5 p-3 text-sm text-ink"
+      <form
+        noValidate
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault()
+          submit()
+        }}
+      >
+        <Field
+          id="invoice-payment-account"
+          label="Conta de pagamento"
+          hint={`Somente contas ativas em ${currency}, exceto cartões de crédito.`}
+        >
+          <Select
+            ref={accountRef}
+            id="invoice-payment-account"
+            value={paymentAccountId}
+            onChange={(event) => setPaymentAccountId(event.target.value)}
           >
-            {error}
+            <option value="">Selecione</option>
+            {paymentAccounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.alias ?? account.institutionName ?? account.id}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {accountsQuery.isSuccess && paymentAccounts.length === 0 ? (
+          <p className="rounded-card border border-warning/35 bg-warning-soft p-3 text-caption text-ink">
+            Nenhuma conta ativa compatível com a moeda do cartão. Cadastre ou ative uma conta antes
+            de registrar o pagamento.
           </p>
         ) : null}
 
-        <form
-          noValidate
-          className="mt-4 space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            submit()
-          }}
+        <Field
+          id="invoice-payment-amount"
+          label={`Valor (${currency === 'BRL' ? 'R$' : currency})`}
         >
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Conta de pagamento</span>
-            <select
-              value={paymentAccountId}
-              onChange={(event) => setPaymentAccountId(event.target.value)}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-            >
-              <option value="">Selecione</option>
-              {(accountsQuery.data?.items ?? []).map((account) => (
-                <option key={account.id} value={account.id} disabled={account.status !== 'ACTIVE'}>
-                  {account.alias ?? account.institutionName ?? account.id}
-                  {account.status !== 'ACTIVE' ? ' (inativa)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Input
+            id="invoice-payment-amount"
+            type="text"
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+        </Field>
 
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Valor (R$)</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-          </label>
+        {exceedsOutstanding ? (
+          <p className="rounded-card border border-line bg-surface-muted p-2 text-caption text-ink-muted">
+            O excedente de {formatMoney((parsedAmount - Number(outstanding)).toFixed(2), currency)}{' '}
+            será mantido como crédito do cartão.
+          </p>
+        ) : null}
 
-          {exceedsOutstanding ? (
-            <p className="rounded-card border border-line bg-surface-muted p-2 text-xs text-ink-muted">
-              O excedente de {formatMoney((parsedAmount - Number(outstanding)).toFixed(2), 'BRL')}{' '}
-              será mantido como crédito do cartão.
-            </p>
-          ) : null}
+        <Field id="invoice-payment-date" label="Data do pagamento">
+          <Input
+            id="invoice-payment-date"
+            type="date"
+            value={paidOn}
+            onChange={(event) => setPaidOn(event.target.value)}
+          />
+        </Field>
 
-          <label className="block text-sm">
-            <span className="font-medium text-ink">Data do pagamento</span>
-            <input
-              type="date"
-              value={paidOn}
-              onChange={(event) => setPaidOn(event.target.value)}
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-            />
-          </label>
-
-          <button
+        <div className="flex flex-wrap justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+            Cancelar
+          </Button>
+          <Button
             type="submit"
-            disabled={save.isPending}
-            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface disabled:opacity-60"
+            loading={save.isPending}
+            loadingLabel="Registrando…"
+            disabled={paymentAccounts.length === 0}
           >
-            {save.isPending ? 'Registrando…' : 'Registrar pagamento'}
-          </button>
-        </form>
-      </div>
-    </div>
+            Registrar pagamento
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   )
 }
 

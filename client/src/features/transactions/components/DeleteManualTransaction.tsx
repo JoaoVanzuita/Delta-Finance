@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/problem'
+import { invalidateTransactionViews } from '@/lib/invalidation'
 
 import { financeApi, type Transaction } from '@/features/integration/api'
 
@@ -25,24 +26,11 @@ export function DeleteManualTransaction({ transaction }: DeleteManualTransaction
 
   const deletion = useMutation({
     mutationFn: () => financeApi.deleteTransaction(transaction.id),
-    onSuccess: () => {
+    onSuccess: async () => {
       setConfirming(false)
       setError(null)
       setMessage('Lançamento excluído.')
-      for (const queryKey of [
-        'transactions',
-        'accounts',
-        'account',
-        'dashboard-summary',
-        'dashboard-categories',
-        'dashboard-timeseries',
-        'dashboard-entries',
-        'internalMatches',
-        'invoices',
-        'cards',
-      ]) {
-        void queryClient.invalidateQueries({ queryKey: [queryKey] })
-      }
+      await invalidateTransactionViews(queryClient)
     },
     onError: (caught) => {
       setMessage(null)

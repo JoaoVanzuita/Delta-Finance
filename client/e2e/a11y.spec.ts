@@ -134,6 +134,7 @@ const ROUTES: ReadonlyArray<{ path: string; name: string }> = [
   { path: '/investments', name: 'investimentos' },
   { path: '/wealth', name: 'patrimônio' },
   { path: '/goals', name: 'metas' },
+  { path: '/settings/preferences', name: 'preferências' },
   { path: '/settings/integration', name: 'integração' },
   { path: '/settings/privacy', name: 'privacidade' },
   { path: '/account', name: 'conta' },
@@ -167,6 +168,94 @@ test('landmarks, hierarquia de títulos e link de pular conteúdo', async ({ pag
   await expect(skipLink).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('main')).toBeFocused()
+})
+
+test('página de login usa apenas o layout público', async ({ page }) => {
+  await installStub(page)
+  await page.goto('/login')
+  await page.waitForLoadState('networkidle')
+
+  await expect(page.getByRole('navigation', { name: 'Navegação pública' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Navegação principal' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 1, name: 'Entrar' })).toBeVisible()
+})
+
+test('usuário autenticado na raiz é levado ao Dashboard', async ({ page }) => {
+  await installStub(page)
+  await page.goto('/')
+  await page.waitForLoadState('networkidle')
+
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+})
+
+test('drawer mobile mantém foco, fecha com Escape e devolve o foco ao botão', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 })
+  await installStub(page)
+  await page.goto('/dashboard')
+  await page.waitForLoadState('networkidle')
+
+  const trigger = page.getByRole('button', { name: 'Abrir navegação' })
+  await trigger.click()
+  const drawer = page.getByRole('dialog', { name: 'Navegação' })
+  await expect(drawer).toBeVisible()
+  await expect(drawer.getByRole('navigation', { name: 'Navegação principal' })).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await expect(drawer).toBeHidden()
+  await expect(trigger).toBeFocused()
+})
+
+test('troca de tema e paleta persiste e mantém contraste no escuro', async ({ page }) => {
+  await installStub(page)
+  await page.goto('/dashboard')
+  await page.waitForLoadState('networkidle')
+
+  await page.getByRole('button', { name: 'Aparência' }).click()
+  await page.getByText('Escuro', { exact: true }).click()
+  await page.getByText('Âmbar', { exact: true }).click()
+  await page.keyboard.press('Escape')
+
+  const root = page.locator('html')
+  await expect(root).toHaveAttribute('data-theme', 'dark')
+  await expect(root).toHaveAttribute('data-accent', 'amber')
+  await expect(root).toHaveAttribute('data-theme-preference', 'dark')
+
+  const darkResults = await new AxeBuilder({ page: page as never })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze()
+  expect(darkResults.violations, JSON.stringify(darkResults.violations, null, 2)).toEqual([])
+
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  await expect(root).toHaveAttribute('data-theme', 'dark')
+  await expect(root).toHaveAttribute('data-accent', 'amber')
+})
+
+test('preferências aplicam tema e paleta e persistem ao recarregar', async ({ page }) => {
+  await installStub(page)
+  await page.goto('/settings/preferences')
+  await page.waitForLoadState('networkidle')
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Preferências' })).toBeVisible()
+  await page.getByText('Escuro', { exact: true }).click()
+  await page.getByText('Âmbar', { exact: true }).click()
+
+  const root = page.locator('html')
+  await expect(root).toHaveAttribute('data-theme', 'dark')
+  await expect(root).toHaveAttribute('data-accent', 'amber')
+  await expect(root).toHaveAttribute('data-theme-preference', 'dark')
+
+  await page.reload()
+  await page.waitForLoadState('networkidle')
+  await expect(root).toHaveAttribute('data-theme', 'dark')
+  await expect(root).toHaveAttribute('data-accent', 'amber')
+
+  await page
+    .getByRole('link', { name: /Integração/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL(/\/settings\/integration$/)
 })
 
 test('navegação principal funciona apenas com teclado e expõe a página atual', async ({ page }) => {

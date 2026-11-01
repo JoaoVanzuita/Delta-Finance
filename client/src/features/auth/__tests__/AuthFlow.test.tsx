@@ -1,6 +1,7 @@
-import { screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Route, Routes } from 'react-router'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { createMemoryRouter, Route, RouterProvider, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ProtectedRoute } from '@/app/ProtectedRoute'
@@ -9,7 +10,7 @@ import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { RegisterPage } from '@/features/auth/pages/RegisterPage'
 import { SessionExpiredBanner } from '@/features/auth/components/SessionExpiredBanner'
 import { markSessionCleared, UNAUTHENTICATED_EVENT } from '@/lib/api/client'
-import { renderWithProviders } from '@/test/render'
+import { createTestQueryClient, renderWithProviders } from '@/test/render'
 
 const USER = {
   id: '11111111-1111-1111-1111-111111111111',
@@ -55,14 +56,29 @@ function stubFetch(handler: FetchHandler) {
   return mock
 }
 
-function renderLoginPage() {
-  return renderWithProviders(
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/account" element={<h1>Conta</h1>} />
-    </Routes>,
-    { route: '/login' },
+function renderLoginPage(options: { from?: string } = {}) {
+  const router = createMemoryRouter(
+    [
+      { path: '/login', element: <LoginPage /> },
+      { path: '/dashboard', element: <h1>Dashboard</h1> },
+      { path: '/accounts', element: <h1>Contas</h1> },
+      { path: '/account', element: <h1>Conta</h1> },
+    ],
+    {
+      initialEntries: [
+        {
+          pathname: '/login',
+          state: options.from ? { from: options.from } : undefined,
+        },
+      ],
+    },
   )
+  render(
+    <QueryClientProvider client={createTestQueryClient()}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
+  return router
 }
 
 function renderRoutes(route: string) {
@@ -144,6 +160,90 @@ describe('fluxo de autenticação', () => {
     await user.click(screen.getByRole('button', { name: 'Criar conta' }))
 
     expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeVisible()
+  })
+
+  it('preserva o deep link original do cadastro até o login', async () => {
+    stubFetch((url, init) => {
+      if (url.endsWith('/auth/register') && init.method === 'POST') return jsonResponse(USER, 201)
+      if (url.endsWith('/auth/login') && init.method === 'POST') return jsonResponse(USER)
+      return problemResponse(404, 'NOT_FOUND', 'Não encontrado.')
+    })
+    const router = createMemoryRouter(
+      [
+        { path: '/register', element: <RegisterPage /> },
+        { path: '/login', element: <LoginPage /> },
+        { path: '/dashboard', element: <h1>Dashboard</h1> },
+        { path: '/accounts', element: <h1>Contas</h1> },
+      ],
+      { initialEntries: [{ pathname: '/register', state: { from: '/accounts' } }] },
+    )
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('Nome de usuário'), 'alice.familia')
+    await user.type(screen.getByLabelText('Senha'), 'cavalo correto bateria grampo')
+    await user.click(screen.getByRole('button', { name: 'Criar conta' }))
+
+    expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeVisible()
+    await user.type(screen.getByLabelText('Senha'), 'cavalo correto bateria grampo')
+    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+
+    expect(await screen.findByRole('heading', { name: 'Contas' })).toBeVisible()
+  })
+
+  it('após login bem-sucedido navega para o Dashboard por padrão', async () => {
+    stubFetch((url, init) => {
+      if (url.endsWith('/auth/login') && init.method === 'POST') {
+        return jsonResponse(USER)
+      }
+      return problemResponse(404, 'NOT_FOUND', 'Não encontrado.')
+    })
+    const user = userEvent.setup()
+    renderLoginPage()
+
+    await user.type(screen.getByLabelText('Nome de usuário'), 'alice.familia')
+    await user.type(screen.getByLabelText('Senha'), 'cavalo correto bateria grampo')
+    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeVisible()
+  })
+
+  it('preserva o deep link original em state.from após autenticar', async () => {
+    stubFetch((url, init) => {
+      if (url.endsWith('/auth/login') && init.method === 'POST') {
+        return jsonResponse(USER)
+      }
+      return problemResponse(404, 'NOT_FOUND', 'Não encontrado.')
+    })
+    const user = userEvent.setup()
+    renderLoginPage({ from: '/accounts' })
+
+    await user.type(screen.getByLabelText('Nome de usuário'), 'alice.familia')
+    await user.type(screen.getByLabelText('Senha'), 'cavalo correto bateria grampo')
+    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+
+    expect(await screen.findByRole('heading', { name: 'Contas' })).toBeVisible()
+  })
+
+  it('ignora destino externo em state.from e usa o Dashboard', async () => {
+    stubFetch((url, init) => {
+      if (url.endsWith('/auth/login') && init.method === 'POST') {
+        return jsonResponse(USER)
+      }
+      return problemResponse(404, 'NOT_FOUND', 'Não encontrado.')
+    })
+    const user = userEvent.setup()
+    renderLoginPage({ from: '//example.com/phishing' })
+
+    await user.type(screen.getByLabelText('Nome de usuário'), 'alice.familia')
+    await user.type(screen.getByLabelText('Senha'), 'cavalo correto bateria grampo')
+    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeVisible()
   })
 
   it('mostra mensagem genérica de credenciais inválidas no login', async () => {

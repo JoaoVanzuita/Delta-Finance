@@ -167,12 +167,15 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
 
   return (
     <form noValidate onSubmit={handleSubmit} className="space-y-4">
+      <p className="overline text-ink-muted">Informações da meta</p>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm" htmlFor={`${baseId}-name`}>
           <span className="font-medium text-ink">Nome da meta</span>
           <input
             id={`${baseId}-name`}
             type="text"
+            autoFocus
             value={name}
             onChange={(event) => setName(event.target.value)}
             maxLength={120}
@@ -244,17 +247,26 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
         />
       </label>
 
-      <label className="block text-sm" htmlFor={`${baseId}-notes`}>
-        <span className="font-medium text-ink">Observações</span>
-        <textarea
-          id={`${baseId}-notes`}
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          maxLength={2000}
-          rows={2}
-          className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
-        />
-      </label>
+      <details className="rounded-card border border-line bg-surface">
+        <summary className="min-h-11 cursor-pointer px-3 py-2.5 text-sm font-medium text-ink">
+          Observações e detalhes
+        </summary>
+        <div className="border-t border-line p-3">
+          <label className="block text-sm" htmlFor={`${baseId}-notes`}>
+            <span className="font-medium text-ink">Observações</span>
+            <textarea
+              id={`${baseId}-notes`}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              maxLength={2000}
+              rows={2}
+              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink"
+            />
+          </label>
+        </div>
+      </details>
+
+      <p className="overline text-ink-muted">Regra e alocações</p>
 
       {progressRule !== 'NET_WORTH' ? (
         <fieldset className="space-y-3">
@@ -396,6 +408,18 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
         </p>
       )}
 
+      <div className="rounded-card border border-line bg-surface-muted p-3 text-caption text-ink-muted">
+        <p className="font-medium text-ink">Resumo do planejamento</p>
+        <p className="mt-1">
+          Alvo: {targetAmount.trim() || 'não informado'} · Regra:{' '}
+          {progressRule === 'ALLOCATIONS' ? 'alocações explícitas' : 'patrimônio líquido'} ·{' '}
+          {progressRule === 'ALLOCATIONS'
+            ? `${allocations.length} alocação(ões) planejada(s)`
+            : 'sem alocações explícitas'}
+          .
+        </p>
+      </div>
+
       {error ? (
         <p role="alert" className="text-sm text-expense">
           {error}
@@ -406,7 +430,7 @@ export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: 
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-60"
         >
           {pending ? 'Salvando…' : submitLabel}
         </button>

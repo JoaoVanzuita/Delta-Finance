@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 
 import { Navigate, useLocation } from 'react-router'
 
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/problem'
 
 import { useSession } from '@/features/auth/hooks/useSession'
@@ -22,7 +24,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
       <div
         role="status"
         aria-live="polite"
-        className="mx-auto max-w-md py-10 text-sm text-ink-muted"
+        className="mx-auto max-w-md py-10 text-body-sm text-ink-muted"
       >
         Carregando sua sessão…
       </div>
@@ -32,36 +34,29 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   if (isError) {
     const forbidden = error instanceof ApiError && error.status === 403
     return (
-      <section
-        role="alert"
-        className="mx-auto max-w-md space-y-3 rounded-card border border-expense/30 bg-expense/5 p-5"
-      >
-        <h1 className="text-lg font-semibold text-ink">
-          {forbidden ? 'Acesso negado' : 'Não foi possível carregar sua sessão'}
-        </h1>
-        <p className="text-sm text-ink-muted">
-          {forbidden
-            ? 'Sua conta não tem permissão para acessar este recurso.'
-            : 'Ocorreu uma falha temporária. Tente novamente.'}
-        </p>
-        {error instanceof ApiError && error.requestId ? (
-          <p className="text-xs text-ink-muted">Código de suporte: {error.requestId}</p>
-        ) : null}
-        {!forbidden ? (
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
-          >
-            Tentar novamente
-          </button>
-        ) : null}
+      <section className="mx-auto max-w-md space-y-3">
+        <Alert
+          variant={forbidden ? 'warning' : 'danger'}
+          title={forbidden ? 'Acesso negado' : 'Não foi possível carregar sua sessão'}
+        >
+          <p>
+            {forbidden
+              ? 'Sua conta não tem permissão para acessar este recurso.'
+              : 'Ocorreu uma falha temporária. Tente novamente.'}
+          </p>
+          {error instanceof ApiError && error.requestId ? (
+            <p className="text-caption">Código de suporte: {error.requestId}</p>
+          ) : null}
+        </Alert>
+        {!forbidden ? <Button onClick={() => void refetch()}>Tentar novamente</Button> : null}
       </section>
     )
   }
 
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    return (
+      <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+    )
   }
 
   return <>{children}</>

@@ -50,7 +50,17 @@ public class DashboardController {
     return DashboardSummaryResponse.from(
         reportingService.summary(
             authenticatedUser.requireId(),
-            query(period, from, to, accountId, categoryId, type, origin, minAmount, maxAmount)));
+            query(
+                period,
+                from,
+                to,
+                accountId,
+                categoryId,
+                type,
+                origin,
+                minAmount,
+                maxAmount,
+                null)));
   }
 
   @GetMapping("/dashboard/categories")
@@ -63,11 +73,24 @@ public class DashboardController {
       @RequestParam(required = false) String type,
       @RequestParam(required = false) String origin,
       @RequestParam(required = false) String minAmount,
-      @RequestParam(required = false) String maxAmount) {
+      @RequestParam(required = false) String maxAmount,
+      @RequestParam(required = false) String direction) {
+    boolean incomeOnly = "INCOME".equalsIgnoreCase(direction);
     List<DashboardCategoryView> views =
         reportingService.categories(
             authenticatedUser.requireId(),
-            query(period, from, to, accountId, categoryId, type, origin, minAmount, maxAmount));
+            query(
+                period,
+                from,
+                to,
+                accountId,
+                categoryId,
+                type,
+                origin,
+                minAmount,
+                maxAmount,
+                direction),
+            incomeOnly);
     return views.stream().map(DashboardCategoryResponse::from).toList();
   }
 
@@ -85,7 +108,8 @@ public class DashboardController {
     List<DashboardBucketView> views =
         reportingService.timeseries(
             authenticatedUser.requireId(),
-            query(period, from, to, accountId, categoryId, type, origin, minAmount, maxAmount));
+            query(
+                period, from, to, accountId, categoryId, type, origin, minAmount, maxAmount, null));
     return views.stream().map(DashboardBucketResponse::from).toList();
   }
 
@@ -100,12 +124,23 @@ public class DashboardController {
       @RequestParam(required = false) String origin,
       @RequestParam(required = false) String minAmount,
       @RequestParam(required = false) String maxAmount,
+      @RequestParam(required = false) String direction,
       @RequestParam(required = false) String cursor,
       @RequestParam(defaultValue = "50") int limit) {
     CursorPage<ReportEntryView> page =
         drillDownService.entries(
             authenticatedUser.requireId(),
-            query(period, from, to, accountId, categoryId, type, origin, minAmount, maxAmount),
+            query(
+                period,
+                from,
+                to,
+                accountId,
+                categoryId,
+                type,
+                origin,
+                minAmount,
+                maxAmount,
+                direction),
             PageRequest.of(limit, cursor));
     return ReportEntryPageResponse.from(page);
   }
@@ -119,8 +154,9 @@ public class DashboardController {
       String type,
       String origin,
       String minAmount,
-      String maxAmount) {
+      String maxAmount,
+      String direction) {
     return new ReportQuery(
-        from, to, period, accountId, categoryId, type, origin, minAmount, maxAmount);
+        from, to, period, accountId, categoryId, type, origin, minAmount, maxAmount, direction);
   }
 }

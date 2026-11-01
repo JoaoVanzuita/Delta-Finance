@@ -191,6 +191,7 @@ describe('metas financeiras', () => {
   })
 
   it('mostra progresso, contribuições, saldo não alocado e histórico', async () => {
+    const user = userEvent.setup()
     stubApi([goal()])
     renderPage()
 
@@ -198,13 +199,16 @@ describe('metas financeiras', () => {
     const card = await screen.findByRole('article', { name: 'Reserva de emergência' })
     expect(within(card).getByText('Ativa')).toBeInTheDocument()
     expect(within(card).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50')
-    expect(within(card).getByText(/Saldo não alocado: R\$\s*500,00/)).toBeInTheDocument()
-    expect(within(card).getByText(/R\$\s*300,00/)).toBeInTheDocument()
-    expect(within(card).getByText(/R\$\s*200,00/)).toBeInTheDocument()
-    expect(within(card).getByText(/30%/)).toBeInTheDocument()
-    expect(within(card).getByText(/20%/)).toBeInTheDocument()
-    expect(within(card).getByText(/Regra: Alocações explícitas/)).toBeInTheDocument()
-    expect(within(card).getByText(/24\/10\/2026/)).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'Ver detalhes' }))
+    const drawer = await screen.findByRole('dialog', { name: 'Reserva de emergência' })
+    expect(within(drawer).getByText(/R\$\s*500,00 do alvo/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/R\$\s*300,00/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/R\$\s*200,00/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/30%/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/20%/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/Regra: Alocações explícitas/)).toBeInTheDocument()
+    await user.click(within(drawer).getByText('Histórico de progresso'))
+    expect(within(drawer).getByText(/24\/10\/2026/)).toBeInTheDocument()
   })
 
   it('seleciona contas em BRL e ativos manuais como fonte da alocação', async () => {
@@ -213,6 +217,8 @@ describe('metas financeiras', () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Metas' })
+    await user.click(screen.getByRole('button', { name: 'Nova meta' }))
+    await screen.findByRole('dialog', { name: 'Nova meta' })
     await user.click(screen.getByRole('button', { name: 'Adicionar alocação' }))
     await user.selectOptions(screen.getByLabelText('Origem da alocação'), 'ACCOUNT')
 
@@ -226,6 +232,7 @@ describe('metas financeiras', () => {
   })
 
   it('mostra observações, nome da fonte e aviso de capacidade excedida', async () => {
+    const user = userEvent.setup()
     stubApi([
       goal({
         notes: 'Guardar para a viagem de 2027.',
@@ -246,12 +253,15 @@ describe('metas financeiras', () => {
     renderPage()
 
     const card = await screen.findByRole('article', { name: 'Reserva de emergência' })
-    expect(within(card).getByText('Guardar para a viagem de 2027.')).toBeInTheDocument()
-    expect(within(card).getByText(/Conta Alfa/)).toBeInTheDocument()
-    expect(within(card).getByText(/Capacidade da fonte excedida/)).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'Ver detalhes' }))
+    const drawer = await screen.findByRole('dialog', { name: 'Reserva de emergência' })
+    expect(within(drawer).getByText('Guardar para a viagem de 2027.')).toBeInTheDocument()
+    expect(within(drawer).getByText(/Conta Alfa/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/Capacidade da fonte excedida/)).toBeInTheDocument()
   })
 
   it('distingue todos os estados e mostra excesso sobre a meta', async () => {
+    const user = userEvent.setup()
     stubApi([
       goal({ id: 'g1', name: 'Ativa', status: 'ACTIVE' }),
       goal({ id: 'g2', name: 'Concluída', status: 'ACHIEVED', percentage: '100.00' }),
@@ -279,9 +289,12 @@ describe('metas financeiras', () => {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
     const exceeded = screen.getByRole('article', { name: 'Com excesso' })
-    expect(within(exceeded).getByText(/Excesso sobre a meta: R\$\s*200,00/)).toBeInTheDocument()
+    await user.click(within(exceeded).getByRole('button', { name: 'Ver detalhes' }))
+    expect(await screen.findByText(/Excesso de R\$\s*200,00/)).toBeInTheDocument()
+    await user.keyboard('{Escape}')
     const changed = screen.getByRole('article', { name: 'Alterada' })
-    expect(within(changed).getByRole('button', { name: 'Entendi a alteração' })).toBeInTheDocument()
+    await user.click(within(changed).getByRole('button', { name: 'Ver detalhes' }))
+    expect(await screen.findByRole('button', { name: 'Entendi a alteração' })).toBeInTheDocument()
   })
 
   it('cria meta com alocação percentual', async () => {
@@ -290,15 +303,18 @@ describe('metas financeiras', () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: 'Metas' })
-    await user.type(screen.getByLabelText('Nome da meta'), 'Viagem')
-    await user.selectOptions(screen.getByLabelText('Tipo'), 'TRAVEL')
-    await user.type(screen.getByLabelText('Valor-alvo'), '1000.00')
-    await user.type(screen.getByLabelText('Observações'), 'Reserva para 2027')
-    await user.selectOptions(screen.getByLabelText('Regra de progresso'), 'ALLOCATIONS')
-    await user.click(screen.getByRole('button', { name: 'Adicionar alocação' }))
-    await user.selectOptions(screen.getByLabelText('Modo da alocação'), 'PERCENTAGE')
-    await user.type(screen.getByLabelText('Percentual da alocação'), '40')
-    await user.click(screen.getByRole('button', { name: 'Criar meta' }))
+    await user.click(screen.getByRole('button', { name: 'Nova meta' }))
+    const form = await screen.findByRole('dialog', { name: 'Nova meta' })
+    await user.type(within(form).getByLabelText('Nome da meta'), 'Viagem')
+    await user.selectOptions(within(form).getByLabelText('Tipo'), 'TRAVEL')
+    await user.type(within(form).getByLabelText('Valor-alvo'), '1000.00')
+    await user.click(within(form).getByText('Observações e detalhes'))
+    await user.type(within(form).getByLabelText('Observações'), 'Reserva para 2027')
+    await user.selectOptions(within(form).getByLabelText('Regra de progresso'), 'ALLOCATIONS')
+    await user.click(within(form).getByRole('button', { name: 'Adicionar alocação' }))
+    await user.selectOptions(within(form).getByLabelText('Modo da alocação'), 'PERCENTAGE')
+    await user.type(within(form).getByLabelText('Percentual da alocação'), '40')
+    await user.click(within(form).getByRole('button', { name: 'Criar meta' }))
 
     await waitFor(() => {
       const post = mock.mock.calls.find(
@@ -329,8 +345,10 @@ describe('metas financeiras', () => {
     renderPage()
 
     const card = await screen.findByRole('article', { name: 'Reserva de emergência' })
-    await user.click(within(card).getByRole('button', { name: 'Pausar' }))
-    expect(await screen.findByText('Pausada')).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'Ver detalhes' }))
+    const drawer = await screen.findByRole('dialog', { name: 'Reserva de emergência' })
+    await user.click(within(drawer).getByRole('button', { name: 'Pausar' }))
+    expect(await within(drawer).findByText('Pausada')).toBeInTheDocument()
     expect(
       mock.mock.calls.some(
         ([url, init]) =>
@@ -340,9 +358,8 @@ describe('metas financeiras', () => {
       ),
     ).toBe(true)
 
-    const pausedCard = screen.getByRole('article', { name: 'Reserva de emergência' })
-    await user.click(within(pausedCard).getByRole('button', { name: 'Reativar' }))
-    expect(await screen.findByText('Ativa')).toBeInTheDocument()
+    await user.click(within(drawer).getByRole('button', { name: 'Reativar' }))
+    expect(await within(drawer).findByText('Ativa')).toBeInTheDocument()
   })
 
   it('não oferece CTA de transferência, compra, investimento ou ordem', async () => {

@@ -1,17 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { useForm } from 'react-hook-form'
+import { KeyRound, LogOut, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
+import { Alert } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { PageHeader, SectionHeader } from '@/components/ui/page-header'
 import { ApiError } from '@/lib/api/problem'
 
 import { FormErrorSummary, type FormIssue } from '../components/FormErrorSummary'
 import { useChangePassword, useLogout, useSession } from '../hooks/useSession'
 import { passwordChangeSchema, type PasswordChangeFormValues } from '../validation'
 
-const inputClass =
-  'mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm outline-none transition-colors focus:border-focus'
-
+/**
+ * Configurações da conta.
+ *
+ * Identidade, alteração de senha e encerramento de sessão. Não sugere recuperação
+ * de senha porque esse fluxo não existe no produto.
+ */
 export function AccountSettingsPage() {
   const navigate = useNavigate()
   const { data: user } = useSession()
@@ -84,53 +95,59 @@ export function AccountSettingsPage() {
   })
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-8">
-      <header className="space-y-2">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">Conta</p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Configurações da conta</h1>
-        <p className="text-sm leading-relaxed text-ink-muted">
-          Gerencie seu acesso. Seus dados financeiros permanecem privados e separados dos demais
-          usuários.
-        </p>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        overline="Configurações"
+        title="Configurações da conta"
+        description="Gerencie seu acesso. Seus dados financeiros permanecem privados e separados dos demais usuários."
+      />
 
-      <section
-        aria-labelledby="identity-heading"
-        className="rounded-card border border-line bg-surface p-5 sm:p-6"
-      >
-        <h2 id="identity-heading" className="text-lg font-semibold text-ink">
-          Identidade
-        </h2>
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[160px_1fr]">
+      <Card className="p-5 sm:p-6">
+        <SectionHeader
+          title="Identidade"
+          description="Informações da sua conta nesta instalação."
+          actions={
+            <span
+              aria-hidden="true"
+              className="flex size-9 items-center justify-center rounded-control bg-surface-muted text-ink-muted"
+            >
+              <UserRound className="size-5" />
+            </span>
+          }
+        />
+        <dl className="mt-4 grid gap-3 text-body-sm sm:grid-cols-[180px_1fr]">
           <dt className="text-ink-muted">Nome de usuário</dt>
           <dd className="font-medium text-ink">{user?.username ?? '—'}</dd>
           <dt className="text-ink-muted">Conta criada em</dt>
           <dd className="text-ink">{formatDate(user?.createdAt)}</dd>
+          <dt className="text-ink-muted">Sessão</dt>
+          <dd>
+            <Badge variant="income">Autenticado</Badge>
+          </dd>
         </dl>
-      </section>
+      </Card>
 
-      <section
-        aria-labelledby="password-heading"
-        className="rounded-card border border-line bg-surface p-5 sm:p-6"
-      >
-        <h2 id="password-heading" className="text-lg font-semibold text-ink">
-          Alterar senha
-        </h2>
-        <p className="mt-1 text-sm text-ink-muted">
-          A nova senha segue a mesma política do cadastro: 12 a 128 caracteres. As outras sessões
-          serão encerradas.
-        </p>
+      <Card className="p-5 sm:p-6">
+        <SectionHeader
+          title="Alterar senha"
+          description="A nova senha segue a mesma política do cadastro: 12 a 128 caracteres. As outras sessões serão encerradas."
+          actions={
+            <span
+              aria-hidden="true"
+              className="flex size-9 items-center justify-center rounded-control bg-surface-muted text-ink-muted"
+            >
+              <KeyRound className="size-5" />
+            </span>
+          }
+        />
 
         {status ? (
-          <p
-            role="status"
-            className="mt-4 rounded-card border border-income/30 bg-income/5 p-3 text-sm text-ink"
-          >
+          <Alert variant="success" className="mt-4" role="status">
             {status}
-          </p>
+          </Alert>
         ) : null}
 
-        <form noValidate onSubmit={onSubmit} className="mt-4 space-y-5">
+        <form noValidate onSubmit={onSubmit} className="mt-4 max-w-xl space-y-4">
           <FormErrorSummary
             id="password-errors"
             issues={issues}
@@ -138,14 +155,12 @@ export function AccountSettingsPage() {
             title="Revise os dados da senha"
           />
 
-          <div>
-            <label
-              htmlFor="password-currentPassword"
-              className="block text-sm font-medium text-ink"
-            >
-              Senha atual
-            </label>
-            <input
+          <Field
+            id="password-currentPassword"
+            label="Senha atual"
+            error={errors.currentPassword?.message}
+          >
+            <Input
               id="password-currentPassword"
               type="password"
               autoComplete="current-password"
@@ -153,44 +168,27 @@ export function AccountSettingsPage() {
               aria-describedby={
                 errors.currentPassword ? 'password-currentPassword-error' : undefined
               }
-              className={inputClass}
               {...register('currentPassword')}
             />
-            {errors.currentPassword ? (
-              <p id="password-currentPassword-error" className="mt-1 text-sm text-expense">
-                {errors.currentPassword.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor="password-newPassword" className="block text-sm font-medium text-ink">
-              Nova senha
-            </label>
-            <input
+          <Field id="password-newPassword" label="Nova senha" error={errors.newPassword?.message}>
+            <Input
               id="password-newPassword"
               type="password"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.newPassword)}
               aria-describedby={errors.newPassword ? 'password-newPassword-error' : undefined}
-              className={inputClass}
               {...register('newPassword')}
             />
-            {errors.newPassword ? (
-              <p id="password-newPassword-error" className="mt-1 text-sm text-expense">
-                {errors.newPassword.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <div>
-            <label
-              htmlFor="password-confirmNewPassword"
-              className="block text-sm font-medium text-ink"
-            >
-              Confirmar nova senha
-            </label>
-            <input
+          <Field
+            id="password-confirmNewPassword"
+            label="Confirmar nova senha"
+            error={errors.confirmNewPassword?.message}
+          >
+            <Input
               id="password-confirmNewPassword"
               type="password"
               autoComplete="new-password"
@@ -198,49 +196,48 @@ export function AccountSettingsPage() {
               aria-describedby={
                 errors.confirmNewPassword ? 'password-confirmNewPassword-error' : undefined
               }
-              className={inputClass}
               {...register('confirmNewPassword')}
             />
-            {errors.confirmNewPassword ? (
-              <p id="password-confirmNewPassword-error" className="mt-1 text-sm text-expense">
-                {errors.confirmNewPassword.message}
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <button
+          <Button
             type="submit"
             disabled={isSubmitting || changePassword.isPending}
-            className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            loading={changePassword.isPending}
+            loadingLabel="Salvando…"
           >
-            {changePassword.isPending ? 'Salvando…' : 'Salvar nova senha'}
-          </button>
+            Salvar nova senha
+          </Button>
         </form>
-      </section>
+      </Card>
 
-      <section
-        aria-labelledby="session-heading"
-        className="rounded-card border border-line bg-surface p-5 sm:p-6"
-      >
-        <h2 id="session-heading" className="text-lg font-semibold text-ink">
-          Sessão
-        </h2>
-        <p className="mt-1 text-sm text-ink-muted">
-          Ao sair, os dados em cache neste navegador são descartados.
-        </p>
-        <button
-          type="button"
+      <Card className="p-5 sm:p-6">
+        <SectionHeader
+          title="Sessão"
+          description="Ao sair, os dados em cache neste navegador são descartados."
+          actions={
+            <span
+              aria-hidden="true"
+              className="flex size-9 items-center justify-center rounded-control bg-surface-muted text-ink-muted"
+            >
+              <LogOut className="size-5" />
+            </span>
+          }
+        />
+        <Button
+          variant="secondary"
+          className="mt-4"
+          loading={logout.isPending}
+          loadingLabel="Saindo…"
           onClick={() =>
             logout.mutate(undefined, {
               onSuccess: () => navigate('/login', { replace: true }),
             })
           }
-          disabled={logout.isPending}
-          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {logout.isPending ? 'Saindo…' : 'Sair'}
-        </button>
-      </section>
+          Sair
+        </Button>
+      </Card>
     </div>
   )
 }

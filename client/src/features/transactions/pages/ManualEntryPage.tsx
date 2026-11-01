@@ -23,9 +23,7 @@ export function ManualEntryPage() {
         </p>
       </header>
 
-      <section className="rounded-card border border-line bg-surface p-5 sm:p-6">
-        <ManualEntryForm />
-      </section>
+      <ManualEntryForm />
     </div>
   )
 }

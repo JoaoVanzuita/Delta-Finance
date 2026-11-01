@@ -1,20 +1,22 @@
-import { formatDateTime, formatMoney } from '@/features/accounts/format'
+import { ChevronRight } from 'lucide-react'
+
+import { Badge } from '@/components/ui/badge'
+import { formatMoney } from '@/lib/format'
 import type { InvestmentHolding } from '@/features/integration/api'
 
-import { formatQuantity, formatReferenceDate, formatUnitPrice } from '../format'
-import { HoldingSettingsForm } from './HoldingSettingsForm'
-import { assetClassLabel, CLASSIFICATION_SOURCE_LABELS, HOLDING_STATUS_LABELS } from '../labels'
+import { formatReferenceDate } from '../format'
+import { assetClassLabel, HOLDING_STATUS_LABELS } from '../labels'
 
 interface InvestmentHoldingsProps {
   readonly items: readonly InvestmentHolding[]
-  readonly onChanged: () => void
+  readonly onOpen: (holding: InvestmentHolding) => void
 }
 
-/** Lista de posições importadas, com detalhes sob demanda e sem recomendação. */
-export function InvestmentHoldings({ items, onChanged }: InvestmentHoldingsProps) {
+/** Cartões compactos de posições; detalhes e edição ficam em drawer. */
+export function InvestmentHoldings({ items, onOpen }: InvestmentHoldingsProps) {
   if (items.length === 0) {
     return (
-      <p className="rounded-card border border-line bg-surface-muted p-4 text-sm text-ink-muted">
+      <p className="rounded-card border border-line bg-surface-muted p-4 text-body-sm text-ink-muted">
         Nenhuma posição neste filtro. Posições encerradas e indisponíveis podem ser consultadas em
         “Todas”.
       </p>
@@ -22,188 +24,63 @@ export function InvestmentHoldings({ items, onChanged }: InvestmentHoldingsProps
   }
 
   return (
-    <ul className="space-y-3" aria-label="Posições importadas de investimento">
-      {items.map((holding) => (
-        <InvestmentHoldingCard key={holding.id} holding={holding} onChanged={onChanged} />
-      ))}
+    <ul className="grid gap-3 md:grid-cols-2" aria-label="Posições importadas de investimento">
+      {items.map((holding) => {
+        const unavailable = holding.unavailableAt != null
+        const statusLabel = unavailable
+          ? 'Indisponível'
+          : (HOLDING_STATUS_LABELS[holding.status] ?? holding.status)
+        return (
+          <li key={holding.id}>
+            <article className="flex h-full flex-col gap-3 rounded-card border border-line bg-surface p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="truncate text-body font-semibold text-ink">
+                    {holding.name ?? 'Posição sem nome'}
+                  </h3>
+                  <p className="mt-0.5 text-caption text-ink-muted">
+                    {holding.code ?? 'Sem código'} · {assetClassLabel(holding.assetClass)}
+                  </p>
+                </div>
+                <Badge variant={unavailable || holding.status === 'CLOSED' ? 'neutral' : 'income'}>
+                  {statusLabel}
+                </Badge>
+              </div>
+
+              <div>
+                <p className="text-caption text-ink-muted">Valor atual</p>
+                <p className="numeric mt-1 text-metric-md font-semibold text-ink">
+                  {formatMoney(holding.balance, holding.currency || 'BRL')}
+                </p>
+              </div>
+
+              <dl className="grid grid-cols-2 gap-2 text-caption">
+                <div>
+                  <dt className="text-ink-muted">Resultado estimado</dt>
+                  <dd className="numeric mt-0.5 font-semibold text-ink">
+                    {holding.estimatedProfit == null
+                      ? 'Sem custo'
+                      : formatMoney(holding.estimatedProfit, holding.currency || 'BRL')}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-ink-muted">Referência</dt>
+                  <dd className="mt-0.5 text-ink">{formatReferenceDate(holding.referenceDate)}</dd>
+                </div>
+              </dl>
+
+              <button
+                type="button"
+                onClick={() => onOpen(holding)}
+                className="mt-auto inline-flex min-h-11 items-center justify-between gap-2 rounded-control border border-line bg-surface px-3 text-body-sm font-semibold text-ink hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              >
+                Ver detalhes
+                <ChevronRight aria-hidden="true" className="size-4" />
+              </button>
+            </article>
+          </li>
+        )
+      })}
     </ul>
-  )
-}
-
-function InvestmentHoldingCard({
-  holding,
-  onChanged,
-}: {
-  readonly holding: InvestmentHolding
-  readonly onChanged: () => void
-}) {
-  const currency = holding.currency || 'BRL'
-  const closed = holding.status === 'CLOSED'
-  const unavailable = holding.unavailableAt != null
-  const statusLabel = unavailable
-    ? 'Indisponível'
-    : (HOLDING_STATUS_LABELS[holding.status] ?? holding.status)
-
-  return (
-    <li className="space-y-3 rounded-card border border-line bg-surface p-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-base font-semibold text-ink">
-              {holding.name ?? 'Posição sem nome'}
-            </h3>
-            {holding.code ? (
-              <span className="rounded-card border border-line bg-surface-muted px-2 py-0.5 text-xs font-semibold tracking-wide text-ink-muted">
-                {holding.code}
-              </span>
-            ) : null}
-          </div>
-          <p className="text-sm text-ink-muted">
-            {assetClassLabel(holding.assetClass)} · {holding.type}
-            {holding.subtype ? ` / ${holding.subtype}` : ''}
-          </p>
-          <p className="text-xs text-ink-muted">
-            {CLASSIFICATION_SOURCE_LABELS[holding.classificationSource] ??
-              holding.classificationSource}
-            {holding.stale ? ' · referência antiga' : ''}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <span
-            className={
-              closed || unavailable
-                ? 'rounded-card border border-line bg-surface-muted px-2 py-1 text-xs font-medium text-ink-muted'
-                : 'rounded-card border border-income/30 bg-income/5 px-2 py-1 text-xs font-medium text-income'
-            }
-          >
-            {statusLabel}
-          </span>
-          <span className="rounded-card border border-line bg-surface-muted px-2 py-1 text-xs font-medium text-ink">
-            {assetClassLabel(holding.assetClass)}
-          </span>
-        </div>
-      </div>
-
-      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 xl:grid-cols-5">
-        <Value label="Valor atual" value={formatMoney(holding.balance, currency)} strong />
-        <Value label="Quantidade" value={formatQuantity(holding.quantity)} />
-        <Value label="Preço unitário" value={formatUnitPrice(holding.unitValue, currency)} />
-        <Value
-          label="Resultado do provedor"
-          value={
-            holding.amountProfit == null
-              ? 'Não informado'
-              : formatMoney(holding.amountProfit, currency)
-          }
-        />
-        <Value
-          label="Resultado estimado"
-          value={
-            holding.estimatedProfit == null
-              ? 'Informe o custo'
-              : formatMoney(holding.estimatedProfit, currency)
-          }
-        />
-        <Value
-          label="Rentabilidade estimada"
-          value={
-            holding.estimatedReturnPercentage == null
-              ? 'Não calculável'
-              : `${holding.estimatedReturnPercentage}%`
-          }
-        />
-        <Value label="Referência" value={formatReferenceDate(holding.referenceDate)} />
-      </dl>
-
-      <details className="rounded-card border border-line bg-surface-muted p-3">
-        <summary className="cursor-pointer text-sm font-medium text-ink">
-          Detalhes do provedor
-        </summary>
-        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          <Value label="Valor bruto" value={formatMoney(holding.amount, currency)} />
-          <Value label="Custo original" value={formatMoney(holding.amountOriginal, currency)} />
-          <Value
-            label="Custo usado"
-            value={
-              holding.costBasis == null
-                ? 'Não informado'
-                : `${formatMoney(holding.costBasis, currency)} · ${
-                    holding.costBasisSource === 'MANUAL'
-                      ? 'informado por você'
-                      : holding.costBasisSource === 'PROVIDER'
-                        ? 'provedor'
-                        : 'sem custo'
-                  }`
-            }
-          />
-          <Value
-            label="Proventos considerados"
-            value={formatMoney(holding.incomeTotal, currency)}
-          />
-          <Value
-            label="Disponível para saque"
-            value={formatMoney(holding.amountWithdrawal, currency)}
-          />
-          <Value label="IR informado" value={formatMoney(holding.taxes, currency)} />
-          <Value label="IOF informado" value={formatMoney(holding.taxes2, currency)} />
-          <Value
-            label="Remuneração contratada"
-            value={
-              holding.rate == null
-                ? 'Não informada'
-                : `${holding.rate}${holding.rateType ? ` · ${holding.rateType}` : ''}`
-            }
-          />
-          <Value
-            label="Taxa fixa anual"
-            value={
-              holding.fixedAnnualRate == null ? 'Não informada' : `${holding.fixedAnnualRate}% a.a.`
-            }
-          />
-          <Value
-            label="Último mês"
-            value={holding.lastMonthRate == null ? 'Não informado' : `${holding.lastMonthRate}%`}
-          />
-          <Value
-            label="12 meses"
-            value={
-              holding.lastTwelveMonthsRate == null
-                ? 'Não informado'
-                : `${holding.lastTwelveMonthsRate}%`
-            }
-          />
-          <Value label="Atualizado na origem" value={formatDateTime(holding.providerUpdatedAt)} />
-          <Value label="Última leitura" value={formatDateTime(holding.syncedAt)} />
-          {holding.unavailableAt ? (
-            <Value label="Indisponível desde" value={formatDateTime(holding.unavailableAt)} />
-          ) : null}
-        </dl>
-        <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-          “Não informado” significa que o provedor não enviou o campo. O resultado estimado só é
-          calculado quando há custo conhecido; ele soma proventos e resgates e não é cotação em
-          tempo real.
-        </p>
-        <HoldingSettingsForm holding={holding} onChanged={onChanged} />
-      </details>
-    </li>
-  )
-}
-
-function Value({
-  label,
-  value,
-  strong = false,
-}: {
-  readonly label: string
-  readonly value: string
-  readonly strong?: boolean
-}) {
-  return (
-    <div>
-      <dt className="text-xs text-ink-muted">{label}</dt>
-      <dd className={`numeric mt-1 ${strong ? 'text-base font-semibold text-ink' : 'text-ink'}`}>
-        {value}
-      </dd>
-    </div>
   )
 }

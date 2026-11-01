@@ -1,236 +1,186 @@
 import { useState } from 'react'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
+import { KeyRound } from 'lucide-react'
 
-import { ApiError } from '@/lib/api/problem'
+import { Alert } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { SectionHeader, PageHeader } from '@/components/ui/page-header'
+import { queryKeys } from '@/lib/query-keys'
 
-import { financeApi, type Integration } from '../api'
+import { financeApi } from '../api'
 import { ConnectionForm } from '../components/ConnectionForm'
 import { ConnectionLimitNotice } from '../components/ConnectionLimitNotice'
 import { ConnectionsList } from '../components/ConnectionsList'
-import { SecretField } from '../components/SecretField'
+import { CredentialsDialog } from '../components/CredentialsDialog'
 import { SyncStatusPanel } from '../components/SyncStatusPanel'
-import { connectionStatusLabels } from '../syncLabels'
+import { connectionStatusLabels, overallSyncState } from '../syncLabels'
 
+/**
+ * Integração bancária (Meu Pluggy).
+ *
+ * A página prioriza estado geral, conexões, ações e histórico. Credenciais e
+ * limites ficam em seção própria. O Client Secret permanece write-only e nunca
+ * é gravado no navegador.
+ */
 export function IntegrationSetupPage() {
-  const queryClient = useQueryClient()
-  const [clientId, setClientId] = useState('')
-  const [clientSecret, setClientSecret] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
+  const [credentialsOpen, setCredentialsOpen] = useState(false)
+  const [savedMessage, setSavedMessage] = useState<string | null>(null)
 
   const integrationQuery = useQuery({
-    queryKey: ['integration'],
+    queryKey: queryKeys.integration,
     queryFn: financeApi.integration,
   })
   const connectionsQuery = useQuery({
-    queryKey: ['connections'],
+    queryKey: queryKeys.connections,
     queryFn: financeApi.connections,
-  })
-
-  const save = useMutation({
-    mutationFn: () =>
-      financeApi.saveCredentials({
-        clientId: clientId.trim(),
-        clientSecret,
-      }),
-    onSuccess: (integration: Integration) => {
-      // Segredo nunca é reidratado: limpa os campos após o envio.
-      setClientId('')
-      setClientSecret('')
-      setError(null)
-      setMessage('Credenciais validadas e salvas.')
-      queryClient.setQueryData(['integration'], integration)
-      void queryClient.invalidateQueries({ queryKey: ['connections'] })
-    },
-    onError: (caught) => {
-      setMessage(null)
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'Não foi possível validar as credenciais. Tente novamente.',
-      )
-    },
-  })
-
-  const validate = useMutation({
-    mutationFn: () => financeApi.validateCredentials({ clientId: clientId.trim(), clientSecret }),
-    onSuccess: () => {
-      setError(null)
-      setMessage('Credenciais válidas. Salve para ativar a integração.')
-    },
-    onError: (caught) => {
-      setMessage(null)
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'Não foi possível validar as credenciais. Tente novamente.',
-      )
-    },
   })
 
   const integration = integrationQuery.data
   const connections = connectionsQuery.data?.items ?? []
   const configured = Boolean(integration?.clientIdMasked)
-  const busy = save.isPending || validate.isPending
+  const overall = overallSyncState(integration, connections)
   const connectionLimit = integration?.connectionLimit
   const connectionCount = integration?.connectionCount ?? connections.length
   const connectionLimitReached = connectionLimit !== undefined && connectionCount >= connectionLimit
 
+  function handleSaved() {
+    setSavedMessage('Credenciais validadas e salvas.')
+  }
+
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
-          Configuração pessoal
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Meu Pluggy</h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-ink-muted">
-          Cada pessoa configura a própria aplicação pessoal. As credenciais ficam cifradas no
-          servidor e o Client Secret nunca é exibido novamente.
-        </p>
-      </header>
-
-      <section
-        aria-labelledby="credentials-heading"
-        className="rounded-card border border-line bg-surface p-5 sm:p-6"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 id="credentials-heading" className="text-lg font-semibold text-ink">
-              Credenciais
-            </h2>
-            <p className="mt-1 text-sm text-ink-muted">
-              Client ID e Client Secret da sua aplicação pessoal no Meu Pluggy.
-            </p>
-          </div>
-          <span className="rounded-card border border-line bg-surface-muted px-3 py-1 text-xs font-medium text-ink">
-            {integration
-              ? (connectionStatusLabels[integration.status] ?? integration.status)
-              : 'Carregando…'}
-          </span>
-        </div>
-
-        {integration?.clientIdMasked ? (
-          <p className="mt-4 text-sm text-ink-muted">
-            Client ID configurado:{' '}
-            <span className="font-medium text-ink">{integration.clientIdMasked}</span>
-          </p>
-        ) : null}
-
-        {message ? (
-          <p
-            role="status"
-            className="mt-4 rounded-card border border-income/30 bg-income/5 p-3 text-sm text-ink"
-          >
-            {message}
-          </p>
-        ) : null}
-        {error ? (
-          <p
-            role="alert"
-            className="mt-4 rounded-card border border-expense/30 bg-expense/5 p-3 text-sm text-ink"
-          >
-            {error}
-          </p>
-        ) : null}
-
-        <form
-          noValidate
-          className="mt-4 space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setError(null)
-            setMessage(null)
-            if (!clientId.trim() || !clientSecret) {
-              setError('Informe Client ID e Client Secret.')
-              return
+    <div className="space-y-6">
+      <PageHeader
+        overline="Configurações"
+        title="Integração bancária"
+        description="Conecte sua conta Meu Pluggy para importar contas, cartões, transações e investimentos. Cada pessoa configura a própria aplicação pessoal."
+        meta={
+          <Badge
+            variant={
+              overall.tone === 'attention'
+                ? 'warning'
+                : overall.tone === 'positive'
+                  ? 'income'
+                  : 'neutral'
             }
-            save.mutate()
-          }}
-        >
-          <div>
-            <label htmlFor="pluggy-client-id" className="block text-sm font-medium text-ink">
-              Client ID
-            </label>
-            <input
-              id="pluggy-client-id"
-              type="text"
-              value={clientId}
-              onChange={(event) => setClientId(event.target.value)}
-              autoComplete="off"
-              className="mt-1 block w-full rounded-card border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm outline-none transition-colors focus:border-focus"
-            />
-          </div>
+          >
+            {overall.label}
+          </Badge>
+        }
+        actions={
+          <Button
+            leadingIcon={<KeyRound aria-hidden="true" className="size-4" />}
+            onClick={() => {
+              setSavedMessage(null)
+              setCredentialsOpen(true)
+            }}
+          >
+            {configured ? 'Atualizar credenciais' : 'Configurar credenciais'}
+          </Button>
+        }
+      />
 
-          <SecretField
-            label="Client Secret"
-            value={clientSecret}
-            onChange={setClientSecret}
-            hint="Write-only: não é exibido novamente após salvar e nunca é armazenado no navegador."
-            autoComplete="off"
-          />
+      {savedMessage ? (
+        <Alert variant="success" role="status">
+          {savedMessage}
+        </Alert>
+      ) : null}
 
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="submit"
-              disabled={busy}
-              className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {save.isPending ? 'Salvando…' : 'Salvar credenciais'}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setError(null)
-                setMessage(null)
-                if (!clientId.trim() || !clientSecret) {
-                  setError('Informe Client ID e Client Secret.')
-                  return
-                }
-                validate.mutate()
-              }}
-              className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {validate.isPending ? 'Validando…' : 'Validar sem salvar'}
-            </button>
-          </div>
-        </form>
-      </section>
+      {integrationQuery.isError ? (
+        <Alert variant="danger" role="alert">
+          Não foi possível consultar a configuração da integração. Tente atualizar a página.
+        </Alert>
+      ) : null}
 
-      <SyncStatusPanel connections={connections} />
+      {connectionsQuery.isError ? (
+        <Alert variant="danger" role="alert">
+          Não foi possível carregar as conexões.
+        </Alert>
+      ) : null}
 
-      <ConnectionsList connections={connections} configured={configured} />
+      <SyncStatusPanel connections={connections} integrationConfigured={configured} />
 
-      <section
-        aria-labelledby="add-connection-heading"
-        className="space-y-4 rounded-card border border-line bg-surface p-5 sm:p-6"
-      >
-        <div>
-          <h2 id="add-connection-heading" className="text-lg font-semibold text-ink">
-            Adicionar conexão
-          </h2>
-          <p className="mt-1 text-sm text-ink-muted">
-            Cada itemId corresponde a uma autorização bancária. Adicione um item por vez.
-          </p>
-        </div>
+      <ConnectionsList
+        connections={connections}
+        configured={configured}
+        connectionLimit={connectionLimit}
+      />
+
+      <Card className="p-5 sm:p-6">
+        <SectionHeader
+          title="Adicionar conexão"
+          description="Cada itemId corresponde a uma autorização bancária criada no Meu Pluggy. Adicione um item por vez."
+        />
 
         {connectionLimit !== undefined && integration?.connectionLimitCheckedAt ? (
-          <ConnectionLimitNotice
-            count={connectionCount}
-            limit={connectionLimit}
-            checkedAt={integration.connectionLimitCheckedAt}
-          />
+          <div className="mt-4">
+            <ConnectionLimitNotice
+              count={connectionCount}
+              limit={connectionLimit}
+              checkedAt={integration.connectionLimitCheckedAt}
+            />
+          </div>
         ) : null}
 
-        {configured ? (
-          <ConnectionForm disabled={connectionLimitReached} />
-        ) : (
-          <p className="text-sm text-ink-muted">
-            Salve credenciais válidas para adicionar conexões.
-          </p>
-        )}
-      </section>
+        <div className="mt-4">
+          {configured ? (
+            <ConnectionForm
+              disabled={connectionLimitReached}
+              onAdded={() =>
+                setSavedMessage(
+                  'Conexão adicionada. A primeira sincronização pode levar alguns instantes.',
+                )
+              }
+            />
+          ) : (
+            <Alert variant="neutral">Salve credenciais válidas para adicionar conexões.</Alert>
+          )}
+        </div>
+      </Card>
+
+      <Card className="p-5 sm:p-6">
+        <SectionHeader
+          title="Meu Pluggy"
+          description="Credenciais e limites da aplicação pessoal. O Client Secret é write-only e não é exibido novamente."
+          actions={
+            <Badge variant={configured ? 'income' : 'neutral'}>
+              {integration
+                ? (connectionStatusLabels[integration.status] ?? integration.status)
+                : 'Carregando…'}
+            </Badge>
+          }
+        />
+
+        <dl className="mt-4 grid gap-3 text-body-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-caption text-ink-muted">Client ID</dt>
+            <dd className="mt-0.5 font-medium text-ink">
+              {integration?.clientIdMasked ?? 'Não configurado'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-caption text-ink-muted">Conexões</dt>
+            <dd className="numeric mt-0.5 text-ink">
+              {connectionCount}
+              {connectionLimit !== undefined ? ` de ${connectionLimit}` : ''}
+            </dd>
+          </div>
+        </dl>
+
+        <p className="mt-4 text-caption leading-relaxed text-ink-muted">
+          As credenciais ficam cifradas no servidor. O Client Secret não é devolvido pela API, não é
+          gravado no localStorage e não aparece em exportações.
+        </p>
+      </Card>
+
+      <CredentialsDialog
+        open={credentialsOpen}
+        onClose={() => setCredentialsOpen(false)}
+        integration={integration}
+        onSaved={handleSaved}
+      />
     </div>
   )
 }

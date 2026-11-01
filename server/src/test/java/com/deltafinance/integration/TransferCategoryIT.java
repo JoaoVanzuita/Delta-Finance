@@ -10,7 +10,10 @@ import com.deltafinance.support.PluggyStub.AccountFixture;
 import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,11 +26,13 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Movimentos internos já identificados pela categoria do provedor.
+ * Movimentos internos e transferências externas.
  *
  * <p>Transferências entre contas do próprio titular e movimentações de cofrinho não podem compor
  * receitas/despesas apenas porque uma das pernas não foi importada ou porque o par ainda não foi
- * confirmado. Categorias do tipo TRANSFER são excluídas dos totais.
+ * confirmado. Categorias do tipo TRANSFER são excluídas dos totais. Transferências genéricas
+ * (“Transfer - TED/PIX” e “Transfers”) são externas por padrão e seguem a direção: entrada é
+ * receita e saída é despesa.
  */
 @AutoConfigureMockMvc
 class TransferCategoryIT extends PostgresTestBase {
@@ -114,6 +119,56 @@ class TransferCategoryIT extends PostgresTestBase {
         "acc-a",
         new TransactionFixture(
             "tx-market", "acc-a", "Mercado", "-50.00", "2026-10-13", "POSTED", "Groceries"));
+    PLUGGY.addTransaction(
+        "acc-a",
+        new TransactionFixture(
+            "tx-external-in",
+            "acc-a",
+            "TED recebida Caixa",
+            "2175.00",
+            "2026-10-05",
+            "POSTED",
+            "Transfer - TED"));
+    PLUGGY.addTransaction(
+        "acc-a",
+        new TransactionFixture(
+            "tx-external-out",
+            "acc-a",
+            "Pix enviado terceiro",
+            "-123.45",
+            "2026-10-06",
+            "POSTED",
+            "Transfer - PIX"));
+    PLUGGY.addTransaction(
+        "acc-a",
+        new TransactionFixture(
+            "tx-groceries-credit",
+            "acc-a",
+            "Devolução mercado",
+            "30.00",
+            "2026-10-07",
+            "POSTED",
+            "Groceries"));
+    PLUGGY.addTransaction(
+        "acc-a",
+        new TransactionFixture(
+            "tx-investment-buy",
+            "acc-a",
+            "Compra de bolsa",
+            "-1000.00",
+            "2026-10-08",
+            "POSTED",
+            "Variable income"));
+    PLUGGY.addTransaction(
+        "acc-a",
+        new TransactionFixture(
+            "tx-investment-sell",
+            "acc-a",
+            "Resgate de fundo",
+            "500.00",
+            "2026-10-09",
+            "POSTED",
+            "Fixed income"));
 
     alice = new AuthTestClient(mockMvc, jsonMapper).csrf();
     alice.register(ALICE, PASSWORD).login(ALICE, PASSWORD);
@@ -128,26 +183,83 @@ class TransferCategoryIT extends PostgresTestBase {
   }
 
   @Test
-  void categoriasInternasNaoEntramEmReceitasNemDespesas() throws Exception {
+  void transferenciasInternasFicamForaMasTransferenciasExternasSeguemADirecao() throws Exception {
     JsonNode categories = categories();
-    assertThat(categoryKind(categories, "Same person transfer")).isEqualTo("TRANSFER");
-    assertThat(categoryKind(categories, "Transfer - Internal")).isEqualTo("TRANSFER");
-    assertThat(categoryKind(categories, "Salary")).isEqualTo("INCOME");
-    assertThat(categoryKind(categories, "Groceries")).isEqualTo("EXPENSE");
+    assertThat(categoryKind(categories, "Transferências")).isEqualTo("TRANSFER");
+    assertThat(categoryKind(categories, "Transferências externas")).isEqualTo("OTHER");
+    assertThat(categoryKind(categories, "Aportes")).isEqualTo("TRANSFER");
+    assertThat(categoryKind(categories, "Resgates")).isEqualTo("TRANSFER");
+    assertThat(categoryKind(categories, "Salário")).isEqualTo("INCOME");
+    assertThat(categoryKind(categories, "Alimentação")).isEqualTo("EXPENSE");
+    assertThat(categoryKind(categories, "Same person transfer")).isNull();
 
     JsonNode summary = summary();
-    assertThat(summary.path("income").asString()).isEqualTo("1000.00");
-    assertThat(summary.path("expenses").asString()).isEqualTo("50.00");
-    assertThat(summary.path("periodResult").asString()).isEqualTo("950.00");
+    assertThat(summary.path("income").asString()).isEqualTo("3205.00");
+    assertThat(summary.path("expenses").asString()).isEqualTo("173.45");
+    assertThat(summary.path("periodResult").asString()).isEqualTo("3031.55");
     assertThat(summary.path("pendingInternalMatches").asInt()).isZero();
 
     JsonNode entries = entries();
-    assertThat(entries.path("items")).hasSize(2);
+    assertThat(entries.path("items")).hasSize(5);
     BigDecimal sum = BigDecimal.ZERO;
     for (JsonNode entry : entries.path("items")) {
       sum = sum.add(new BigDecimal(entry.path("amount").asString()));
     }
-    assertThat(sum.setScale(2)).isEqualByComparingTo("950.00");
+    assertThat(sum.setScale(2)).isEqualByComparingTo("3031.55");
+
+    JsonNode incomeCategories = incomeCategories();
+    assertThat(categoryNames(incomeCategories))
+        .contains("Salário", "Outros", "Transferências externas")
+        .doesNotContain("Alimentação", "Compras");
+  }
+
+  @Test
+  void receitaManualEmCategoriaDeDespesaApareceEmOutros() throws Exception {
+    JsonNode categories = categories();
+    UUID accountId = accountId("Conta A");
+    UUID expenseCategoryId = categoryId(categories, "Alimentação");
+
+    alice
+        .post(
+            "/api/v1/transactions",
+            Map.of(
+                "accountId",
+                accountId.toString(),
+                "type",
+                "CREDIT",
+                "postedOn",
+                "2026-10-20",
+                "amount",
+                "77.00",
+                "description",
+                "Receita manual em categoria de despesa",
+                "categoryId",
+                expenseCategoryId.toString()))
+        .andExpect(status().isCreated());
+
+    JsonNode summary = summary();
+    assertThat(summary.path("income").asString()).isEqualTo("3282.00");
+    assertThat(summary.path("expenses").asString()).isEqualTo("173.45");
+    assertThat(summary.path("periodResult").asString()).isEqualTo("3108.55");
+
+    JsonNode incomeCategories = incomeCategories();
+    assertThat(categoryNames(incomeCategories)).doesNotContain("Alimentação");
+    JsonNode outros = categoryByName(incomeCategories, "Outros");
+    assertThat(outros.path("amount").asString()).isEqualTo("107.00");
+
+    UUID outrosId = categoryId(categories, "Outros");
+    assertThat(sumAmounts(entries("&categoryId=" + outrosId + "&direction=INCOME")))
+        .isEqualByComparingTo("107.00");
+    assertThat(entries("&categoryId=" + outrosId + "&direction=EXPENSE").path("items").size())
+        .isZero();
+  }
+
+  private static BigDecimal sumAmounts(JsonNode page) {
+    BigDecimal sum = BigDecimal.ZERO;
+    for (JsonNode entry : page.path("items")) {
+      sum = sum.add(new BigDecimal(entry.path("amount").asString()));
+    }
+    return sum.setScale(2);
   }
 
   private JsonNode categories() throws Exception {
@@ -166,7 +278,61 @@ class TransferCategoryIT extends PostgresTestBase {
         return item.path("kind").asString();
       }
     }
+    return null;
+  }
+
+  private static List<String> categoryNames(JsonNode categories) {
+    List<String> names = new ArrayList<>();
+    for (JsonNode item : categories) {
+      names.add(item.path("categoryName").asString());
+    }
+    return names;
+  }
+
+  private static UUID categoryId(JsonNode page, String name) {
+    for (JsonNode item : page.path("items")) {
+      if (name.equals(item.path("name").asString())) {
+        return UUID.fromString(item.path("id").asString());
+      }
+    }
     throw new AssertionError("Categoria não encontrada: " + name);
+  }
+
+  private static JsonNode categoryByName(JsonNode categories, String name) {
+    for (JsonNode item : categories) {
+      if (name.equals(item.path("categoryName").asString())) {
+        return item;
+      }
+    }
+    throw new AssertionError("Categoria de relatório não encontrada: " + name);
+  }
+
+  private UUID accountId(String name) throws Exception {
+    JsonNode page =
+        json(
+            alice
+                .get("/api/v1/accounts")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    for (JsonNode item : page.path("items")) {
+      if (name.equals(item.path("alias").asString())
+          || name.equals(item.path("providerName").asString())) {
+        return UUID.fromString(item.path("id").asString());
+      }
+    }
+    throw new AssertionError("Conta não encontrada: " + name);
+  }
+
+  private JsonNode incomeCategories() throws Exception {
+    return json(
+        alice
+            .get("/api/v1/dashboard/categories?from=2026-10-01&to=2026-10-31&direction=INCOME")
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
   private JsonNode summary() throws Exception {
@@ -180,9 +346,13 @@ class TransferCategoryIT extends PostgresTestBase {
   }
 
   private JsonNode entries() throws Exception {
+    return entries("");
+  }
+
+  private JsonNode entries(String extra) throws Exception {
     return json(
         alice
-            .get("/api/v1/reports/entries?from=2026-10-01&to=2026-10-31")
+            .get("/api/v1/reports/entries?from=2026-10-01&to=2026-10-31" + extra)
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()

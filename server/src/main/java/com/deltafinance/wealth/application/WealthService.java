@@ -253,6 +253,20 @@ public class WealthService {
       Map<UUID, BigDecimal> cardOutstanding,
       LocalDate today) {
     String description = description(account, "CREDIT");
+    if (!Money.BRL.equals(account.currency())) {
+      accumulator.exclude(
+          item(
+              WealthSourceType.CARD,
+              account.id(),
+              description,
+              "0.00",
+              false,
+              "Moeda diferente de BRL não compõe o passivo consolidado.",
+              account.origin(),
+              today,
+              false));
+      return;
+    }
     if (!cardOutstanding.containsKey(account.id())) {
       accumulator.gap(
           item(

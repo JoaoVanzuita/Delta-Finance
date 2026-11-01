@@ -1,211 +1,91 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
 
-import { AccountDetailPage } from '@/features/accounts/pages/AccountDetailPage'
-import { AccountsPage } from '@/features/accounts/pages/AccountsPage'
-import { ManualAccountPage } from '@/features/accounts/pages/ManualAccountPage'
-import { CardDetailPage } from '@/features/cards/pages/CardDetailPage'
-import { CardsPage } from '@/features/cards/pages/CardsPage'
-import { CategoriesPage } from '@/features/categories/pages/CategoriesPage'
-import { DashboardPage } from '@/features/dashboard/pages/DashboardPage'
-import { InvoiceDetailPage } from '@/features/invoices/pages/InvoiceDetailPage'
-import { InvoicesPage } from '@/features/invoices/pages/InvoicesPage'
-import { InvestmentsPage } from '@/features/investments/pages/InvestmentsPage'
-import { GoalsPage } from '@/features/goals/pages/GoalsPage'
-import { WealthPage } from '@/features/wealth/pages/WealthPage'
-import { ReconciliationPage } from '@/features/reconciliation/pages/ReconciliationPage'
-import { ManualEntryPage } from '@/features/transactions/pages/ManualEntryPage'
-import { AccountSettingsPage } from '@/features/auth/pages/AccountSettingsPage'
+import { PublicLayout } from '@/components/layout/PublicLayout'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { RegisterPage } from '@/features/auth/pages/RegisterPage'
-import { IntegrationSetupPage } from '@/features/integration/pages/IntegrationSetupPage'
-import { PrivacySettingsPage } from '@/features/privacy/pages/PrivacySettingsPage'
-import { TransactionsPage } from '@/features/transactions/pages/TransactionsPage'
+import { SettingsLayout } from '@/features/settings/pages/SettingsLayout'
 
-import { HomePage } from './HomePage'
-import { NotFoundPage } from './NotFoundPage'
-import { ProtectedRoute } from './ProtectedRoute'
+import { AuthenticatedLayout, HomeRoute, NotFoundRoute } from './layouts'
+import {
+  AccountDetailPage,
+  AccountSettingsPage,
+  AccountsPage,
+  CardDetailPage,
+  CardsPage,
+  CategoriesPage,
+  DashboardPage,
+  GoalsPage,
+  IntegrationSetupPage,
+  InvoiceDetailPage,
+  InvoicesPage,
+  InvestmentsPage,
+  ManualAccountPage,
+  ManualEntryPage,
+  PreferencesPage,
+  PrivacySettingsPage,
+  ReconciliationPage,
+  TransactionsPage,
+  WealthPage,
+} from './lazy-pages'
 import { RootLayout } from './RootLayout'
 
 /**
  * Tabela de rotas.
  *
- * As rotas cobrem identidade, integração, contas, transações, faturas, dashboard, reconciliação,
- * privacidade, investimentos, patrimônio e metas. Toda rota aponta para uma tela existente; novas
- * telas devem ser adicionadas junto com a história correspondente.
+ * - layout público: Home, login e cadastro, sem sidebar autenticada;
+ * - layout autenticado: AppShell + proteção de sessão;
+ * - 404 escolhe o layout conforme o estado da sessão.
+ *
+ * Nenhuma rota existente foi removida. `/` autenticado é encaminhado ao
+ * Dashboard por `HomeRoute`; o destino pós-login é `/dashboard`.
  */
-export const router = createBrowserRouter([
+export const routes: RouteObject[] = [
   {
     path: '/',
     element: <RootLayout />,
     children: [
       {
-        index: true,
-        element: <HomePage />,
+        element: <PublicLayout />,
+        children: [
+          { index: true, element: <HomeRoute /> },
+          { path: 'login', element: <LoginPage /> },
+          { path: 'register', element: <RegisterPage /> },
+        ],
       },
       {
-        path: 'login',
-        element: <LoginPage />,
+        element: <AuthenticatedLayout />,
+        children: [
+          { path: 'dashboard', element: <DashboardPage /> },
+          { path: 'accounts', element: <AccountsPage /> },
+          { path: 'accounts/new', element: <ManualAccountPage /> },
+          { path: 'accounts/:id', element: <AccountDetailPage /> },
+          { path: 'accounts/:id/edit', element: <ManualAccountPage /> },
+          { path: 'cards', element: <CardsPage /> },
+          { path: 'cards/:accountId', element: <CardDetailPage /> },
+          { path: 'cards/:accountId/invoices', element: <InvoicesPage /> },
+          { path: 'invoices/:id', element: <InvoiceDetailPage /> },
+          { path: 'transactions', element: <TransactionsPage /> },
+          { path: 'transactions/new', element: <ManualEntryPage /> },
+          { path: 'categories', element: <CategoriesPage /> },
+          { path: 'reconciliation', element: <ReconciliationPage /> },
+          { path: 'investments', element: <InvestmentsPage /> },
+          { path: 'wealth', element: <WealthPage /> },
+          { path: 'goals', element: <GoalsPage /> },
+          { path: 'settings', element: <Navigate to="/settings/preferences" replace /> },
+          {
+            element: <SettingsLayout />,
+            children: [
+              { path: 'settings/preferences', element: <PreferencesPage /> },
+              { path: 'settings/integration', element: <IntegrationSetupPage /> },
+              { path: 'settings/privacy', element: <PrivacySettingsPage /> },
+              { path: 'account', element: <AccountSettingsPage /> },
+            ],
+          },
+        ],
       },
-      {
-        path: 'dashboard',
-        element: (
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'register',
-        element: <RegisterPage />,
-      },
-      {
-        path: 'accounts',
-        element: (
-          <ProtectedRoute>
-            <AccountsPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'accounts/new',
-        element: (
-          <ProtectedRoute>
-            <ManualAccountPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'accounts/:id',
-        element: (
-          <ProtectedRoute>
-            <AccountDetailPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'accounts/:id/edit',
-        element: (
-          <ProtectedRoute>
-            <ManualAccountPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'cards',
-        element: (
-          <ProtectedRoute>
-            <CardsPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'transactions',
-        element: (
-          <ProtectedRoute>
-            <TransactionsPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'transactions/new',
-        element: (
-          <ProtectedRoute>
-            <ManualEntryPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'categories',
-        element: (
-          <ProtectedRoute>
-            <CategoriesPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'reconciliation',
-        element: (
-          <ProtectedRoute>
-            <ReconciliationPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'cards/:accountId',
-        element: (
-          <ProtectedRoute>
-            <CardDetailPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'cards/:accountId/invoices',
-        element: (
-          <ProtectedRoute>
-            <InvoicesPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'invoices/:id',
-        element: (
-          <ProtectedRoute>
-            <InvoiceDetailPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'investments',
-        element: (
-          <ProtectedRoute>
-            <InvestmentsPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'wealth',
-        element: (
-          <ProtectedRoute>
-            <WealthPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'goals',
-        element: (
-          <ProtectedRoute>
-            <GoalsPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'settings/integration',
-        element: (
-          <ProtectedRoute>
-            <IntegrationSetupPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'settings/privacy',
-        element: (
-          <ProtectedRoute>
-            <PrivacySettingsPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'account',
-        element: (
-          <ProtectedRoute>
-            <AccountSettingsPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: '*',
-        element: <NotFoundPage />,
-      },
+      { path: '*', element: <NotFoundRoute /> },
     ],
   },
-])
+]
+
+export const router = createBrowserRouter(routes)

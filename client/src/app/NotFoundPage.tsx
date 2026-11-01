@@ -1,27 +1,40 @@
 import { Link } from 'react-router'
 
-/** 404: rota inexistente, sem revelar nada sobre recursos de outros usuários. */
-export function NotFoundPage() {
+import { buttonVariants } from '@/components/ui/button-variants'
+import { cn } from '@/lib/cn'
+
+/** 404: não revela nada sobre recursos de outros usuários. */
+export function NotFoundPage({ authenticated = false }: { authenticated?: boolean }) {
   return (
     <div className="mx-auto max-w-md space-y-4">
-      <p className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">Erro 404</p>
-      <h1 className="text-2xl font-semibold tracking-tight text-ink">Página não encontrada</h1>
-      <p className="text-sm leading-relaxed text-ink-muted">
-        O endereço acessado não existe. Se você chegou por um link antigo, volte ao início.
+      <p className="overline text-ink-muted">Página não encontrada</p>
+      <h1 className="text-page-title font-bold tracking-tight text-ink">
+        Não encontramos este endereço
+      </h1>
+      <p className="text-body-sm text-ink-muted">
+        O endereço acessado não existe ou foi movido. Se você chegou por um link antigo, use um dos
+        caminhos abaixo.
       </p>
-      <div className="flex flex-wrap gap-3">
-        <Link
-          to="/"
-          className="inline-flex min-h-11 items-center justify-center rounded-card bg-primary px-4 text-sm font-semibold text-surface transition-colors hover:bg-primary-hover"
-        >
-          Ir para o início
-        </Link>
-        <Link
-          to="/login"
-          className="inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted"
-        >
-          Entrar
-        </Link>
+      <div className="flex flex-wrap gap-3 pt-1">
+        {authenticated ? (
+          <>
+            <Link to="/dashboard" className={cn(buttonVariants({ variant: 'primary' }))}>
+              Ir para o Dashboard
+            </Link>
+            <Link to="/accounts" className={cn(buttonVariants({ variant: 'secondary' }))}>
+              Ver contas
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link to="/" className={cn(buttonVariants({ variant: 'primary' }))}>
+              Ir para o início
+            </Link>
+            <Link to="/login" className={cn(buttonVariants({ variant: 'secondary' }))}>
+              Entrar
+            </Link>
+          </>
+        )}
       </div>
     </div>
   )
