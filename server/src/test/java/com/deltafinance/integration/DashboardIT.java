@@ -210,6 +210,10 @@ class DashboardIT extends PostgresTestBase {
     assertThat(summary.path("pendingInternalMatches").asInt()).isZero();
     assertThat(summary.has("cashFlow")).isFalse();
     assertThat(summary.has("netPending")).isFalse();
+    assertThat(summary.path("investmentContributions").asString()).isEqualTo("0.00");
+    assertThat(summary.path("investmentWithdrawals").asString()).isEqualTo("0.00");
+    assertThat(summary.path("netInvestmentContributions").asString()).isEqualTo("0.00");
+    assertThat(summary.path("investmentTrackingAvailable").asBoolean()).isFalse();
 
     alice
         .get("/api/v1/dashboard/summary?from=2026-10-01&to=2026-10-31")

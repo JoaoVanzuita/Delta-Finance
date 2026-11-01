@@ -22,6 +22,10 @@ const SUMMARY = {
   pendingInternalMatches: 2,
   lastSuccessfulSyncAt: '2026-10-23T12:00:00Z',
   cardOutstandingBalance: '310.00',
+  investmentContributions: '53473.17',
+  investmentWithdrawals: '0.00',
+  netInvestmentContributions: '53473.17',
+  investmentTrackingAvailable: true,
 }
 
 const CATEGORIES = [
@@ -240,6 +244,12 @@ describe('dashboard', () => {
     expect(screen.getAllByText(/R\$\s*610,00/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/R\$\s*310,00/).length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: 'Acompanhar cartões' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: 'Aportes no período' })).toBeVisible()
+    expect(screen.getAllByText(/R\$\s*53\.473,17/).length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'Ver aportes' })).toHaveAttribute(
+      'href',
+      '/investments?tab=contributions',
+    )
 
     const attention = screen.getByRole('heading', { name: 'Precisa de atenção' }).closest('section')
     expect(attention).not.toBeNull()
@@ -424,6 +434,10 @@ describe('dashboard', () => {
         pendingExpenses: '0.00',
         pendingInternalMatches: 0,
         cardOutstandingBalance: '0.00',
+        investmentContributions: '0.00',
+        investmentWithdrawals: '0.00',
+        netInvestmentContributions: '0.00',
+        investmentTrackingAvailable: true,
       },
       entries: { items: [], hasMore: false },
       categories: [],

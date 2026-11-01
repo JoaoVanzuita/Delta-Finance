@@ -204,6 +204,8 @@ export function DashboardPage() {
     summary !== undefined &&
     Number(summary.income) === 0 &&
     Number(summary.expenses) === 0 &&
+    Number(summary.investmentContributions ?? 0) === 0 &&
+    Number(summary.investmentWithdrawals ?? 0) === 0 &&
     categories.length === 0 &&
     (summary.pendingCount ?? 0) === 0 &&
     !recentQuery.isLoading &&
@@ -360,7 +362,8 @@ export function DashboardPage() {
           previousPeriodLabel={previousMonth?.label}
           onPreviousPeriod={
             previousMonth
-              ? () => applyFilters({ period: 'MONTH', from: previousMonth.from, to: previousMonth.to })
+              ? () =>
+                  applyFilters({ period: 'MONTH', from: previousMonth.from, to: previousMonth.to })
               : undefined
           }
           onClearFilters={clearFilters}

@@ -4,6 +4,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   CreditCard,
+  PiggyBank,
   Scale,
   TrendingDown,
   TrendingUp,
@@ -108,6 +109,54 @@ export function DashboardOverview({ summary, periodLabel }: DashboardOverviewPro
           tone="expense"
         />
       </div>
+
+      {summary.investmentTrackingAvailable ? (
+        <section
+          aria-labelledby="investment-contributions-heading"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 py-3 shadow-[var(--shadow-card)]"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="flex size-8 shrink-0 items-center justify-center rounded-control bg-primary-soft text-primary"
+            >
+              <PiggyBank className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <h3
+                id="investment-contributions-heading"
+                className="text-body-sm font-semibold text-ink"
+              >
+                {Number(summary.netInvestmentContributions ?? 0) < 0
+                  ? 'Resgates líquidos no período'
+                  : 'Aportes no período'}
+              </h3>
+              <p className="text-caption leading-relaxed text-ink-muted">
+                {Number(summary.investmentContributions ?? 0) > 0 ||
+                Number(summary.investmentWithdrawals ?? 0) > 0
+                  ? 'Não é despesa; o dinheiro virou investimento. Considera todas as conexões.'
+                  : 'Nenhum aporte ou resgate no período.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <p
+              className={cn(
+                'numeric text-metric-sm font-semibold',
+                Number(summary.netInvestmentContributions ?? 0) < 0 ? 'text-expense' : 'text-ink',
+              )}
+            >
+              {formatMoney(summary.netInvestmentContributions, 'BRL')}
+            </p>
+            <Link
+              to="/investments?tab=contributions"
+              className="text-body-sm font-semibold text-action underline underline-offset-4 hover:text-action-hover"
+            >
+              Ver aportes
+            </Link>
+          </div>
+        </section>
+      ) : null}
     </div>
   )
 }

@@ -162,6 +162,22 @@ class InvestmentContributionIT extends PostgresTestBase {
 
     assertThat(report.path("flows").toString()).contains("CONTRIBUTION").contains("APPLICATION");
 
+    String today = LocalDate.now().toString();
+    JsonNode dashboard =
+        json(
+            alice
+                .get("/api/v1/dashboard/summary?from=" + today + "&to=" + today)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(dashboard.path("investmentContributions").asString()).isEqualTo("1010.00");
+    assertThat(dashboard.path("investmentWithdrawals").asString()).isEqualTo("0.00");
+    assertThat(dashboard.path("netInvestmentContributions").asString()).isEqualTo("1010.00");
+    assertThat(dashboard.path("investmentTrackingAvailable").asBoolean()).isTrue();
+    // O crédito na conta marcada é aporte, não receita, mesmo sem conciliação confirmada.
+    assertThat(dashboard.path("income").asString()).isEqualTo("0.00");
+
     JsonNode holding =
         json(
             alice

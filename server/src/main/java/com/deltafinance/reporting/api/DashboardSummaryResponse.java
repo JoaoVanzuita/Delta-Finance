@@ -17,7 +17,11 @@ public record DashboardSummaryResponse(
     String pendingExpenses,
     long pendingInternalMatches,
     Instant lastSuccessfulSyncAt,
-    String cardOutstandingBalance) {
+    String cardOutstandingBalance,
+    String investmentContributions,
+    String investmentWithdrawals,
+    String netInvestmentContributions,
+    boolean investmentTrackingAvailable) {
 
   public static DashboardSummaryResponse from(DashboardSummaryView view) {
     return new DashboardSummaryResponse(
@@ -33,6 +37,10 @@ public record DashboardSummaryResponse(
         view.pendingExpenses(),
         view.pendingInternalMatches(),
         view.lastSuccessfulSyncAt(),
-        view.cardOutstandingBalance());
+        view.cardOutstandingBalance(),
+        view.investmentContributions(),
+        view.investmentWithdrawals(),
+        view.netInvestmentContributions(),
+        view.investmentTrackingAvailable());
   }
 }

@@ -1,5 +1,6 @@
 package com.deltafinance.accounts.application;
 
+import com.deltafinance.accounts.domain.AccountOrigin;
 import com.deltafinance.accounts.domain.AccountType;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
@@ -45,6 +46,11 @@ public class AccountInvestmentService {
     if (account.getType() == AccountType.CREDIT) {
       throw new ConflictException(
           "ACCOUNT_IS_CARD", "Cartões não podem ser marcados como conta de investimento.");
+    }
+    if (account.getOrigin() != AccountOrigin.IMPORTED) {
+      throw new ConflictException(
+          "ACCOUNT_NOT_IMPORTED",
+          "Apenas contas importadas podem ser marcadas como conta de investimento.");
     }
     account.updateInvestmentAccount(investmentAccount);
     accountRepository.save(account);

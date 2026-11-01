@@ -6,6 +6,8 @@ import com.deltafinance.categories.application.CategoryService;
 import com.deltafinance.categories.application.CategoryView;
 import com.deltafinance.categories.domain.CategoryKind;
 import com.deltafinance.connections.application.SyncQueryService;
+import com.deltafinance.investments.application.InvestmentContributionService;
+import com.deltafinance.investments.application.InvestmentContributionView;
 import com.deltafinance.invoices.application.CardDebtService;
 import com.deltafinance.invoices.application.InvoiceReportingService;
 import com.deltafinance.invoices.application.InvoiceReportingService.InvoiceReportItem;
@@ -75,6 +77,7 @@ public class ReportingService {
   private final CategoryService categoryService;
   private final SyncQueryService syncQueryService;
   private final InternalMatchService internalMatchService;
+  private final InvestmentContributionService investmentContributionService;
   private final Clock clock;
 
   public ReportingService(
@@ -85,6 +88,7 @@ public class ReportingService {
       CategoryService categoryService,
       SyncQueryService syncQueryService,
       InternalMatchService internalMatchService,
+      InvestmentContributionService investmentContributionService,
       Clock clock) {
     this.accountQueryService = accountQueryService;
     this.transactionQueryService = transactionQueryService;
@@ -93,6 +97,7 @@ public class ReportingService {
     this.categoryService = categoryService;
     this.syncQueryService = syncQueryService;
     this.internalMatchService = internalMatchService;
+    this.investmentContributionService = investmentContributionService;
     this.clock = clock;
   }
 
@@ -106,6 +111,8 @@ public class ReportingService {
     Pending pending = pending(userId, resolved);
     Balance balance = currentBalance(resolved);
     BigDecimal cardOutstanding = cardOutstanding(userId, resolved);
+    InvestmentContributionView investments =
+        investmentContributionService.contributions(userId, resolved.from(), resolved.to(), null);
 
     return new DashboardSummaryView(
         resolved.from(),
@@ -120,7 +127,11 @@ public class ReportingService {
         MoneyAggregator.format(pending.expenses()),
         internalMatchService.countPending(userId),
         lastSuccessfulSync(userId, resolved),
-        MoneyAggregator.format(cardOutstanding));
+        MoneyAggregator.format(cardOutstanding),
+        investments.contributions(),
+        investments.withdrawals(),
+        investments.netContributions(),
+        !investments.sources().isEmpty());
   }
 
   public List<DashboardCategoryView> categories(
@@ -602,6 +613,12 @@ public class ReportingService {
     if (!"BRL".equalsIgnoreCase(transaction.currency())) {
       return false;
     }
+    if (isInvestmentContributionCredit(transaction, resolved)) {
+      // Crédito em conta marcada como investimento é aporte, não receita. Proventos continuam
+      // entrando porque a categoria é INCOME. A regra evita que um aporte ainda não conciliado
+      // infle receitas e apareça ao mesmo tempo no indicador de aportes.
+      return false;
+    }
     if ("TRANSFER".equals(transaction.type())) {
       return false;
     }
@@ -622,6 +639,30 @@ public class ReportingService {
 
   private static String normalizedInvoiceOrigin(String source) {
     return "MANUAL".equals(source) ? "MANUAL" : "IMPORTED";
+  }
+
+  private boolean isInvestmentContributionCredit(TransactionView transaction, Resolved resolved) {
+    if (MoneyAggregator.parse(transaction.amount()).signum() <= 0) {
+      return false;
+    }
+    AccountView account = accountById(resolved, transaction.accountId());
+    if (account == null || !account.investmentAccount()) {
+      return false;
+    }
+    CategoryKind kind =
+        transaction.categoryId() == null
+            ? null
+            : resolved.categoryKinds().get(transaction.categoryId());
+    return kind != CategoryKind.INCOME;
+  }
+
+  private static AccountView accountById(Resolved resolved, UUID accountId) {
+    for (AccountView account : resolved.accounts()) {
+      if (account.id().equals(accountId)) {
+        return account;
+      }
+    }
+    return null;
   }
 
   private boolean accountCurrencyIsBrl(Resolved resolved, UUID accountId) {

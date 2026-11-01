@@ -1645,6 +1645,14 @@ export interface components {
             lastSuccessfulSyncAt?: string;
             /** @description Saldo devedor total de cartões no período. Não é somado a currentBalance. */
             cardOutstandingBalance?: string;
+            /** @description Créditos externos que entraram nas contas marcadas como investimento no período. Não compõem income. */
+            investmentContributions?: string;
+            /** @description Débitos externos que saíram das contas marcadas como investimento no período. Não compõem expenses. */
+            investmentWithdrawals?: string;
+            /** @description investmentContributions - investmentWithdrawals. */
+            netInvestmentContributions?: string;
+            /** @description true quando existe ao menos uma conexão com investimentos importados e o indicador pode ser exibido. */
+            investmentTrackingAvailable?: boolean;
         };
         DashboardCategory: {
             /** Format: uuid */
@@ -2965,7 +2973,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            /** @description Cartão não pode ser marcado como conta de investimento (código `ACCOUNT_IS_CARD`). */
+            /** @description Cartão ou conta manual não pode ser marcado como conta de investimento (`ACCOUNT_IS_CARD`/`ACCOUNT_NOT_IMPORTED`). */
             409: {
                 headers: {
                     [name: string]: unknown;

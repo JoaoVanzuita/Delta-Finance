@@ -17,4 +17,8 @@ public record DashboardSummaryView(
     String pendingExpenses,
     long pendingInternalMatches,
     Instant lastSuccessfulSyncAt,
-    String cardOutstandingBalance) {}
+    String cardOutstandingBalance,
+    String investmentContributions,
+    String investmentWithdrawals,
+    String netInvestmentContributions,
+    boolean investmentTrackingAvailable) {}
