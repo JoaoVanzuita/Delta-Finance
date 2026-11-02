@@ -20,6 +20,19 @@ const IDEMPOTENCY_HEADER = 'Idempotency-Key'
 const UNAUTHENTICATED_EVENT = 'delta:unauthenticated'
 
 /**
+ * 401 nessas rotas é falha de credencial/CSRF, não expiração da sessão atual.
+ * O evento global não pode deslogar o usuário quando ele erra a senha no login.
+ */
+const SESSION_BOOTSTRAP_PATHS = ['/auth/csrf', '/auth/login', '/auth/register']
+
+function expiresSession(path: string): boolean {
+  const pathname = path.split(/[?#]/, 1)[0] ?? path
+  return !SESSION_BOOTSTRAP_PATHS.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  )
+}
+
+/**
  * Operações com replay de idempotência no backend. As demais mutações ignoram
  * `Idempotency-Key`, então o cliente só gera a chave para estes caminhos.
  */
@@ -185,7 +198,12 @@ async function send<T>(path: string, options: RequestOptions, idempotencyKey?: s
 
   if (!response.ok) {
     const error = await toApiError(response)
-    if (error.status === 401 && sessionEstablished && typeof window !== 'undefined') {
+    if (
+      error.status === 401 &&
+      sessionEstablished &&
+      expiresSession(path) &&
+      typeof window !== 'undefined'
+    ) {
       window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT))
     }
     throw error
@@ -217,7 +235,12 @@ async function download(path: string): Promise<Blob> {
 
   if (!response.ok) {
     const error = await toApiError(response)
-    if (error.status === 401 && sessionEstablished && typeof window !== 'undefined') {
+    if (
+      error.status === 401 &&
+      sessionEstablished &&
+      expiresSession(path) &&
+      typeof window !== 'undefined'
+    ) {
       window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT))
     }
     throw error

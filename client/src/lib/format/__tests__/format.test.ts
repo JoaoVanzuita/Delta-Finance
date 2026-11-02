@@ -6,10 +6,7 @@ import {
   formatMoney,
   formatNumber,
   formatPercent,
-  formatRatioAsPercent,
   formatRelativeDate,
-  formatSignedMoney,
-  isDecimalString,
 } from '@/lib/format'
 
 describe('formatação compartilhada pt-BR', () => {
@@ -23,7 +20,6 @@ describe('formatação compartilhada pt-BR', () => {
 
   it('formata negativos com sinal de menos tipográfico', () => {
     expect(formatMoney('-1234.56', 'BRL')).toBe('−R$\u00a01.234,56')
-    expect(formatSignedMoney('10.00', 'BRL')).toBe('+R$\u00a010,00')
   })
 
   it('exibe moeda estrangeira com o símbolo correto, nunca R$', () => {
@@ -36,16 +32,12 @@ describe('formatação compartilhada pt-BR', () => {
   it('não inventa valor para entrada inválida', () => {
     expect(formatMoney(null)).toBe('Não informado')
     expect(formatMoney('abc', 'USD')).toBe('abc USD')
-    expect(isDecimalString('10.50')).toBe(true)
-    expect(isDecimalString('10,50')).toBe(false)
   })
 
   it('formata percentuais com uma casa e sem zeros desnecessários', () => {
     expect(formatPercent('12.3')).toBe('12,3%')
     expect(formatPercent('50.00')).toBe('50%')
     expect(formatPercent('3.25')).toBe('3,3%')
-    expect(formatRatioAsPercent('0.5')).toBe('50%')
-    expect(formatRatioAsPercent('0.123')).toBe('12,3%')
   })
 
   it('formata números com agrupamento e casas controladas', () => {

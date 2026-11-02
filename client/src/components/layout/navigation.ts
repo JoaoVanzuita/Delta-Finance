@@ -27,7 +27,7 @@ export interface NavigationGroup {
   readonly items: readonly NavigationItem[]
 }
 
-/** Arquitetura da informação aprovada na Fase 0: cinco grupos, doze destinos. */
+/** Arquitetura da informação: cinco grupos e treze destinos. */
 export const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
   {
     label: 'Visão geral',

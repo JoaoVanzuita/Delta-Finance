@@ -52,6 +52,44 @@ export function addDecimals(values: readonly string[]): string {
   return `${negative ? '-' : ''}${integer}.${fraction}`
 }
 
+/**
+ * Normaliza entrada monetária pt-BR para o formato do contrato (`1234.56`).
+ *
+ * Aceita agrupamento (`1.234,56`), decimal com vírgula ou ponto e espaços. Entrada vazia
+ * permanece vazia; entrada inválida é devolvida como veio para que a validação do formulário
+ * apresente o erro.
+ */
+export function normalizeMoneyInput(value: string): string {
+  const compact = value.trim().replace(/\s+/g, '')
+  if (!compact) return ''
+
+  const lastComma = compact.lastIndexOf(',')
+  const lastDot = compact.lastIndexOf('.')
+  let decimalIndex = -1
+  if (lastComma >= 0 && lastDot >= 0) {
+    decimalIndex = Math.max(lastComma, lastDot)
+  } else if (lastComma >= 0) {
+    decimalIndex = lastComma
+  } else if (lastDot >= 0 && compact.indexOf('.') === lastDot) {
+    decimalIndex = lastDot
+  }
+
+  if (decimalIndex === -1) {
+    const digits = compact.replace(/[.,]/g, '')
+    return /^[+-]?\d+$/.test(digits) ? digits : compact
+  }
+
+  const integerPart = compact.slice(0, decimalIndex).replace(/[.,]/g, '') || '0'
+  const fractionPart = compact.slice(decimalIndex + 1).replace(/[.,]/g, '')
+  const normalized = `${integerPart}.${fractionPart}`
+  return /^[+-]?\d+(\.\d+)?$/.test(normalized) ? normalized : compact
+}
+
+/** Converte entrada monetária em número; `NaN` quando inválida. */
+export function parseMoneyInput(value: string): number {
+  return Number(normalizeMoneyInput(value))
+}
+
 /** Converte um decimal textual em `number` apenas para geometria de gráfico. */
 export function toFiniteNumber(value: string): number {
   const parsed = Number(value)

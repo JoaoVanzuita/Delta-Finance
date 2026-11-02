@@ -6,7 +6,7 @@ import type {
   InvestmentIncome,
   InvestmentIncomeItem,
   InvestmentOverview,
-} from '@/features/integration/api'
+} from '@/lib/api/finance'
 
 export const USER = {
   id: 'user-1',
@@ -372,6 +372,7 @@ export const CONTRIBUTIONS: InvestmentContribution = {
   cumulativeContributions: '53474.02',
   cumulativeWithdrawals: '0.00',
   feeSource: 'DERIVED',
+  trackingAvailable: true,
   reconciliationDifference: '0.00',
   contributionCount: 4,
   withdrawalCount: 0,

@@ -126,6 +126,32 @@ describe('api client', () => {
     window.removeEventListener(UNAUTHENTICATED_EVENT, listener)
   })
 
+  it('não encerra sessão existente quando o login falha', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          type: 'urn:delta-finance:error:invalid_credentials',
+          title: 'Unauthorized',
+          status: 401,
+          code: 'INVALID_CREDENTIALS',
+          detail: 'Usuário ou senha inválidos.',
+        },
+        401,
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    markSessionEstablished()
+    const listener = vi.fn()
+    window.addEventListener(UNAUTHENTICATED_EVENT, listener)
+
+    await expect(
+      api.post('/auth/login', { username: 'alice', password: 'errada' }),
+    ).rejects.toBeInstanceOf(ApiError)
+
+    expect(listener).not.toHaveBeenCalled()
+    window.removeEventListener(UNAUTHENTICATED_EVENT, listener)
+  })
+
   it('retorna undefined em 204', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)

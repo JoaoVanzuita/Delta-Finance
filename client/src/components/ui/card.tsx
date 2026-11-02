@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from 'react'
+import type { HTMLAttributes } from 'react'
 
 import { cn } from '@/lib/cn'
 
@@ -45,15 +45,4 @@ export function CardDescription({ className, ...props }: HTMLAttributes<HTMLPara
 
 export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('p-5 pt-0', className)} {...props} />
-}
-
-export function CardFooter({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn('flex flex-wrap items-center gap-2 border-t border-line px-5 py-4', className)}
-      {...props}
-    >
-      {children as ReactNode}
-    </div>
-  )
 }

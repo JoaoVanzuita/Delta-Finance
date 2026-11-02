@@ -243,15 +243,6 @@ export function formatMoney(
   }
 }
 
-/** Igual a `formatMoney`, mas prefixa `+` em valores positivos. */
-export function formatSignedMoney(
-  value: string | null | undefined,
-  currency = 'BRL',
-  options: MoneyFormatOptions = {},
-): string {
-  return formatMoney(value, currency, { ...options, signDisplay: 'always' })
-}
-
 function asDecimalString(value: string | number | null | undefined): string | null {
   if (value == null) {
     return null
@@ -322,31 +313,113 @@ export function formatPercent(
   return `${formatted}%`
 }
 
-/** Converte a razão (0–1) em percentual formatado. */
-export function formatRatioAsPercent(
-  value: string | number | null | undefined,
-  options: NumberFormatOptions = {},
+/** Data longa (ex.: "2 de novembro de 2026"). */
+export function formatDateLong(
+  value: string | null | undefined,
+  options: DateFormatOptions = {},
 ): string {
-  const raw = asDecimalString(value)
-  const parts = parseDecimal(raw)
-  if (!parts) {
-    return options.fallback ?? NOT_INFORMED
+  const date = parseDateInput(value)
+  if (!date) {
+    return options.fallback ?? (value ? String(value) : 'Data não informada')
   }
-  // Multiplicação apenas sobre a representação decimal, sem float.
-  const scaled = scaleDecimal(parts, 2)
-  return formatPercent(scaled, options)
+  return new Intl.DateTimeFormat(LOCALE, {
+    dateStyle: 'long',
+    timeZone: TIME_ZONE,
+  }).format(date)
 }
 
-function scaleDecimal(parts: DecimalParts, exponent: number): string {
-  const digits = `${parts.integer}${parts.fraction}`
-  const shift = exponent - parts.fraction.length
-  if (shift >= 0) {
-    return `${parts.negative ? '-' : ''}${digits}${'0'.repeat(shift)}`
+/** Data média (ex.: "2 de nov. de 2026"). */
+export function formatDateMedium(
+  value: string | null | undefined,
+  options: DateFormatOptions = {},
+): string {
+  const date = parseDateInput(value)
+  if (!date) {
+    return options.fallback ?? (value ? String(value) : 'Data não informada')
   }
-  const cut = digits.length + shift
-  const integer = digits.slice(0, Math.max(cut, 0)) || '0'
-  const fraction = digits.slice(Math.max(cut, 0))
-  return `${parts.negative ? '-' : ''}${integer}${fraction ? `.${fraction}` : ''}`
+  return new Intl.DateTimeFormat(LOCALE, {
+    dateStyle: 'medium',
+    timeZone: TIME_ZONE,
+  }).format(date)
+}
+
+/** Mês/ano curto a partir de uma data civil ou timestamp. */
+export function formatShortMonthYear(
+  value: string | null | undefined,
+  options: DateFormatOptions = {},
+): string {
+  const date = parseDateInput(value)
+  if (!date) {
+    return options.fallback ?? (value ? String(value) : 'Data não informada')
+  }
+  return new Intl.DateTimeFormat(LOCALE, {
+    month: 'short',
+    year: 'numeric',
+    timeZone: TIME_ZONE,
+  })
+    .format(date)
+    .replace('.', '')
+}
+
+/** Mês/ano longo a partir de uma data civil ou timestamp. */
+export function formatLongMonthYear(
+  value: string | null | undefined,
+  options: DateFormatOptions = {},
+): string {
+  const date = parseDateInput(value)
+  if (!date) {
+    return options.fallback ?? (value ? String(value) : 'Data não informada')
+  }
+  return new Intl.DateTimeFormat(LOCALE, {
+    month: 'long',
+    year: 'numeric',
+    timeZone: TIME_ZONE,
+  }).format(date)
+}
+
+/** Mês/ano curto a partir de uma chave `YYYY-MM`. */
+export function formatMonthKeyShort(value: string | null | undefined): string {
+  if (!value) return 'Data não informada'
+  const match = /^(\d{4})-(\d{2})$/.exec(value)
+  if (!match) return value
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (!Number.isInteger(year) || month < 1 || month > 12) return value
+  return new Intl.DateTimeFormat(LOCALE, {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+    .format(new Date(Date.UTC(year, month - 1, 1)))
+    .replace('.', '')
+}
+
+/** Fração 0–1 formatada como percentual, sem converter o valor inteiro para float. */
+export function formatRatePercent(value: string | number | null | undefined): string {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return 'Não informado'
+  return `${formatNumber(numeric * 100, { maximumFractionDigits: 4 })}%`
+}
+
+/** Data civil de hoje em America/Sao_Paulo (`YYYY-MM-DD`). */
+export function todayIsoDate(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
+/** Moeda compacta para eixos de gráfico (`R$ 12,3 mil`). */
+export function formatCompactCurrency(value: number, currency = 'BRL'): string {
+  if (!Number.isFinite(value)) return '—'
+  return new Intl.NumberFormat(LOCALE, {
+    style: 'currency',
+    currency,
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value)
 }
 
 function civilDateKey(date: Date): string {
@@ -425,25 +498,10 @@ export function formatRelativeDate(
   return formatDate(value, options)
 }
 
-/** Formata mês/ano de um dia civil ou timestamp. */
-export function formatMonthYear(
-  value: string | null | undefined,
-  options: DateFormatOptions = {},
-): string {
-  const date = parseDateInput(value)
-  if (!date) {
-    return options.fallback ?? formatDate(value, options)
-  }
-  return new Intl.DateTimeFormat(LOCALE, {
-    month: 'long',
-    year: 'numeric',
-    timeZone: TIME_ZONE,
-  }).format(date)
-}
-
-/** Exposto para consumidores que precisam apenas validar o contrato decimal. */
-export function isDecimalString(value: string | null | undefined): boolean {
-  return typeof value === 'string' && /^[+-]?\d+(?:\.\d+)?$/.test(value.trim())
-}
-
-export { addDecimals, subtractDecimals, toFiniteNumber } from './decimal'
+export {
+  addDecimals,
+  normalizeMoneyInput,
+  parseMoneyInput,
+  subtractDecimals,
+  toFiniteNumber,
+} from './decimal'

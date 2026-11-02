@@ -5,6 +5,8 @@ import { Navigate, Outlet } from 'react-router'
 import { AppShell } from '@/components/layout/AppShell'
 import { PublicLayout } from '@/components/layout/PublicLayout'
 import { RouteLoading } from '@/components/layout/RouteLoading'
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { SessionExpiredBanner } from '@/features/auth/components/SessionExpiredBanner'
 import { useSession } from '@/features/auth/hooks/useSession'
 
@@ -26,10 +28,21 @@ function SessionLoading({ label }: { label: string }) {
  * Preserva a Home pública independente para quem não entrou.
  */
 export function HomeRoute() {
-  const { data: user, isLoading } = useSession()
+  const { data: user, isLoading, isError, refetch } = useSession()
 
   if (isLoading) {
     return <SessionLoading label="Carregando sua sessão…" />
+  }
+  if (isError) {
+    // Sessão desconhecida não é o mesmo que visitante anônimo.
+    return (
+      <section className="mx-auto max-w-md space-y-3 py-10">
+        <Alert variant="danger" title="Não foi possível carregar sua sessão">
+          <p>Ocorreu uma falha temporária. Tente novamente.</p>
+        </Alert>
+        <Button onClick={() => void refetch()}>Tentar novamente</Button>
+      </section>
+    )
   }
   if (user) {
     return <Navigate to="/dashboard" replace />

@@ -28,6 +28,7 @@ import {
   WealthPage,
 } from './lazy-pages'
 import { RootLayout } from './RootLayout'
+import { RouteError } from './RouteError'
 
 /**
  * Tabela de rotas.
@@ -43,6 +44,7 @@ export const routes: RouteObject[] = [
   {
     path: '/',
     element: <RootLayout />,
+    errorElement: <RouteError />,
     children: [
       {
         element: <PublicLayout />,

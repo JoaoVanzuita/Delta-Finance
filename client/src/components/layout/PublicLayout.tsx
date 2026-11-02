@@ -5,6 +5,8 @@ import { Link, Outlet } from 'react-router'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { cn } from '@/lib/cn'
 
+import { SessionExpiredBanner } from '@/features/auth/components/SessionExpiredBanner'
+
 import { Brand } from './Brand'
 import { ThemeMenu } from './ThemeMenu'
 
@@ -48,7 +50,10 @@ export function PublicLayout({ children }: { children?: ReactNode }) {
         tabIndex={-1}
         className="flex-1 px-4 py-8 focus-visible:outline-none sm:px-6 sm:py-12 lg:px-10"
       >
-        <div className="mx-auto w-full max-w-[var(--content-max)]">{children ?? <Outlet />}</div>
+        <div className="mx-auto w-full max-w-[var(--content-max)]">
+          <SessionExpiredBanner />
+          {children ?? <Outlet />}
+        </div>
       </main>
 
       <footer className="border-t border-line px-4 py-4 text-caption text-ink-muted sm:px-6 lg:px-10">
