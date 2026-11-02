@@ -2,6 +2,7 @@ package com.deltafinance.reporting.api;
 
 import com.deltafinance.reporting.application.DashboardBucketView;
 import com.deltafinance.reporting.application.DashboardCategoryView;
+import com.deltafinance.reporting.application.DashboardSummaryView;
 import com.deltafinance.reporting.application.DrillDownService;
 import com.deltafinance.reporting.application.ReportEntryView;
 import com.deltafinance.reporting.application.ReportQuery;
@@ -37,7 +38,7 @@ public class DashboardController {
   }
 
   @GetMapping("/dashboard/summary")
-  public DashboardSummaryResponse summary(
+  public DashboardSummaryView summary(
       @RequestParam(required = false) String period,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -47,24 +48,13 @@ public class DashboardController {
       @RequestParam(required = false) String origin,
       @RequestParam(required = false) String minAmount,
       @RequestParam(required = false) String maxAmount) {
-    return DashboardSummaryResponse.from(
-        reportingService.summary(
-            authenticatedUser.requireId(),
-            query(
-                period,
-                from,
-                to,
-                accountId,
-                categoryId,
-                type,
-                origin,
-                minAmount,
-                maxAmount,
-                null)));
+    return reportingService.summary(
+        authenticatedUser.requireId(),
+        query(period, from, to, accountId, categoryId, type, origin, minAmount, maxAmount, null));
   }
 
   @GetMapping("/dashboard/categories")
-  public List<DashboardCategoryResponse> categories(
+  public List<DashboardCategoryView> categories(
       @RequestParam(required = false) String period,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -91,11 +81,11 @@ public class DashboardController {
                 maxAmount,
                 direction),
             incomeOnly);
-    return views.stream().map(DashboardCategoryResponse::from).toList();
+    return List.copyOf(views);
   }
 
   @GetMapping("/dashboard/timeseries")
-  public List<DashboardBucketResponse> timeseries(
+  public List<DashboardBucketView> timeseries(
       @RequestParam(required = false) String period,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -110,7 +100,7 @@ public class DashboardController {
             authenticatedUser.requireId(),
             query(
                 period, from, to, accountId, categoryId, type, origin, minAmount, maxAmount, null));
-    return views.stream().map(DashboardBucketResponse::from).toList();
+    return List.copyOf(views);
   }
 
   @GetMapping("/reports/entries")

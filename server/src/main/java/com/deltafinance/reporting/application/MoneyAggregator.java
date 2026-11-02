@@ -2,7 +2,6 @@ package com.deltafinance.reporting.application;
 
 import com.deltafinance.shared.money.Money;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Objects;
 
 /**
@@ -14,7 +13,7 @@ import java.util.Objects;
  */
 public final class MoneyAggregator {
 
-  private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(Money.SCALE);
+  private static final BigDecimal ZERO = Money.scaled(BigDecimal.ZERO);
 
   private MoneyAggregator() {}
 
@@ -22,7 +21,7 @@ public final class MoneyAggregator {
     if (value == null || value.isBlank()) {
       return ZERO;
     }
-    return new BigDecimal(value).setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+    return Money.scaled(new BigDecimal(value));
   }
 
   public static BigDecimal zero() {
@@ -30,11 +29,11 @@ public final class MoneyAggregator {
   }
 
   public static BigDecimal sum(BigDecimal left, BigDecimal right) {
-    return left.add(right).setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+    return Money.scaled(left.add(right));
   }
 
   public static BigDecimal abs(BigDecimal value) {
-    return value.abs().setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+    return Money.scaled(value.abs());
   }
 
   /** Faixa inclusiva aplicada à magnitude do valor. Limites negativos são normalizados. */
@@ -51,6 +50,6 @@ public final class MoneyAggregator {
 
   public static String format(BigDecimal value) {
     Objects.requireNonNull(value, "value");
-    return value.setScale(Money.SCALE, RoundingMode.HALF_EVEN).toPlainString();
+    return Money.plain(value);
   }
 }
