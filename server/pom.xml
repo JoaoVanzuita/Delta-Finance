@@ -38,6 +38,7 @@
     <google-java-format.version>1.36.1</google-java-format.version>
     <checkstyle.version>14.3.0</checkstyle.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+    <spotbugs-plugin.version>4.9.8.2</spotbugs-plugin.version>
   </properties>
 
   <dependencies>
@@ -124,10 +125,18 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>net.ttddyy</groupId>
+      <artifactId>datasource-proxy</artifactId>
+      <version>1.10.1</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
+
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-postgresql</artifactId>
@@ -244,7 +253,6 @@
                   <element>CLASS</element>
                   <includes>
                     <include>com/deltafinance/shared/money/Money</include>
-                    <include>com/deltafinance/security/OwnershipGuard</include>
                     <include>com/deltafinance/security/AuthenticatedUser</include>
                   </includes>
                   <limits>
@@ -323,6 +331,28 @@
         <executions>
           <execution>
             <id>checkstyle-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- SpotBugs: falha apenas em achados de severidade alta, evitando ruído de records/DTOs. -->
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>${spotbugs-plugin.version}</version>
+        <configuration>
+          <threshold>High</threshold>
+          <effort>Max</effort>
+          <failOnError>true</failOnError>
+          <excludeFilterFile>config/spotbugs/spotbugs-exclude.xml</excludeFilterFile>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotbugs-check</id>
             <phase>verify</phase>
             <goals>
               <goal>check</goal>

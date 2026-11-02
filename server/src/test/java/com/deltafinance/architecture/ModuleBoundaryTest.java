@@ -1,5 +1,8 @@
 package com.deltafinance.architecture;
 
+import com.deltafinance.shared.crypto.CryptoContext;
+import com.deltafinance.shared.crypto.CryptoService;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
@@ -12,6 +15,7 @@ import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
 import java.util.UUID;
 import org.springframework.data.repository.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Fronteiras do monólito modular.
@@ -99,6 +103,50 @@ class ModuleBoundaryTest {
           .because("entidades JPA não atravessam a fronteira pública do módulo");
 
   @ArchTest
+  static final ArchRule leituraCifradaPassaPeloEncryptedValueReader =
+      ArchRuleDefinition.noClasses()
+          .that()
+          .resideOutsideOfPackage("com.deltafinance.shared.crypto..")
+          .and()
+          .doNotHaveFullyQualifiedName("com.deltafinance.security.IdempotencyFilter")
+          .and()
+          .doNotHaveFullyQualifiedName("com.deltafinance.shared.crypto.KeyRotationJob")
+          .should()
+          .callMethod(CryptoService.class, "decryptString", byte[].class, CryptoContext.class)
+          .orShould()
+          .callMethod(CryptoService.class, "decrypt", byte[].class, CryptoContext.class)
+          .because("leitura de campos cifrados deve usar EncryptedValueReader");
+
+  @ArchTest
+  static final ArchRule repositoriosFinanceirosNaoUsamFindByIdSemUsuario =
+      ArchRuleDefinition.classes()
+          .that()
+          .areAssignableTo(Repository.class)
+          .and()
+          .resideInAnyPackage(FINANCIAL_MODULES)
+          .should(naoDeclararBuscaPorIdSemUsuario())
+          .because("consulta por ID sem user_id permite vazamento entre titulares");
+
+  @ArchTest
+  static final ArchRule apiNaoUsaTransactional =
+      ArchRuleDefinition.methods()
+          .that()
+          .areDeclaredInClassesThat()
+          .resideInAPackage("com.deltafinance..api..")
+          .should(
+              new ArchCondition<>("não declarar @Transactional na borda HTTP") {
+                @Override
+                public void check(JavaMethod method, ConditionEvents events) {
+                  if (method.isAnnotatedWith(Transactional.class)) {
+                    events.add(
+                        SimpleConditionEvent.violated(
+                            method, method.getFullName() + " usa @Transactional no controller"));
+                  }
+                }
+              })
+          .because("transação pertence ao serviço de aplicação, não ao controller");
+
+  @ArchTest
   static final ArchRule consultasFinanceirasExigemEscopoDeUsuario =
       ArchRuleDefinition.methods()
           .that()
@@ -110,8 +158,22 @@ class ModuleBoundaryTest {
           .and()
           .haveNameMatching("(find|get|list|search|count|delete|exists).*")
           .should(exigirParametroDeUsuario())
-          .allowEmptyShould(true) // ainda não há repositórios financeiros nesta fase
           .because("nenhuma consulta financeira pode atravessar o limite do usuário");
+
+  private static ArchCondition<JavaClass> naoDeclararBuscaPorIdSemUsuario() {
+    return new ArchCondition<>("não declarar findById/getById/deleteById/existsById") {
+      @Override
+      public void check(JavaClass type, ConditionEvents events) {
+        for (JavaMethod method : type.getMethods()) {
+          if (method.getName().matches("(findById|getById|deleteById|existsById)")) {
+            events.add(
+                SimpleConditionEvent.violated(
+                    method, method.getFullName() + " busca apenas pelo ID, sem user_id"));
+          }
+        }
+      }
+    };
+  }
 
   private static ArchCondition<JavaMethod> exigirParametroDeUsuario() {
     return new ArchCondition<>("exigir parâmetro UUID (user_id)") {
