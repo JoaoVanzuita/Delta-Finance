@@ -11,11 +11,12 @@ import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.domain.Transaction;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +47,7 @@ public class CurrencyConversionRepairService {
   private final InvoiceRepository invoiceRepository;
   private final InvoiceBalanceService balanceService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -56,6 +58,7 @@ public class CurrencyConversionRepairService {
       InvoiceRepository invoiceRepository,
       InvoiceBalanceService balanceService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService,
       Clock clock) {
     this.transactionRepository = transactionRepository;
@@ -64,6 +67,7 @@ public class CurrencyConversionRepairService {
     this.invoiceRepository = invoiceRepository;
     this.balanceService = balanceService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -119,7 +123,7 @@ public class CurrencyConversionRepairService {
       for (InvoiceItem mirror : mirrors) {
         converted = converted.add(decryptItemAmount(mirror));
       }
-      converted = converted.add(adjustment).setScale(2, RoundingMode.HALF_EVEN);
+      converted = Money.scaled(converted.add(adjustment));
       repaired++;
       total = total.add(converted);
       if (dryRun) {
@@ -147,7 +151,7 @@ public class CurrencyConversionRepairService {
             mirror.getReportingEffect(),
             mirror.getDescriptionEnc(),
             cryptoService.encrypt(
-                newAmount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
+                Money.plain(newAmount),
                 new CryptoContext(userId, ITEM_TABLE, "amount", mirror.getId())),
             mirror.getOccurredOn());
         itemRepository.save(mirror);
@@ -173,31 +177,28 @@ public class CurrencyConversionRepairService {
               "reason", "currency-conversion",
               "sourceCurrency", transaction.getSourceCurrency()));
     }
-    return new Report(dryRun, repaired, total.setScale(2, RoundingMode.HALF_EVEN));
+    return new Report(dryRun, repaired, Money.scaled(total));
   }
 
   private BigDecimal decryptTransactionAmount(UUID userId, Transaction transaction) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            transaction.getAmountEffectiveEnc(),
-            new CryptoContext(userId, TRANSACTION_TABLE, "amount_effective", transaction.getId())));
+    return encryptedValueReader.readMoney(
+        userId,
+        TRANSACTION_TABLE,
+        "amount_effective",
+        transaction.getId(),
+        transaction.getAmountEffectiveEnc());
   }
 
   private BigDecimal decryptItemAmount(InvoiceItem item) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            item.getAmountEnc(),
-            new CryptoContext(item.getUserId(), ITEM_TABLE, "amount", item.getId())));
+    return encryptedValueReader.readMoney(
+        item.getUserId(), ITEM_TABLE, "amount", item.getId(), item.getAmountEnc());
   }
 
   private String decryptItemDescription(InvoiceItem item) {
-    try {
-      return cryptoService.decryptString(
-          item.getDescriptionEnc(),
-          new CryptoContext(item.getUserId(), ITEM_TABLE, "description", item.getId()));
-    } catch (RuntimeException exception) {
-      return "";
-    }
+    return encryptedValueReader
+        .tryRead(
+            item.getUserId(), ITEM_TABLE, "description", item.getId(), item.getDescriptionEnc())
+        .orElse("");
   }
 
   private static boolean isBillReconciliation(String description) {

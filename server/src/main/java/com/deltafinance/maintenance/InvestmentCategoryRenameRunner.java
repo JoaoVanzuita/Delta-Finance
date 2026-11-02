@@ -1,5 +1,6 @@
-package com.deltafinance.categories.application;
+package com.deltafinance.maintenance;
 
+import com.deltafinance.categories.application.InvestmentCategoryRenameService;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;

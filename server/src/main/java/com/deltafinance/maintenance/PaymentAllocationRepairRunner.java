@@ -1,7 +1,8 @@
-package com.deltafinance.invoices.application;
+package com.deltafinance.maintenance;
 
 import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
+import com.deltafinance.invoices.application.PaymentAllocationRepairService;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;

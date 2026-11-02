@@ -4,8 +4,8 @@ import com.deltafinance.accounts.domain.CardProfile;
 import com.deltafinance.invoices.domain.InvoiceRepository;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.domain.ReconciliationState;
 import com.deltafinance.transactions.domain.Transaction;
@@ -13,7 +13,6 @@ import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionSource;
 import com.deltafinance.transactions.domain.TransactionStatus;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Map;
@@ -41,7 +40,7 @@ public class PendingCardBackfillService {
   private final InvoiceRepository invoiceRepository;
   private final InvoiceGenerationService invoiceGenerationService;
   private final CardCycleService cardCycleService;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -50,14 +49,14 @@ public class PendingCardBackfillService {
       InvoiceRepository invoiceRepository,
       InvoiceGenerationService invoiceGenerationService,
       CardCycleService cardCycleService,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService,
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.invoiceRepository = invoiceRepository;
     this.invoiceGenerationService = invoiceGenerationService;
     this.cardCycleService = cardCycleService;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -161,16 +160,18 @@ public class PendingCardBackfillService {
         cardAccountId,
         promoted,
         skipped,
-        purchases.setScale(2, RoundingMode.HALF_EVEN),
-        credits.setScale(2, RoundingMode.HALF_EVEN),
+        Money.scaled(purchases),
+        Money.scaled(credits),
         invoicesBefore,
         invoicesAfter);
   }
 
   private BigDecimal decryptAmount(UUID userId, Transaction transaction) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            transaction.getAmountEffectiveEnc(),
-            new CryptoContext(userId, "transaction", "amount_effective", transaction.getId())));
+    return encryptedValueReader.readMoney(
+        userId,
+        "transaction",
+        "amount_effective",
+        transaction.getId(),
+        transaction.getAmountEffectiveEnc());
   }
 }

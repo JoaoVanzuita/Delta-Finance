@@ -7,11 +7,10 @@ import com.deltafinance.invoices.domain.InvoicePaymentStatus;
 import com.deltafinance.invoices.domain.InvoiceRepository;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -39,7 +38,7 @@ public class PaymentAllocationRepairService {
   private final InvoicePaymentRepository paymentRepository;
   private final InvoiceRepository invoiceRepository;
   private final InvoiceBalanceService balanceService;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
 
   public PaymentAllocationRepairService(
@@ -47,13 +46,13 @@ public class PaymentAllocationRepairService {
       InvoicePaymentRepository paymentRepository,
       InvoiceRepository invoiceRepository,
       InvoiceBalanceService balanceService,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService) {
     this.transactionRepository = transactionRepository;
     this.paymentRepository = paymentRepository;
     this.invoiceRepository = invoiceRepository;
     this.balanceService = balanceService;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
   }
 
@@ -121,7 +120,7 @@ public class PaymentAllocationRepairService {
     if (!dryRun && reassigned > 0) {
       balanceService.recalculateCard(userId, cardAccountId);
     }
-    return new Report(dryRun, cardAccountId, reassigned, moved.setScale(2, RoundingMode.HALF_EVEN));
+    return new Report(dryRun, cardAccountId, reassigned, Money.scaled(moved));
   }
 
   /**
@@ -152,17 +151,13 @@ public class PaymentAllocationRepairService {
   }
 
   private BigDecimal decryptTotal(UUID userId, Invoice invoice) {
-    return new BigDecimal(
-            cryptoService.decryptString(
-                invoice.getTotalEnc(),
-                new CryptoContext(userId, "invoice", "total", invoice.getId())))
+    return encryptedValueReader
+        .readMoney(userId, "invoice", "total", invoice.getId(), invoice.getTotalEnc())
         .max(BigDecimal.ZERO);
   }
 
   private BigDecimal decryptAmount(UUID userId, InvoicePayment payment) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            payment.getAmountEnc(),
-            new CryptoContext(userId, "invoice_payment", "amount", payment.getId())));
+    return encryptedValueReader.readMoney(
+        userId, "invoice_payment", "amount", payment.getId(), payment.getAmountEnc());
   }
 }

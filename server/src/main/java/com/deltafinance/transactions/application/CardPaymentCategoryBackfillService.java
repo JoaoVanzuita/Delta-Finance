@@ -9,8 +9,7 @@ import com.deltafinance.categories.application.CategoryView;
 import com.deltafinance.categories.domain.CategoryKind;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.transactions.domain.Transaction;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionType;
@@ -34,19 +33,19 @@ public class CardPaymentCategoryBackfillService {
   private final TransactionRepository transactionRepository;
   private final FinancialAccountRepository accountRepository;
   private final CategoryService categoryService;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
 
   public CardPaymentCategoryBackfillService(
       TransactionRepository transactionRepository,
       FinancialAccountRepository accountRepository,
       CategoryService categoryService,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
     this.categoryService = categoryService;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
   }
 
@@ -79,19 +78,22 @@ public class CardPaymentCategoryBackfillService {
         continue;
       }
       String description =
-          cryptoService.decryptString(
-              transaction.getDescriptionEffectiveEnc(),
-              new CryptoContext(
-                  userId, "transaction", "description_effective", transaction.getId()));
+          encryptedValueReader.read(
+              userId,
+              "transaction",
+              "description_effective",
+              transaction.getId(),
+              transaction.getDescriptionEffectiveEnc());
       if (!CategoryTaxonomy.isCardInvoicePaymentDescription(description)) {
         continue;
       }
       BigDecimal value =
-          new BigDecimal(
-              cryptoService.decryptString(
-                  transaction.getAmountEffectiveEnc(),
-                  new CryptoContext(
-                      userId, "transaction", "amount_effective", transaction.getId())));
+          encryptedValueReader.readMoney(
+              userId,
+              "transaction",
+              "amount_effective",
+              transaction.getId(),
+              transaction.getAmountEffectiveEnc());
       reclassified++;
       amount = amount.add(value.abs());
       if (!dryRun) {

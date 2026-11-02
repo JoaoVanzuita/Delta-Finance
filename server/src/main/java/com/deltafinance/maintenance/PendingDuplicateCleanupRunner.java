@@ -1,5 +1,6 @@
-package com.deltafinance.transactions.application;
+package com.deltafinance.maintenance;
 
+import com.deltafinance.transactions.application.PendingDuplicateCleanupService;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -14,33 +15,33 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Executa a reclassificação de salário uma única vez quando habilitada por propriedade.
+ * Limpa duplicatas históricas de pagamento de cartão uma única vez.
  *
  * <pre>
  * ./mvnw spring-boot:run \
- *   -Dspring-boot.run.arguments="--delta.categories.salary-backfill=true \
+ *   -Dspring-boot.run.arguments="--delta.transactions.pending-dedup=true \
  *     --spring.main.web-application-type=none"
  * </pre>
  *
- * Use {@code --delta.categories.salary-backfill.dry-run=true} para simular.
+ * Use {@code --delta.transactions.pending-dedup.dry-run=true} para simular.
  */
 @Component
-@ConditionalOnProperty(name = "delta.categories.salary-backfill", havingValue = "true")
-public class SalaryCategoryBackfillRunner implements ApplicationRunner {
+@ConditionalOnProperty(name = "delta.transactions.pending-dedup", havingValue = "true")
+public class PendingDuplicateCleanupRunner implements ApplicationRunner {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SalaryCategoryBackfillRunner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PendingDuplicateCleanupRunner.class);
 
-  private final SalaryCategoryBackfillService backfillService;
+  private final PendingDuplicateCleanupService cleanupService;
   private final JdbcTemplate jdbcTemplate;
   private final ApplicationContext applicationContext;
   private final boolean dryRun;
 
-  public SalaryCategoryBackfillRunner(
-      SalaryCategoryBackfillService backfillService,
+  public PendingDuplicateCleanupRunner(
+      PendingDuplicateCleanupService cleanupService,
       JdbcTemplate jdbcTemplate,
       ApplicationContext applicationContext,
-      @Value("${delta.categories.salary-backfill.dry-run:false}") boolean dryRun) {
-    this.backfillService = backfillService;
+      @Value("${delta.transactions.pending-dedup.dry-run:false}") boolean dryRun) {
+    this.cleanupService = cleanupService;
     this.jdbcTemplate = jdbcTemplate;
     this.applicationContext = applicationContext;
     this.dryRun = dryRun;
@@ -51,16 +52,16 @@ public class SalaryCategoryBackfillRunner implements ApplicationRunner {
     List<UUID> userIds = jdbcTemplate.queryForList("select id from app_user", UUID.class);
     int total = 0;
     for (UUID userId : userIds) {
-      SalaryCategoryBackfillService.Report report = backfillService.backfillUser(userId, dryRun);
-      total += report.reclassified();
+      PendingDuplicateCleanupService.Report report = cleanupService.cleanupUser(userId, dryRun);
+      total += report.cleaned();
       LOG.info(
-          "Salário: usuário={} dryRun={} reclassificadas={} valor={}",
+          "Duplicatas pendentes: usuário={} dryRun={} limpas={} valor={}",
           userId,
           report.dryRun(),
-          report.reclassified(),
+          report.cleaned(),
           report.amount());
     }
-    LOG.info("Salário: total reclassificadas={} dryRun={}", total, dryRun);
+    LOG.info("Duplicatas pendentes: total limpas={} dryRun={}", total, dryRun);
     System.exit(SpringApplication.exit(applicationContext, () -> 0));
   }
 }

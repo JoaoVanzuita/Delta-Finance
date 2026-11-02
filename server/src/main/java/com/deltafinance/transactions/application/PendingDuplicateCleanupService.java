@@ -5,8 +5,7 @@ import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.transactions.domain.ReconciliationState;
 import com.deltafinance.transactions.domain.Transaction;
 import com.deltafinance.transactions.domain.TransactionRepository;
@@ -35,17 +34,17 @@ public class PendingDuplicateCleanupService {
 
   private final TransactionRepository transactionRepository;
   private final FinancialAccountRepository accountRepository;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
 
   public PendingDuplicateCleanupService(
       TransactionRepository transactionRepository,
       FinancialAccountRepository accountRepository,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
   }
 
@@ -82,6 +81,8 @@ public class PendingDuplicateCleanupService {
         continue;
       }
       pending.markStatus(TransactionStatus.POSTED);
+      // Impede que a próxima sincronização restaure o status PENDING do provedor.
+      pending.markEdited("status");
       pending.setReconciliationState(ReconciliationState.MATCHED);
       transactionRepository.save(pending);
       auditService.record(
@@ -114,20 +115,23 @@ public class PendingDuplicateCleanupService {
   }
 
   private BigDecimal decryptAmount(UUID userId, Transaction transaction) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            transaction.getAmountEffectiveEnc(),
-            new CryptoContext(userId, TABLE, "amount_effective", transaction.getId())));
+    return encryptedValueReader.readMoney(
+        userId,
+        TABLE,
+        "amount_effective",
+        transaction.getId(),
+        transaction.getAmountEffectiveEnc());
   }
 
   private String decryptDescription(UUID userId, Transaction transaction) {
-    try {
-      return cryptoService.decryptString(
-          transaction.getDescriptionEffectiveEnc(),
-          new CryptoContext(userId, TABLE, "description_effective", transaction.getId()));
-    } catch (RuntimeException exception) {
-      return "";
-    }
+    return encryptedValueReader
+        .tryRead(
+            userId,
+            TABLE,
+            "description_effective",
+            transaction.getId(),
+            transaction.getDescriptionEffectiveEnc())
+        .orElse("");
   }
 
   private static boolean looksLikeCardPayment(String description) {
