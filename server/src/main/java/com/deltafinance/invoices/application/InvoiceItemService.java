@@ -13,8 +13,8 @@ import com.deltafinance.invoices.domain.InvoiceRepository;
 import com.deltafinance.invoices.domain.InvoiceStatus;
 import com.deltafinance.invoices.domain.ReportingEffect;
 import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
@@ -24,7 +24,6 @@ import com.deltafinance.transactions.domain.Transaction;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionSource;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +53,7 @@ public class InvoiceItemService {
   private final CardCycleService cardCycleService;
   private final InvoiceGenerationService invoiceGenerationService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final Clock clock;
 
   public InvoiceItemService(
@@ -66,6 +66,7 @@ public class InvoiceItemService {
       CardCycleService cardCycleService,
       InvoiceGenerationService invoiceGenerationService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       Clock clock) {
     this.invoiceRepository = invoiceRepository;
     this.itemRepository = itemRepository;
@@ -76,6 +77,7 @@ public class InvoiceItemService {
     this.cardCycleService = cardCycleService;
     this.invoiceGenerationService = invoiceGenerationService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.clock = clock;
   }
 
@@ -114,6 +116,9 @@ public class InvoiceItemService {
         for (InvoiceItem existing :
             itemRepository.findByUserIdAndTransactionId(userId, transaction.getId())) {
           if (existing.isActive()) {
+            // Libera a FK antes de remover logicamente o espelho; o item histórico não pode
+            // impedir a exclusão da transação de origem.
+            existing.attachTransaction(null);
             existing.remove(clock.now());
             itemRepository.save(existing);
           }
@@ -153,7 +158,11 @@ public class InvoiceItemService {
             request.occurredOn(),
             installmentNumber,
             totalInstallments,
-            installmentService.planKey(userId, description, totalInstallments));
+            installmentService.planKey(
+                userId,
+                transaction == null ? null : transaction.getId(),
+                description,
+                totalInstallments));
     itemRepository.save(item);
     if (transaction != null) {
       transaction.setInvoiceId(invoiceId);
@@ -187,7 +196,7 @@ public class InvoiceItemService {
                 () ->
                     new ValidationException(
                         "installments", "Configure o ciclo do cartão antes de parcelar."));
-    byte[] planKey = installmentService.planKey(userId, description, total);
+    byte[] planKey = installmentService.planKey(userId, transaction.getId(), description, total);
     CardCycleService.CardCycle cycle =
         new CardCycleService.CardCycle(
             invoice.getCycleStart(),
@@ -465,28 +474,16 @@ public class InvoiceItemService {
   }
 
   private String decryptItem(UUID userId, UUID itemId, String column, byte[] value) {
-    if (value == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          value, new CryptoContext(userId, ITEM_TABLE, column, itemId));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    return encryptedValueReader.tryRead(userId, ITEM_TABLE, column, itemId, value).orElse(null);
   }
 
   private BigDecimal decryptItemAmount(UUID userId, UUID itemId, byte[] value) {
-    return new BigDecimal(decryptItem(userId, itemId, "amount", value));
+    return encryptedValueReader.readMoney(userId, ITEM_TABLE, "amount", itemId, value);
   }
 
   private String decryptCorrection(InvoiceItemCorrection correction, String column, byte[] value) {
-    if (value == null) {
-      return null;
-    }
-    return cryptoService.decryptString(
-        value,
-        new CryptoContext(correction.getUserId(), CORRECTION_TABLE, column, correction.getId()));
+    return encryptedValueReader.read(
+        correction.getUserId(), CORRECTION_TABLE, column, correction.getId(), value);
   }
 
   private byte[] encryptItem(UUID userId, UUID itemId, String column, String value) {
@@ -523,8 +520,7 @@ public class InvoiceItemService {
 
   private static BigDecimal parseAmount(String value) {
     try {
-      BigDecimal amount =
-          new BigDecimal(value.trim()).setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+      BigDecimal amount = Money.scaled(new BigDecimal(value.trim()));
       if (amount.signum() <= 0) {
         throw new ValidationException("amount", "O valor do item deve ser positivo.");
       }

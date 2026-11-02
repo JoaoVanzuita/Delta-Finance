@@ -14,11 +14,12 @@ import com.deltafinance.invoices.domain.InvoiceStatus;
 import com.deltafinance.invoices.domain.ReportingEffect;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.money.Money;
+import com.deltafinance.shared.recalculation.RecalculationBatch;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,7 @@ public class InvoiceBalanceService {
 
   private static final String INVOICE_TABLE = "invoice";
   private static final String CARD_TABLE = "card_profile";
-  private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(Money.SCALE);
+  private static final BigDecimal ZERO = Money.scaled(BigDecimal.ZERO);
 
   private final InvoiceRepository invoiceRepository;
   private final InvoiceItemRepository itemRepository;
@@ -47,6 +48,7 @@ public class InvoiceBalanceService {
   private final CardProfileRepository cardProfileRepository;
   private final ProviderBillService providerBillService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final Clock clock;
 
   public InvoiceBalanceService(
@@ -56,6 +58,7 @@ public class InvoiceBalanceService {
       CardProfileRepository cardProfileRepository,
       ProviderBillService providerBillService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       Clock clock) {
     this.invoiceRepository = invoiceRepository;
     this.itemRepository = itemRepository;
@@ -63,11 +66,16 @@ public class InvoiceBalanceService {
     this.cardProfileRepository = cardProfileRepository;
     this.providerBillService = providerBillService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.clock = clock;
   }
 
   @Transactional
   public void recalculateCard(UUID userId, UUID cardAccountId) {
+    if (RecalculationBatch.isActive()) {
+      RecalculationBatch.markDirty(cardAccountId);
+      return;
+    }
     CardProfile profile =
         cardProfileRepository.findByAccountIdAndUserId(cardAccountId, userId).orElse(null);
     if (profile == null) {
@@ -131,7 +139,7 @@ public class InvoiceBalanceService {
 
     profile.updateCreditBalance(
         cryptoService.encrypt(
-            creditPool.setScale(Money.SCALE, RoundingMode.HALF_EVEN).toPlainString(),
+            Money.plain(creditPool),
             new CryptoContext(userId, CARD_TABLE, "credit_balance", profile.getId())));
     cardProfileRepository.save(profile);
   }
@@ -171,9 +179,7 @@ public class InvoiceBalanceService {
         overflow = overflow.add(amount.subtract(applied));
       }
     }
-    return new Totals(
-        running.setScale(Money.SCALE, RoundingMode.HALF_EVEN),
-        overflow.setScale(Money.SCALE, RoundingMode.HALF_EVEN));
+    return new Totals(Money.scaled(running), Money.scaled(overflow));
   }
 
   /**
@@ -226,9 +232,8 @@ public class InvoiceBalanceService {
   }
 
   private BigDecimal decryptInvoice(Invoice invoice, String column, byte[] value) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            value, new CryptoContext(invoice.getUserId(), INVOICE_TABLE, column, invoice.getId())));
+    return encryptedValueReader.readMoney(
+        invoice.getUserId(), INVOICE_TABLE, column, invoice.getId(), value);
   }
 
   private BigDecimal decryptInvoice(Invoice invoice, String column) {
@@ -240,22 +245,18 @@ public class InvoiceBalanceService {
 
   private byte[] encrypt(Invoice invoice, String column, BigDecimal value) {
     return cryptoService.encrypt(
-        value.setScale(Money.SCALE, RoundingMode.HALF_EVEN).toPlainString(),
+        Money.plain(value),
         new CryptoContext(invoice.getUserId(), INVOICE_TABLE, column, invoice.getId()));
   }
 
   private BigDecimal decryptItem(InvoiceItem item) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            item.getAmountEnc(),
-            new CryptoContext(item.getUserId(), "invoice_item", "amount", item.getId())));
+    return encryptedValueReader.readMoney(
+        item.getUserId(), "invoice_item", "amount", item.getId(), item.getAmountEnc());
   }
 
   private BigDecimal decryptPayment(InvoicePayment payment) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            payment.getAmountEnc(),
-            new CryptoContext(payment.getUserId(), "invoice_payment", "amount", payment.getId())));
+    return encryptedValueReader.readMoney(
+        payment.getUserId(), "invoice_payment", "amount", payment.getId(), payment.getAmountEnc());
   }
 
   private record Totals(BigDecimal total, BigDecimal overflow) {}

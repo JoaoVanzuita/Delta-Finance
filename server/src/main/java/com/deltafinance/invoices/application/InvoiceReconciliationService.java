@@ -16,7 +16,6 @@ import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.money.Money;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -82,7 +81,7 @@ public class InvoiceReconciliationService {
           "INVOICE_ALREADY_RECONCILED",
           "O total local já coincide com a Bill oficial desta fatura.");
     }
-    BigDecimal adjustment = difference.negate().setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+    BigDecimal adjustment = Money.scaled(difference.negate());
     ReportingEffect effect =
         adjustment.signum() > 0
             ? ReportingEffect.EXPENSE_INCREASE

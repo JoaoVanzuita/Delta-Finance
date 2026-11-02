@@ -13,6 +13,7 @@ import com.deltafinance.support.PluggyStub.BillFixture;
 import com.deltafinance.support.PluggyStub.BillPaymentFixture;
 import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -545,6 +546,50 @@ class InvoiceIT extends PostgresTestBase {
       assertThat(detail.path("items").get(0).path("kind").asString()).isEqualTo("INSTALLMENT");
       assertThat(detail.path("items").get(0).path("installmentNumber").asInt()).isBetween(1, 3);
     }
+  }
+
+  @Test
+  void correcaoDeCompraParceladaMantemValorDasParcelas() throws Exception {
+    String transactionId = createCardTransaction("DEBIT", "-300.00", "2026-10-03");
+    invoices();
+    createInstallmentPlan(
+        invoiceIdForTransaction(transactionId),
+        transactionId,
+        "Compra parcelada",
+        "100.00",
+        "2026-10-03");
+
+    assertInstallmentTotals(transactionId, "100.00");
+
+    alice
+        .patch(
+            "/api/v1/transactions/" + transactionId,
+            Map.of("description", "Compra parcelada corrigida"))
+        .andExpect(status().isOk());
+
+    // Um evento posterior (correção/reimportação) não pode multiplicar o total da fatura.
+    assertInstallmentTotals(transactionId, "100.00");
+  }
+
+  @Test
+  void exclusaoDeCompraParceladaNaoRemoveItensDeOutraCompraComMesmoPlano() throws Exception {
+    // Mesma descrição e mesmo número de parcelas: antes a chave do plano era compartilhada.
+    String first = createCardTransaction("DEBIT", "-300.00", "2026-10-03");
+    String second = createCardTransaction("DEBIT", "-300.00", "2027-01-03");
+    invoices();
+
+    createInstallmentPlan(
+        invoiceIdForTransaction(first), first, "Compra parcelada", "100.00", "2026-10-03");
+    createInstallmentPlan(
+        invoiceIdForTransaction(second), second, "Compra parcelada", "100.00", "2027-01-03");
+
+    assertThat(countItemsForTransaction(first)).isEqualTo(3);
+    assertThat(countItemsForTransaction(second)).isEqualTo(3);
+
+    alice.delete("/api/v1/transactions/" + first).andExpect(status().isNoContent());
+
+    assertThat(countItemsForTransaction(first)).isZero();
+    assertThat(countItemsForTransaction(second)).isEqualTo(3);
   }
 
   @Test
@@ -1277,6 +1322,73 @@ class InvoiceIT extends PostgresTestBase {
       }
     }
     throw new AssertionError("Fatura não encontrada: " + cycleStart + " em " + invoices());
+  }
+
+  private void createInstallmentPlan(
+      String invoiceId, String transactionId, String description, String amount, String occurredOn)
+      throws Exception {
+    alice
+        .post(
+            "/api/v1/invoices/" + invoiceId + "/items",
+            Map.of(
+                "kind",
+                "INSTALLMENT",
+                "reportingEffect",
+                "NONE",
+                "description",
+                description,
+                "amount",
+                amount,
+                "occurredOn",
+                occurredOn,
+                "transactionId",
+                transactionId,
+                "installmentNumber",
+                1,
+                "totalInstallments",
+                3))
+        .andExpect(status().isCreated());
+  }
+
+  private String invoiceIdForTransaction(String transactionId) throws Exception {
+    for (JsonNode transaction : transactions().path("items")) {
+      if (transactionId.equals(transaction.path("id").asString())) {
+        return transaction.path("invoiceId").asString();
+      }
+    }
+    throw new AssertionError("Transação não encontrada: " + transactionId);
+  }
+
+  private int countItemsForTransaction(String transactionId) throws Exception {
+    int count = 0;
+    for (JsonNode invoice : invoices().path("items")) {
+      for (JsonNode item : invoiceDetail(invoice.path("id").asString()).path("items")) {
+        if (transactionId.equals(item.path("transactionId").asString())) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  private void assertInstallmentTotals(String transactionId, String expectedAmount)
+      throws Exception {
+    int invoicesWithItem = 0;
+    for (JsonNode invoice : invoices().path("items")) {
+      JsonNode detail = invoiceDetail(invoice.path("id").asString());
+      BigDecimal total = BigDecimal.ZERO;
+      for (JsonNode item : detail.path("items")) {
+        if (transactionId.equals(item.path("transactionId").asString())) {
+          assertThat(item.path("amount").asString()).isEqualTo(expectedAmount);
+          total = total.add(new BigDecimal(item.path("amount").asString()));
+        }
+      }
+      if (total.signum() > 0) {
+        assertThat(detail.path("total").asString()).isEqualTo(expectedAmount);
+        invoicesWithItem++;
+      }
+    }
+    assertThat(invoicesWithItem).isEqualTo(3);
   }
 
   private void sync() throws Exception {

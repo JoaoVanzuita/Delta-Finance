@@ -5,11 +5,9 @@ import com.deltafinance.invoices.domain.ProviderBill;
 import com.deltafinance.invoices.domain.ProviderBillPayment;
 import com.deltafinance.invoices.domain.ProviderBillPaymentRepository;
 import com.deltafinance.invoices.domain.ProviderBillRepository;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.money.Money;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -41,15 +39,15 @@ public class ProviderBillService {
 
   private final ProviderBillRepository billRepository;
   private final ProviderBillPaymentRepository paymentRepository;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
 
   public ProviderBillService(
       ProviderBillRepository billRepository,
       ProviderBillPaymentRepository paymentRepository,
-      CryptoService cryptoService) {
+      EncryptedValueReader encryptedValueReader) {
     this.billRepository = billRepository;
     this.paymentRepository = paymentRepository;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   /** Bills do cartão em ordem crescente de vencimento. */
@@ -131,7 +129,7 @@ public class ProviderBillService {
     BigDecimal providerPayments =
         officialPayments.stream()
             .map(payment -> decryptPayment(payment))
-            .reduce(BigDecimal.ZERO.setScale(Money.SCALE), BigDecimal::add);
+            .reduce(Money.scaled(BigDecimal.ZERO), BigDecimal::add);
 
     BigDecimal totalDifference = localTotal.subtract(providerTotal);
     BigDecimal paymentsDifference = localPayments.subtract(providerPayments);
@@ -197,25 +195,21 @@ public class ProviderBillService {
   }
 
   private BigDecimal decryptInvoice(Invoice invoice, String column, byte[] value) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            value, new CryptoContext(invoice.getUserId(), INVOICE_TABLE, column, invoice.getId())));
+    return encryptedValueReader.readMoney(
+        invoice.getUserId(), INVOICE_TABLE, column, invoice.getId(), value);
   }
 
   private BigDecimal decryptBill(ProviderBill bill, String column, byte[] value) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            value, new CryptoContext(bill.getUserId(), BILL_TABLE, column, bill.getId())));
+    return encryptedValueReader.readMoney(
+        bill.getUserId(), BILL_TABLE, column, bill.getId(), value);
   }
 
   private BigDecimal decryptPayment(ProviderBillPayment payment) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            payment.getAmountEnc(),
-            new CryptoContext(payment.getUserId(), PAYMENT_TABLE, "amount", payment.getId())));
+    return encryptedValueReader.readMoney(
+        payment.getUserId(), PAYMENT_TABLE, "amount", payment.getId(), payment.getAmountEnc());
   }
 
   private static String format(BigDecimal value) {
-    return value.setScale(Money.SCALE, RoundingMode.HALF_EVEN).toPlainString();
+    return Money.plain(value);
   }
 }

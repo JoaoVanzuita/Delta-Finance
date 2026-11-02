@@ -358,7 +358,8 @@ class FinalInvoiceIT extends PostgresTestBase {
                 "kind", "PURCHASE",
                 "reportingEffect", "NONE",
                 "description", "Compra -120.00",
-                "amount", "120.00",
+                // O contrato do plano usa o valor de cada parcela (120 / 3).
+                "amount", "40.00",
                 "occurredOn", "2026-10-03",
                 "transactionId", transactionId,
                 "totalInstallments", 3))
@@ -376,7 +377,8 @@ class FinalInvoiceIT extends PostgresTestBase {
       JsonNode detail = invoiceDetail(invoice.path("id").asString());
       for (JsonNode item : detail.path("items")) {
         if ("Compra corrigida".equals(item.path("description").asString())) {
-          assertThat(item.path("amount").asString()).isEqualTo("150.00");
+          // A correção para 150 distribui o total entre as 3 parcelas sem multiplicar a fatura.
+          assertThat(item.path("amount").asString()).isEqualTo("50.00");
           corrected++;
         }
       }

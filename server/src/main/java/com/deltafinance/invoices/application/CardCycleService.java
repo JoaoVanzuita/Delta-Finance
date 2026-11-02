@@ -15,8 +15,9 @@ import org.springframework.stereotype.Service;
 /**
  * Cálculo do ciclo local do cartão.
  *
- * <p>O fechamento ocorre no dia configurado; o vencimento é no dia configurado do mês seguinte. Sem
- * {@code card_profile}, o cartão não possui ciclo e as transações ficam não alocadas.
+ * <p>O fechamento ocorre no dia configurado. O vencimento usa o mesmo mês quando o dia configurado
+ * ainda não passou do fechamento; caso contrário, cai no mês seguinte. Sem {@code card_profile}, o
+ * cartão não possui ciclo e as transações ficam não alocadas.
  */
 @Service
 public class CardCycleService {

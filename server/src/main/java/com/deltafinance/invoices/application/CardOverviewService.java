@@ -3,11 +3,12 @@ package com.deltafinance.invoices.application;
 import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
 import com.deltafinance.invoices.domain.InvoiceRepository;
-import com.deltafinance.shared.errors.NotFoundException;
-import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.money.Money;
+import com.deltafinance.transactions.domain.Transaction;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionStatus;
+import com.deltafinance.transactions.domain.TransactionType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -27,7 +28,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class CardOverviewService {
 
-  private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(Money.SCALE);
+  private static final BigDecimal ZERO = Money.scaled(BigDecimal.ZERO);
   private static final List<TransactionStatus> EFFECTIVE_STATUSES =
       List.of(TransactionStatus.POSTED, TransactionStatus.RECONCILED);
 
@@ -36,18 +37,21 @@ public class CardOverviewService {
   private final InvoiceRepository invoiceRepository;
   private final TransactionRepository transactionRepository;
   private final CardDebtService cardDebtService;
+  private final EncryptedValueReader encryptedValueReader;
 
   public CardOverviewService(
       AccountQueryService accountQueryService,
       InvoiceQueryService invoiceQueryService,
       InvoiceRepository invoiceRepository,
       TransactionRepository transactionRepository,
-      CardDebtService cardDebtService) {
+      CardDebtService cardDebtService,
+      EncryptedValueReader encryptedValueReader) {
     this.accountQueryService = accountQueryService;
     this.invoiceQueryService = invoiceQueryService;
     this.invoiceRepository = invoiceRepository;
     this.transactionRepository = transactionRepository;
     this.cardDebtService = cardDebtService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   public CardOverviewView overview(UUID userId) {
@@ -119,6 +123,8 @@ public class CardOverviewService {
       nextDueDate = currentInvoice.dueDate();
     }
 
+    AttentionTotals attention = attentionTotals(userId, account.id(), currentInvoice);
+
     return new CardOverviewView.CardItem(
         account.id(),
         account.alias(),
@@ -142,37 +148,102 @@ public class CardOverviewService {
         nextDueDate,
         currentInvoice,
         nextDueInvoice,
-        pendingCount(userId, account.id()),
-        unallocatedCount(userId, account.id()));
+        attention.pendingAllCount(),
+        attention.unallocatedAllCount(),
+        attention.pendingPurchaseCount(),
+        format(attention.pendingPurchaseTotal()),
+        attention.unallocatedPurchaseCount(),
+        format(attention.unallocatedPurchaseTotal()),
+        attention.unallocatedCreditCount(),
+        format(attention.unallocatedCreditTotal()));
   }
+
+  private AttentionTotals attentionTotals(UUID userId, UUID accountId, InvoiceView currentInvoice) {
+    int pendingAllCount = 0;
+    int pendingPurchaseCount = 0;
+    BigDecimal pendingPurchaseTotal = ZERO;
+    int unallocatedAllCount = 0;
+    int unallocatedPurchaseCount = 0;
+    BigDecimal unallocatedPurchaseTotal = ZERO;
+    int unallocatedCreditCount = 0;
+    BigDecimal unallocatedCreditTotal = ZERO;
+
+    for (Transaction transaction :
+        transactionRepository.findByUserIdAndAccountIdOrderByPostedOnDescIdDesc(
+            userId, accountId)) {
+      if (transaction.getStatus() == TransactionStatus.PENDING) {
+        pendingAllCount++;
+        boolean inCurrentCycle =
+            currentInvoice != null
+                && !transaction.getPostedOn().isBefore(currentInvoice.cycleStart())
+                && !transaction.getPostedOn().isAfter(currentInvoice.cycleEnd());
+        if (transaction.getType() == TransactionType.DEBIT && inCurrentCycle) {
+          pendingPurchaseCount++;
+          pendingPurchaseTotal = pendingPurchaseTotal.add(amount(userId, transaction));
+        }
+        continue;
+      }
+      if (transaction.getInvoiceId() != null
+          || !EFFECTIVE_STATUSES.contains(transaction.getStatus())) {
+        continue;
+      }
+      unallocatedAllCount++;
+      BigDecimal amount = amount(userId, transaction);
+      if (isCredit(transaction)) {
+        unallocatedCreditCount++;
+        unallocatedCreditTotal = unallocatedCreditTotal.add(amount);
+      } else {
+        unallocatedPurchaseCount++;
+        unallocatedPurchaseTotal = unallocatedPurchaseTotal.add(amount);
+      }
+    }
+    return new AttentionTotals(
+        pendingAllCount,
+        pendingPurchaseCount,
+        pendingPurchaseTotal,
+        unallocatedAllCount,
+        unallocatedPurchaseCount,
+        unallocatedPurchaseTotal,
+        unallocatedCreditCount,
+        unallocatedCreditTotal);
+  }
+
+  private BigDecimal amount(UUID userId, Transaction transaction) {
+    return encryptedValueReader
+        .tryReadMoney(
+            userId,
+            "transaction",
+            "amount_effective",
+            transaction.getId(),
+            transaction.getAmountEffectiveEnc())
+        .map(BigDecimal::abs)
+        .orElse(ZERO);
+  }
+
+  private static boolean isCredit(Transaction transaction) {
+    return transaction.getType() == TransactionType.CREDIT
+        || transaction.getType() == TransactionType.REFUND
+        || transaction.getType() == TransactionType.CHARGEBACK;
+  }
+
+  private record AttentionTotals(
+      int pendingAllCount,
+      int pendingPurchaseCount,
+      BigDecimal pendingPurchaseTotal,
+      int unallocatedAllCount,
+      int unallocatedPurchaseCount,
+      BigDecimal unallocatedPurchaseTotal,
+      int unallocatedCreditCount,
+      BigDecimal unallocatedCreditTotal) {}
 
   private List<InvoiceView> invoicesFor(UUID userId, AccountView account) {
     if (account.cardProfile() == null) {
-      return List.of();
-    }
-    try {
-      invoiceQueryService.ensureInvoices(userId, account.id());
-    } catch (ValidationException | NotFoundException exception) {
       return List.of();
     }
     return invoiceQueryService.toViews(
         userId,
         account.id(),
         invoiceRepository.findByUserIdAndCardAccountIdOrderByCycleStartDesc(userId, account.id()));
-  }
-
-  private int pendingCount(UUID userId, UUID accountId) {
-    long count =
-        transactionRepository.countByUserIdAndAccountIdAndStatus(
-            userId, accountId, TransactionStatus.PENDING);
-    return (int) Math.min(Integer.MAX_VALUE, count);
-  }
-
-  private int unallocatedCount(UUID userId, UUID accountId) {
-    long count =
-        transactionRepository.countByUserIdAndAccountIdAndInvoiceIdIsNullAndStatusIn(
-            userId, accountId, EFFECTIVE_STATUSES);
-    return (int) Math.min(Integer.MAX_VALUE, count);
   }
 
   private static String utilization(BigDecimal used, BigDecimal limit) {
@@ -189,13 +260,13 @@ public class CardOverviewService {
       return fallback;
     }
     try {
-      return new BigDecimal(value).setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+      return Money.scaled(new BigDecimal(value));
     } catch (NumberFormatException exception) {
       return fallback;
     }
   }
 
   private static String format(BigDecimal value) {
-    return value.setScale(Money.SCALE, RoundingMode.HALF_EVEN).toPlainString();
+    return Money.plain(value);
   }
 }

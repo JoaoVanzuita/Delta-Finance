@@ -13,12 +13,12 @@ import com.deltafinance.invoices.domain.InvoicePaymentStatus;
 import com.deltafinance.invoices.domain.InvoiceRepository;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.money.Money;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,18 +34,21 @@ public class InvoicePaymentService {
   private final FinancialAccountRepository accountRepository;
   private final InvoiceBalanceService balanceService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
 
   public InvoicePaymentService(
       InvoiceRepository invoiceRepository,
       InvoicePaymentRepository paymentRepository,
       FinancialAccountRepository accountRepository,
       InvoiceBalanceService balanceService,
-      CryptoService cryptoService) {
+      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader) {
     this.invoiceRepository = invoiceRepository;
     this.paymentRepository = paymentRepository;
     this.accountRepository = accountRepository;
     this.balanceService = balanceService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   @Transactional
@@ -96,12 +99,13 @@ public class InvoicePaymentService {
         payment.getId(),
         payment.getInvoiceId(),
         payment.getPaymentAccountId(),
-        new BigDecimal(
-                cryptoService.decryptString(
-                    payment.getAmountEnc(),
-                    new CryptoContext(
-                        payment.getUserId(), PAYMENT_TABLE, "amount", payment.getId())))
-            .toPlainString(),
+        Money.plain(
+            encryptedValueReader.readMoney(
+                payment.getUserId(),
+                PAYMENT_TABLE,
+                "amount",
+                payment.getId(),
+                payment.getAmountEnc())),
         payment.getPaidOn(),
         payment.getStatus().name(),
         payment.getSource().name());
@@ -109,8 +113,7 @@ public class InvoicePaymentService {
 
   private static BigDecimal parseAmount(String value) {
     try {
-      BigDecimal amount =
-          new BigDecimal(value.trim()).setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+      BigDecimal amount = Money.scaled(new BigDecimal(value.trim()));
       if (amount.signum() <= 0) {
         throw new ValidationException("amount", "O valor do pagamento deve ser positivo.");
       }

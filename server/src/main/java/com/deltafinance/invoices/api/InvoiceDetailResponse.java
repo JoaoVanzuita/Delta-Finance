@@ -1,6 +1,8 @@
 package com.deltafinance.invoices.api;
 
 import com.deltafinance.invoices.application.InvoiceDetailView;
+import com.deltafinance.invoices.application.InvoiceItemView;
+import com.deltafinance.invoices.application.InvoicePaymentView;
 import com.deltafinance.invoices.application.ProviderBillView;
 import java.time.LocalDate;
 import java.util.List;
@@ -24,8 +26,8 @@ public record InvoiceDetailResponse(
     int adjustmentCount,
     ProviderBillView providerBill,
     boolean missingPurchases,
-    List<InvoiceItemResponse> items,
-    List<InvoicePaymentResponse> payments) {
+    List<InvoiceItemView> items,
+    List<InvoicePaymentView> payments) {
 
   public static InvoiceDetailResponse from(InvoiceDetailView view) {
     var invoice = view.invoice();
@@ -47,7 +49,7 @@ public record InvoiceDetailResponse(
         invoice.adjustmentCount(),
         invoice.providerBill(),
         invoice.missingPurchases(),
-        view.items().stream().map(InvoiceItemResponse::from).toList(),
-        view.payments().stream().map(InvoicePaymentResponse::from).toList());
+        view.items().stream().toList(),
+        view.payments().stream().toList());
   }
 }

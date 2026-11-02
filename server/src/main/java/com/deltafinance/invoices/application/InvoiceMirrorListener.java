@@ -12,6 +12,7 @@ import com.deltafinance.invoices.domain.InvoiceStatus;
 import com.deltafinance.invoices.domain.ReportingEffect;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.application.TransactionDeletedEvent;
@@ -52,8 +53,10 @@ public class InvoiceMirrorListener {
   private final InvoiceRepository invoiceRepository;
   private final TransactionRepository transactionRepository;
   private final InvoiceGenerationService generationService;
+  private final CardPaymentReconciler paymentReconciler;
   private final InvoiceBalanceService balanceService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final Clock clock;
 
   public InvoiceMirrorListener(
@@ -62,16 +65,20 @@ public class InvoiceMirrorListener {
       InvoiceRepository invoiceRepository,
       TransactionRepository transactionRepository,
       InvoiceGenerationService generationService,
+      CardPaymentReconciler paymentReconciler,
       InvoiceBalanceService balanceService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       Clock clock) {
     this.itemRepository = itemRepository;
     this.paymentRepository = paymentRepository;
     this.invoiceRepository = invoiceRepository;
     this.transactionRepository = transactionRepository;
     this.generationService = generationService;
+    this.paymentReconciler = paymentReconciler;
     this.balanceService = balanceService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.clock = clock;
   }
 
@@ -102,6 +109,8 @@ public class InvoiceMirrorListener {
 
     if (!isEffective(transaction)) {
       suspendMirrors(event.userId(), active);
+      // Cria a fatura aberta do ciclo sem depender de uma leitura que escreve.
+      generationService.ensureCurrentInvoiceForCard(event.userId(), transaction.getAccountId());
       return;
     }
     if (active.isEmpty()) {
@@ -127,13 +136,13 @@ public class InvoiceMirrorListener {
         paymentRepository.save(payment);
       }
       // Correções de valor/data/chave também chegam pelo evento da transação.
-      boolean dataChanged = generationService.synchronizePaymentData(userId, transaction, payment);
+      boolean dataChanged = paymentReconciler.synchronizePaymentData(userId, transaction, payment);
       if (!dataChanged && statusChanged) {
         recalculatePaymentCard(userId, payment);
       }
       return;
     }
-    if (generationService.reassignPaymentSource(userId, transaction, payment)) {
+    if (paymentReconciler.reassignPaymentSource(userId, transaction, payment)) {
       // Outra transação equivalente continua efetiva e assume o pagamento.
       return;
     }
@@ -157,7 +166,7 @@ public class InvoiceMirrorListener {
     if (plan) {
       syncPlan(userId, active, transaction);
     } else if (active.size() == 1) {
-      sync(userId, active.getFirst(), transaction, true);
+      sync(userId, active.getFirst(), transaction, true, transactionAmount(userId, transaction));
     }
   }
 
@@ -176,7 +185,7 @@ public class InvoiceMirrorListener {
               .findByIdAndUserId(event.transactionId(), event.userId())
               .orElse(null);
       if (transaction == null
-          || !generationService.reassignPaymentSource(event.userId(), transaction, payment)) {
+          || !paymentReconciler.reassignPaymentSource(event.userId(), transaction, payment)) {
         if (payment.getStatus() != InvoicePaymentStatus.REVERSED) {
           payment.reverse();
           paymentRepository.save(payment);
@@ -228,8 +237,15 @@ public class InvoiceMirrorListener {
     for (InvoiceItem item : related) {
       byte[] planKey = item.getInstallmentPlanKey();
       if (planKey != null) {
+        UUID anchorTransactionId = item.getTransactionId();
         for (InvoiceItem planItem :
             itemRepository.findByUserIdAndInstallmentPlanKey(userId, planKey)) {
+          // Chaves antigas não incluíam a transação; o filtro impede que um plano legado
+          // continue agrupando compras diferentes após a correção.
+          if (anchorTransactionId != null
+              && !anchorTransactionId.equals(planItem.getTransactionId())) {
+            continue;
+          }
           if (related.stream().noneMatch(existing -> existing.getId().equals(planItem.getId()))) {
             related.add(planItem);
           }
@@ -292,33 +308,60 @@ public class InvoiceMirrorListener {
   private void syncPlan(UUID userId, List<InvoiceItem> active, Transaction transaction) {
     InvoiceItem anchor =
         active.stream()
-            .min(
-                Comparator.comparing(
-                    item -> item.getInstallmentNumber() == null ? 0 : item.getInstallmentNumber()))
+            .min(Comparator.comparing(InvoiceMirrorListener::installmentNumber))
             .orElse(null);
+    BigDecimal total = transactionAmount(userId, transaction);
+    BigDecimal perInstallment = null;
+    InvoiceItem last = null;
+    if (active.size() > 1) {
+      // Plano local: a transação guarda o total da compra, não o valor de cada parcela.
+      perInstallment = total.divide(BigDecimal.valueOf(active.size()), 2, RoundingMode.HALF_EVEN);
+      last =
+          active.stream()
+              .max(Comparator.comparing(InvoiceMirrorListener::installmentNumber))
+              .orElse(null);
+    }
     for (InvoiceItem item : active) {
-      sync(userId, item, transaction, item == anchor);
+      BigDecimal amount = total;
+      if (perInstallment != null) {
+        // A última parcela absorve o resíduo do arredondamento para o total fechar exatamente.
+        amount =
+            item == last
+                ? total.subtract(perInstallment.multiply(BigDecimal.valueOf(active.size() - 1)))
+                : perInstallment;
+      }
+      sync(userId, item, transaction, item == anchor, amount);
     }
   }
 
-  private void sync(UUID userId, InvoiceItem item, Transaction transaction, boolean anchor) {
+  private static int installmentNumber(InvoiceItem item) {
+    return item.getInstallmentNumber() == null ? 0 : item.getInstallmentNumber();
+  }
+
+  private BigDecimal transactionAmount(UUID userId, Transaction transaction) {
+    return encryptedValueReader
+        .readMoney(
+            userId,
+            TRANSACTION_TABLE,
+            "amount_effective",
+            transaction.getId(),
+            transaction.getAmountEffectiveEnc())
+        .abs();
+  }
+
+  private void sync(
+      UUID userId, InvoiceItem item, Transaction transaction, boolean anchor, BigDecimal amount) {
     Invoice current = invoiceRepository.findByIdAndUserId(item.getInvoiceId(), userId).orElse(null);
     if (current == null || current.getStatus() == InvoiceStatus.PAID) {
       return;
     }
-    BigDecimal amount =
-        new BigDecimal(
-                cryptoService.decryptString(
-                    transaction.getAmountEffectiveEnc(),
-                    new CryptoContext(
-                        userId, TRANSACTION_TABLE, "amount_effective", transaction.getId())))
-            .abs()
-            .setScale(2, RoundingMode.HALF_EVEN);
     String description =
-        cryptoService.decryptString(
-            transaction.getDescriptionEffectiveEnc(),
-            new CryptoContext(
-                userId, TRANSACTION_TABLE, "description_effective", transaction.getId()));
+        encryptedValueReader.read(
+            userId,
+            TRANSACTION_TABLE,
+            "description_effective",
+            transaction.getId(),
+            transaction.getDescriptionEffectiveEnc());
     if (anchor) {
       boolean sameCycle =
           !transaction.getPostedOn().isBefore(current.getCycleStart())

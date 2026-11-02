@@ -1,6 +1,7 @@
 package com.deltafinance.invoices.api;
 
 import com.deltafinance.invoices.application.CardOverviewView;
+import com.deltafinance.invoices.application.InvoiceView;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -21,11 +22,20 @@ public record CardOverviewItemResponse(
     String last4,
     String usedAmount,
     String outstanding,
+    String invoicedOutstanding,
+    String unbilledAmount,
     String utilization,
     LocalDate nextDueDate,
-    InvoiceResponse currentInvoice,
-    InvoiceResponse nextDueInvoice,
-    int unallocatedCount) {
+    InvoiceView currentInvoice,
+    InvoiceView nextDueInvoice,
+    int pendingCount,
+    int unallocatedCount,
+    int pendingPurchaseCount,
+    String pendingPurchaseTotal,
+    int unallocatedPurchaseCount,
+    String unallocatedPurchaseTotal,
+    int unallocatedCreditCount,
+    String unallocatedCreditTotal) {
 
   public static CardOverviewItemResponse from(CardOverviewView.CardItem item) {
     return new CardOverviewItemResponse(
@@ -45,10 +55,19 @@ public record CardOverviewItemResponse(
         item.last4(),
         item.usedAmount(),
         item.outstanding(),
+        item.invoicedOutstanding(),
+        item.unbilledAmount(),
         item.utilization(),
         item.nextDueDate(),
-        item.currentInvoice() == null ? null : InvoiceResponse.from(item.currentInvoice()),
-        item.nextDueInvoice() == null ? null : InvoiceResponse.from(item.nextDueInvoice()),
-        item.unallocatedCount());
+        item.currentInvoice() == null ? null : item.currentInvoice(),
+        item.nextDueInvoice() == null ? null : item.nextDueInvoice(),
+        item.pendingCount(),
+        item.unallocatedCount(),
+        item.pendingPurchaseCount(),
+        item.pendingPurchaseTotal(),
+        item.unallocatedPurchaseCount(),
+        item.unallocatedPurchaseTotal(),
+        item.unallocatedCreditCount(),
+        item.unallocatedCreditTotal());
   }
 }

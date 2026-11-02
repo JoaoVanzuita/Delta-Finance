@@ -4,8 +4,7 @@ import com.deltafinance.invoices.domain.Invoice;
 import com.deltafinance.invoices.domain.InvoiceItemRepository;
 import com.deltafinance.invoices.domain.InvoicePaymentRepository;
 import com.deltafinance.invoices.domain.InvoiceRepository;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.pagination.CursorPage;
@@ -29,11 +28,8 @@ public class InvoiceQueryService {
   private final InvoicePaymentRepository paymentRepository;
   private final InvoiceItemService itemService;
   private final InvoicePaymentService paymentService;
-  private final InvoiceGenerationService generationService;
-  private final InvoiceBalanceService balanceService;
-  private final CardCycleService cardCycleService;
   private final ProviderBillService providerBillService;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
 
   public InvoiceQueryService(
       InvoiceRepository invoiceRepository,
@@ -41,25 +37,18 @@ public class InvoiceQueryService {
       InvoicePaymentRepository paymentRepository,
       InvoiceItemService itemService,
       InvoicePaymentService paymentService,
-      InvoiceGenerationService generationService,
-      InvoiceBalanceService balanceService,
-      CardCycleService cardCycleService,
       ProviderBillService providerBillService,
-      CryptoService cryptoService) {
+      EncryptedValueReader encryptedValueReader) {
     this.invoiceRepository = invoiceRepository;
     this.itemRepository = itemRepository;
     this.paymentRepository = paymentRepository;
     this.itemService = itemService;
     this.paymentService = paymentService;
-    this.generationService = generationService;
-    this.balanceService = balanceService;
-    this.cardCycleService = cardCycleService;
     this.providerBillService = providerBillService;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   public CursorPage<InvoiceView> list(UUID userId, UUID cardAccountId, String cursor, int limit) {
-    ensureInvoices(userId, cardAccountId);
     List<Invoice> all =
         invoiceRepository.findByUserIdAndCardAccountIdOrderByCycleStartDesc(userId, cardAccountId);
     Cursor decoded = decode(cursor);
@@ -88,23 +77,8 @@ public class InvoiceQueryService {
     return hasMore ? CursorPage.of(views, nextCursor) : CursorPage.last(views);
   }
 
-  /**
-   * Garante que as faturas locais do cartão existam.
-   *
-   * <p>Usado pela visão patrimonial para que o saldo devedor reflita transações já importadas. Um
-   * cartão sem ciclo configurado continua sendo uma lacuna sinalizada, não um erro fatal.
-   */
-  public void ensureInvoices(UUID userId, UUID cardAccountId) {
-    cardCycleService.requireCard(userId, cardAccountId);
-    generationService.ensureInvoices(userId, cardAccountId);
-    generationService.ensureCurrentInvoice(userId, cardAccountId);
-  }
-
   public InvoiceDetailView detail(UUID userId, UUID invoiceId) {
     Invoice invoice =
-        invoiceRepository.findByIdAndUserId(invoiceId, userId).orElseThrow(NotFoundException::new);
-    balanceService.recalculateInvoice(userId, invoiceId);
-    Invoice refreshed =
         invoiceRepository.findByIdAndUserId(invoiceId, userId).orElseThrow(NotFoundException::new);
     List<InvoiceItemView> items =
         itemRepository
@@ -120,9 +94,7 @@ public class InvoiceQueryService {
             .map(paymentService::toView)
             .toList();
     return new InvoiceDetailView(
-        toViews(userId, refreshed.getCardAccountId(), List.of(refreshed)).getFirst(),
-        items,
-        payments);
+        toViews(userId, invoice.getCardAccountId(), List.of(invoice)).getFirst(), items, payments);
   }
 
   public InvoiceView get(UUID userId, UUID invoiceId) {
@@ -178,8 +150,8 @@ public class InvoiceQueryService {
   }
 
   private String decrypt(Invoice invoice, String column, byte[] value) {
-    return cryptoService.decryptString(
-        value, new CryptoContext(invoice.getUserId(), INVOICE_TABLE, column, invoice.getId()));
+    return encryptedValueReader.read(
+        invoice.getUserId(), INVOICE_TABLE, column, invoice.getId(), value);
   }
 
   private static String encode(LocalDate cycleStart, UUID id) {

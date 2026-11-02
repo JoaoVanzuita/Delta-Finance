@@ -4,7 +4,6 @@ import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
 import com.deltafinance.shared.money.Money;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,7 +25,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class CardDebtService {
 
-  private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(Money.SCALE);
+  private static final BigDecimal ZERO = Money.scaled(BigDecimal.ZERO);
 
   private final AccountQueryService accountQueryService;
   private final InvoiceReportingService invoiceReportingService;
@@ -84,7 +83,7 @@ public class CardDebtService {
         total = total.add(debt.outstanding());
       }
     }
-    return total.setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+    return Money.scaled(total);
   }
 
   private static CardDebt debt(
@@ -93,7 +92,7 @@ public class CardDebtService {
       boolean hasInvoice,
       String providerBalanceValue) {
     BigDecimal invoiced =
-        invoicedOutstanding == null ? ZERO : invoicedOutstanding.max(ZERO).setScale(Money.SCALE);
+        invoicedOutstanding == null ? ZERO : Money.scaled(invoicedOutstanding.max(ZERO));
     BigDecimal provider = parse(providerBalanceValue);
     BigDecimal providerDebt = provider == null ? ZERO : provider.max(ZERO);
     BigDecimal outstanding = invoiced.max(providerDebt).max(ZERO);
@@ -101,10 +100,10 @@ public class CardDebtService {
     boolean known = hasInvoice || provider != null;
     return new CardDebt(
         cardAccountId,
-        invoiced.setScale(Money.SCALE, RoundingMode.HALF_EVEN),
-        provider == null ? null : provider.setScale(Money.SCALE, RoundingMode.HALF_EVEN),
-        unbilled.setScale(Money.SCALE, RoundingMode.HALF_EVEN),
-        outstanding.setScale(Money.SCALE, RoundingMode.HALF_EVEN),
+        invoiced,
+        provider == null ? null : Money.scaled(provider),
+        Money.scaled(unbilled),
+        Money.scaled(outstanding),
         known);
   }
 

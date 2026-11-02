@@ -32,13 +32,22 @@ public class InstallmentService {
     }
   }
 
-  /** Chave estável para agrupar parcelas do mesmo plano sem depender do ID externo. */
-  public byte[] planKey(UUID userId, String description, Integer totalInstallments) {
-    if (totalInstallments == null || totalInstallments < 2) {
+  /**
+   * Chave estável para agrupar parcelas do mesmo plano.
+   *
+   * <p>Inclui a transação de origem: duas compras com a mesma descrição e o mesmo número de
+   * parcelas são planos distintos e nunca podem compartilhar itens. Itens manuais sem transação não
+   * formam plano.
+   */
+  public byte[] planKey(
+      UUID userId, UUID transactionId, String description, Integer totalInstallments) {
+    if (transactionId == null || totalInstallments == null || totalInstallments < 2) {
       return null;
     }
     String value =
         userId
+            + "|"
+            + transactionId
             + "|"
             + (description == null ? "" : description.strip().toLowerCase(java.util.Locale.ROOT))
             + "|"

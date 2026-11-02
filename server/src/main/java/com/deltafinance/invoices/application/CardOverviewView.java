@@ -37,5 +37,11 @@ public record CardOverviewView(
       InvoiceView currentInvoice,
       InvoiceView nextDueInvoice,
       int pendingCount,
-      int unallocatedCount) {}
+      int unallocatedCount,
+      int pendingPurchaseCount,
+      String pendingPurchaseTotal,
+      int unallocatedPurchaseCount,
+      String unallocatedPurchaseTotal,
+      int unallocatedCreditCount,
+      String unallocatedCreditTotal) {}
 }

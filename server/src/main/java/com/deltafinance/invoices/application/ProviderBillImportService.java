@@ -11,7 +11,6 @@ import com.deltafinance.shared.crypto.IndexHmacService;
 import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -80,10 +79,10 @@ public class ProviderBillImportService {
           bill.minimumPaymentAmount() == null ? null : scale(bill.minimumPaymentAmount());
       BigDecimal paymentsTotal =
           bill.payments() == null
-              ? BigDecimal.ZERO.setScale(Money.SCALE)
+              ? Money.scaled(BigDecimal.ZERO)
               : bill.payments().stream()
                   .map(payment -> scale(payment.amount()))
-                  .reduce(BigDecimal.ZERO.setScale(Money.SCALE), BigDecimal::add);
+                  .reduce(Money.scaled(BigDecimal.ZERO), BigDecimal::add);
       String currency =
           bill.currency() == null || bill.currency().isBlank() ? "BRL" : bill.currency();
 
@@ -205,7 +204,7 @@ public class ProviderBillImportService {
   }
 
   private static BigDecimal scale(BigDecimal value) {
-    return value.setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+    return Money.scaled(value);
   }
 
   private static String truncate(String value, int max) {

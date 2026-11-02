@@ -6,11 +6,9 @@ import com.deltafinance.invoices.domain.InvoiceItemKind;
 import com.deltafinance.invoices.domain.InvoiceItemRepository;
 import com.deltafinance.invoices.domain.InvoiceRepository;
 import com.deltafinance.invoices.domain.ReportingEffect;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
+import com.deltafinance.shared.money.Money;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,15 +35,15 @@ public class InvoiceReportingService {
 
   private final InvoiceItemRepository itemRepository;
   private final InvoiceRepository invoiceRepository;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
 
   public InvoiceReportingService(
       InvoiceItemRepository itemRepository,
       InvoiceRepository invoiceRepository,
-      CryptoService cryptoService) {
+      EncryptedValueReader encryptedValueReader) {
     this.itemRepository = itemRepository;
     this.invoiceRepository = invoiceRepository;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   /**
@@ -83,7 +81,7 @@ public class InvoiceReportingService {
     for (Map.Entry<UUID, List<InvoiceItem>> entry : allItemsByInvoice.entrySet()) {
       UUID invoiceId = entry.getKey();
       UUID cardAccountId = cardByInvoice.get(invoiceId);
-      BigDecimal running = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
+      BigDecimal running = Money.scaled(BigDecimal.ZERO);
       for (InvoiceItem item : entry.getValue()) {
         BigDecimal amount = decryptAmount(item);
         if (candidateIds.contains(item.getId())) {
@@ -135,7 +133,7 @@ public class InvoiceReportingService {
               decryptDescription(item),
               decryptAmount(item),
               item.getOccurredOn(),
-              BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN)));
+              Money.scaled(BigDecimal.ZERO)));
     }
     return result;
   }
@@ -143,14 +141,14 @@ public class InvoiceReportingService {
   /** Saldo devedor consolidado dos cartões informados. */
   public BigDecimal outstandingBalance(UUID userId, Collection<UUID> cardAccountIds) {
     if (cardAccountIds == null || cardAccountIds.isEmpty()) {
-      return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
+      return Money.scaled(BigDecimal.ZERO);
     }
     Map<UUID, BigDecimal> byCard = outstandingByCard(userId);
     BigDecimal total = BigDecimal.ZERO;
     for (UUID cardAccountId : cardAccountIds) {
       total = total.add(byCard.getOrDefault(cardAccountId, BigDecimal.ZERO));
     }
-    return total.setScale(2, RoundingMode.HALF_EVEN);
+    return Money.scaled(total);
   }
 
   /**
@@ -169,12 +167,12 @@ public class InvoiceReportingService {
   }
 
   private BigDecimal decryptOutstanding(Invoice invoice) {
-    return new BigDecimal(
-            cryptoService.decryptString(
-                invoice.getOutstandingEnc(),
-                new CryptoContext(
-                    invoice.getUserId(), INVOICE_TABLE, "outstanding", invoice.getId())))
-        .setScale(2, RoundingMode.HALF_EVEN);
+    return encryptedValueReader.readMoney(
+        invoice.getUserId(),
+        INVOICE_TABLE,
+        "outstanding",
+        invoice.getId(),
+        invoice.getOutstandingEnc());
   }
 
   private Map<UUID, UUID> cardAccountsByInvoice(UUID userId) {
@@ -217,23 +215,18 @@ public class InvoiceReportingService {
     if (item.getReportingEffect() == ReportingEffect.EXPENSE_DECREASE) {
       return running.subtract(amount.min(running));
     }
-    return running;
+    return Money.scaled(running);
   }
 
   private BigDecimal decryptAmount(InvoiceItem item) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            item.getAmountEnc(),
-            new CryptoContext(item.getUserId(), ITEM_TABLE, "amount", item.getId())));
+    return encryptedValueReader.readMoney(
+        item.getUserId(), ITEM_TABLE, "amount", item.getId(), item.getAmountEnc());
   }
 
   private String decryptDescription(InvoiceItem item) {
-    try {
-      return cryptoService.decryptString(
-          item.getDescriptionEnc(),
-          new CryptoContext(item.getUserId(), ITEM_TABLE, "description", item.getId()));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    return encryptedValueReader
+        .tryRead(
+            item.getUserId(), ITEM_TABLE, "description", item.getId(), item.getDescriptionEnc())
+        .orElse(null);
   }
 }

@@ -56,9 +56,7 @@ public class InvoiceController {
     CursorPage<InvoiceView> page =
         queryService.list(authenticatedUser.requireId(), accountId, cursor, limit);
     return new InvoicePageResponse(
-        page.items().stream().map(InvoiceResponse::from).toList(),
-        page.nextCursor(),
-        page.hasMore());
+        page.items().stream().toList(), page.nextCursor(), page.hasMore());
   }
 
   @GetMapping("/invoices/{id}")
@@ -68,16 +66,16 @@ public class InvoiceController {
 
   @PostMapping("/invoices/{id}/items")
   @ResponseStatus(HttpStatus.CREATED)
-  public InvoiceItemResponse addItem(
+  public InvoiceItemView addItem(
       @PathVariable UUID id, @Valid @RequestBody InvoiceItemRequest request) {
     InvoiceItemView view = itemService.add(authenticatedUser.requireId(), id, request);
-    return InvoiceItemResponse.from(view);
+    return view;
   }
 
   @PatchMapping("/invoice-items/{id}")
-  public InvoiceItemResponse updateItem(
+  public InvoiceItemView updateItem(
       @PathVariable UUID id, @Valid @RequestBody InvoiceItemRequest request) {
-    return InvoiceItemResponse.from(itemService.update(authenticatedUser.requireId(), id, request));
+    return itemService.update(authenticatedUser.requireId(), id, request);
   }
 
   @DeleteMapping("/invoice-items/{id}")
@@ -87,18 +85,18 @@ public class InvoiceController {
   }
 
   @GetMapping("/invoice-items/{id}/corrections")
-  public List<InvoiceItemCorrectionResponse> corrections(@PathVariable UUID id) {
+  public List<InvoiceItemCorrectionView> corrections(@PathVariable UUID id) {
     List<InvoiceItemCorrectionView> views =
         itemService.corrections(authenticatedUser.requireId(), id);
-    return views.stream().map(InvoiceItemCorrectionResponse::from).toList();
+    return views.stream().toList();
   }
 
   @PostMapping("/invoices/{id}/payments")
   @ResponseStatus(HttpStatus.CREATED)
-  public InvoicePaymentResponse addPayment(
+  public InvoicePaymentView addPayment(
       @PathVariable UUID id, @Valid @RequestBody InvoicePaymentRequest request) {
     InvoicePaymentView view = paymentService.add(authenticatedUser.requireId(), id, request);
-    return InvoicePaymentResponse.from(view);
+    return view;
   }
 
   @PostMapping("/invoices/{id}/reconcile-provider")

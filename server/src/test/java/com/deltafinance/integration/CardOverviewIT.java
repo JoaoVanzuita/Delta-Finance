@@ -3,12 +3,16 @@ package com.deltafinance.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.deltafinance.connections.application.SyncJobService;
 import com.deltafinance.integrations.infrastructure.PluggyRateLimiter;
 import com.deltafinance.support.AuthTestClient;
 import com.deltafinance.support.PluggyStub;
 import com.deltafinance.support.PluggyStub.AccountFixture;
+import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,10 +47,12 @@ class CardOverviewIT extends PostgresTestBase {
   @Autowired private MockMvc mockMvc;
   @Autowired private JsonMapper jsonMapper;
   @Autowired private PluggyRateLimiter rateLimiter;
+  @Autowired private SyncJobService syncJobService;
 
   private AuthTestClient alice;
   private String cardWithCycleId;
   private String cardWithoutCycleId;
+  private String connectionId;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -82,9 +88,15 @@ class CardOverviewIT extends PostgresTestBase {
             "/api/v1/integrations/pluggy",
             Map.of("clientId", CLIENT, "clientSecret", "secret-alice"))
         .andExpect(status().isOk());
-    alice
-        .post("/api/v1/connections", Map.of("itemId", "item-cartoes"))
-        .andExpect(status().isCreated());
+    connectionId =
+        json(alice
+                .post("/api/v1/connections", Map.of("itemId", "item-cartoes"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+            .path("id")
+            .asString();
 
     for (JsonNode account : accounts().path("items")) {
       if ("Cartão Alfa".equals(account.path("alias").asString())) {
@@ -161,6 +173,52 @@ class CardOverviewIT extends PostgresTestBase {
       }
     }
     throw new AssertionError("Cartão não encontrado: " + accountId);
+  }
+
+  @Test
+  void totaisDePendentesENaoAlocadasNaoDependemDoLimiteDaListagem() throws Exception {
+    List<TransactionFixture> pending = new ArrayList<>();
+    for (int index = 0; index < 120; index++) {
+      pending.add(
+          new TransactionFixture(
+              "pending-" + index,
+              "acc-card",
+              "Pendente " + index,
+              "10.00",
+              "2026-10-03",
+              "PENDING",
+              null));
+    }
+    PLUGGY.setTransactions("acc-card", pending);
+
+    List<TransactionFixture> unallocated = new ArrayList<>();
+    for (int index = 0; index < 120; index++) {
+      unallocated.add(
+          new TransactionFixture(
+              "unallocated-" + index,
+              "acc-card-no-cycle",
+              "Sem ciclo " + index,
+              "5.00",
+              "2026-10-03",
+              "POSTED",
+              null));
+    }
+    PLUGGY.setTransactions("acc-card-no-cycle", unallocated);
+
+    alice
+        .post("/api/v1/connections/" + connectionId + "/sync", null)
+        .andExpect(status().isAccepted());
+    syncJobService.processNext("card-overview", "attention");
+
+    JsonNode card = item(overview(), cardWithCycleId);
+    assertThat(card.path("pendingPurchaseCount").asInt()).isEqualTo(120);
+    assertThat(card.path("pendingPurchaseTotal").asString()).isEqualTo("1200.00");
+
+    JsonNode withoutCycle = item(overview(), cardWithoutCycleId);
+    assertThat(withoutCycle.path("unallocatedPurchaseCount").asInt()).isEqualTo(120);
+    assertThat(withoutCycle.path("unallocatedPurchaseTotal").asString()).isEqualTo("600.00");
+    assertThat(withoutCycle.path("unallocatedCreditCount").asInt()).isZero();
+    assertThat(withoutCycle.path("unallocatedCreditTotal").asString()).isEqualTo("0.00");
   }
 
   private JsonNode overview() throws Exception {
