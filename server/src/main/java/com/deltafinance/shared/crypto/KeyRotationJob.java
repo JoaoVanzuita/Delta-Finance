@@ -10,7 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Rotação online da chave de dados (T176).
+ * Rotação online da chave de dados.
  *
  * <p>Percorre todos os campos cifrados conhecidos e regrava com a versão ativa do key ring. O
  * ciphertext carrega a versão da chave no segundo byte, portanto a consulta é incremental e pode

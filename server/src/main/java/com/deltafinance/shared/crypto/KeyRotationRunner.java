@@ -8,7 +8,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Component;
 
 /**
- * Execução operacional única da rotação de chave (T176).
+ * Execução operacional única da rotação de chave.
  *
  * <p>Só é ativada com {@code --delta.crypto.rotation.run=true}; após a rotação o processo encerra
  * com código 0 (sucesso) ou 1 (falhas). Nunca é agendada automaticamente, porque a rotação exige a

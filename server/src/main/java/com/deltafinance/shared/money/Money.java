@@ -52,6 +52,21 @@ public record Money(BigDecimal amount, String currency) implements Comparable<Mo
     return ZERO_BRL;
   }
 
+  public static Money zero(String currency) {
+    return new Money(BigDecimal.ZERO, currency);
+  }
+
+  /** Escala monetária canônica, sem criar um objeto quando só o arredondamento importa. */
+  public static BigDecimal scaled(BigDecimal amount) {
+    Objects.requireNonNull(amount, "amount");
+    return amount.setScale(SCALE, RoundingMode.HALF_EVEN);
+  }
+
+  /** String decimal na escala monetária canônica. */
+  public static String plain(BigDecimal amount) {
+    return scaled(amount).toPlainString();
+  }
+
   public Money plus(Money other) {
     return new Money(amount.add(requireSameCurrency(other).amount), currency);
   }

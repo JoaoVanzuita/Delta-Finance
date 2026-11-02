@@ -1,7 +1,5 @@
 package com.deltafinance.shared.pagination;
 
-import java.util.Objects;
-
 /**
  * Requisição de página por cursor.
  *
@@ -38,17 +36,5 @@ public record PageRequest(int limit, String cursor) {
 
   public PageRequest withLimit(int newLimit) {
     return new PageRequest(newLimit, cursor);
-  }
-
-  @Override
-  public boolean equals(Object other) {
-    return other instanceof PageRequest that
-        && limit == that.limit
-        && Objects.equals(cursor, that.cursor);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(limit, cursor);
   }
 }

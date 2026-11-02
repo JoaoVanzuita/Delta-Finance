@@ -17,6 +17,10 @@ class MoneyTest {
     assertThat(new Money(new BigDecimal("1"), "brl").currency()).isEqualTo("BRL");
     assertThat(Money.ZERO_BRL.isZero()).isTrue();
     assertThat(Money.zero()).isEqualTo(Money.of("0.00"));
+    assertThat(Money.zero("USD").currency()).isEqualTo("USD");
+    assertThat(Money.scaled(new BigDecimal("2.345"))).hasToString("2.34");
+    assertThat(Money.scaled(new BigDecimal("2.355"))).hasToString("2.36");
+    assertThat(Money.plain(new BigDecimal("7.5"))).isEqualTo("7.50");
   }
 
   @Test
