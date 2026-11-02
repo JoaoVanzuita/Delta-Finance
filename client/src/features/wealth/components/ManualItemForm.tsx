@@ -1,6 +1,8 @@
 import { useId, useState, type FormEvent } from 'react'
 
-import type { WealthManualItem, WealthManualItemInput } from '@/features/integration/api'
+import { normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
+
+import type { WealthManualItem, WealthManualItemInput } from '@/lib/api/finance'
 
 type Kind = WealthManualItem['kind']
 
@@ -13,11 +15,12 @@ interface ManualItemFormProps {
 }
 
 function normalizeDecimal(value: string): string {
-  return value.trim().replace(',', '.')
+  return normalizeMoneyInput(value)
 }
 
 function isNonNegative(value: string): boolean {
-  const number = Number(value)
+  if (!value.trim()) return false
+  const number = parseMoneyInput(value)
   return Number.isFinite(number) && number >= 0
 }
 

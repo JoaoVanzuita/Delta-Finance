@@ -1,3 +1,4 @@
+import { accountsApi, categoriesApi, syncApi } from '@/lib/api/finance'
 import { useMemo, useState } from 'react'
 
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -37,9 +38,10 @@ import {
 } from '@/features/dashboard/components/DashboardStates'
 import { TimeSeriesChart } from '@/features/dashboard/components/TimeSeriesChart'
 import { categoryDisplayName, formatPeriodLabel } from '@/features/dashboard/format'
-import { financeApi } from '@/features/integration/api'
+
 import { ApiError } from '@/lib/api/problem'
-import { formatMoney, formatPercent, toFiniteNumber } from '@/lib/format'
+import { formatLongMonthYear, formatMoney, formatPercent, toFiniteNumber } from '@/lib/format'
+import { queryKeys } from '@/lib/query-keys'
 
 interface DrillDown {
   readonly kind: 'category' | 'period'
@@ -110,11 +112,7 @@ function previousMonthRange(start: string): { from: string; to: string; label: s
   if (Number.isNaN(year) || Number.isNaN(month)) return null
   const first = new Date(Date.UTC(year, month - 2, 1))
   const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0))
-  const label = new Intl.DateTimeFormat('pt-BR', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(first)
+  const label = formatLongMonthYear(first.toISOString().slice(0, 10))
   return {
     from: first.toISOString().slice(0, 10),
     to: last.toISOString().slice(0, 10),
@@ -141,27 +139,30 @@ export function DashboardPage() {
   const [recentDrawerOpen, setRecentDrawerOpen] = useState(false)
 
   const summaryQuery = useQuery({
-    queryKey: ['dashboard-summary', filters],
+    queryKey: queryKeys.dashboardSummaryFor(filters),
     queryFn: () => dashboardApi.summary(filters),
   })
   const categoriesQuery = useQuery({
-    queryKey: ['dashboard-categories', filters, 'EXPENSE'],
+    queryKey: queryKeys.dashboardCategoriesFor(filters, 'EXPENSE'),
     queryFn: () => dashboardApi.categories(filters, 'EXPENSE'),
   })
   const incomeCategoriesQuery = useQuery({
-    queryKey: ['dashboard-categories', filters, 'INCOME'],
+    queryKey: queryKeys.dashboardCategoriesFor(filters, 'INCOME'),
     queryFn: () => dashboardApi.categories(filters, 'INCOME'),
   })
   const timeseriesQuery = useQuery({
-    queryKey: ['dashboard-timeseries', filters],
+    queryKey: queryKeys.dashboardTimeseriesFor(filters),
     queryFn: () => dashboardApi.timeseries(filters),
   })
-  const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
-  const categoryListQuery = useQuery({ queryKey: ['categories'], queryFn: financeApi.categories })
-  const syncStatusQuery = useQuery({ queryKey: ['syncStatus'], queryFn: financeApi.syncStatus })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
+  const categoryListQuery = useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: categoriesApi.categories,
+  })
+  const syncStatusQuery = useQuery({ queryKey: queryKeys.syncStatus, queryFn: syncApi.syncStatus })
 
   const recentQuery = useInfiniteQuery({
-    queryKey: ['dashboard-entries', 'recent', filters],
+    queryKey: queryKeys.dashboardEntriesFor('recent', filters),
     queryFn: ({ pageParam }) => dashboardApi.entries(filters, pageParam, 10),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
@@ -169,7 +170,7 @@ export function DashboardPage() {
 
   const drillFilters = drillDown?.filters
   const drillQuery = useInfiniteQuery({
-    queryKey: ['dashboard-entries', 'drill', drillFilters],
+    queryKey: queryKeys.dashboardEntriesFor('drill', drillFilters),
     queryFn: ({ pageParam }) => dashboardApi.entries(drillFilters ?? {}, pageParam, 25),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
@@ -237,11 +238,11 @@ export function DashboardPage() {
   }
 
   function refresh() {
-    void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })
-    void queryClient.invalidateQueries({ queryKey: ['dashboard-categories'] })
-    void queryClient.invalidateQueries({ queryKey: ['dashboard-timeseries'] })
-    void queryClient.invalidateQueries({ queryKey: ['dashboard-entries'] })
-    void queryClient.invalidateQueries({ queryKey: ['syncStatus'] })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardSummary })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardCategories })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardTimeseries })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboardEntries })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus })
   }
 
   function drillCategory(category: DashboardCategory, direction: CategoryDirection) {

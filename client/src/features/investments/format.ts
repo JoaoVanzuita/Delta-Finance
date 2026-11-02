@@ -9,11 +9,6 @@ export function formatMoney(value: string | null | undefined): string {
   return formatMoneyShared(value, 'BRL')
 }
 
-/** Preço unitário pode ter até 8 casas decimais; nunca é arredondado na apresentação. */
-export function formatReferencePrice(value: string | null | undefined): string {
-  return formatMoneyShared(value, 'BRL', { minimumFractionDigits: 2, maximumFractionDigits: 8 })
-}
-
 export function formatQuantity(value: string | null | undefined): string {
   return formatNumber(value, { fallback: 'Não informada', maximumFractionDigits: 8 })
 }

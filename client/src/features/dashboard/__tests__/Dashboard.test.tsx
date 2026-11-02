@@ -4,7 +4,7 @@ import { useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage'
-import type { Connection, SyncStatus } from '@/features/integration/api'
+import type { Connection, SyncStatus } from '@/lib/api/finance'
 import { expectNoA11yViolations } from '@/test/axe'
 import { renderWithProviders } from '@/test/render'
 

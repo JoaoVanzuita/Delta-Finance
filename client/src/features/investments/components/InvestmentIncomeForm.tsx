@@ -1,15 +1,15 @@
+import {
+  investmentsApi,
+  type InvestmentHolding,
+  type InvestmentIncomeInput,
+  type InvestmentIncomeItem,
+} from '@/lib/api/finance'
 import { useId, useState, type FormEvent } from 'react'
 
 import { useMutation } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/problem'
-
-import {
-  financeApi,
-  type InvestmentHolding,
-  type InvestmentIncomeInput,
-  type InvestmentIncomeItem,
-} from '@/features/integration/api'
+import { normalizeMoneyInput, todayIsoDate } from '@/lib/format'
 
 const INCOME_TYPES = [
   { value: 'DIVIDEND', label: 'Dividendo' },
@@ -25,7 +25,7 @@ function messageFrom(caught: unknown, fallback: string): string {
 }
 
 function today(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+  return todayIsoDate()
 }
 
 interface InvestmentIncomeFormProps {
@@ -60,8 +60,8 @@ export function InvestmentIncomeForm({
   const save = useMutation({
     mutationFn: (input: InvestmentIncomeInput) =>
       initial
-        ? financeApi.updateInvestmentIncome(initial.id ?? '', input)
-        : financeApi.createInvestmentIncome(input),
+        ? investmentsApi.updateInvestmentIncome(initial.id ?? '', input)
+        : investmentsApi.createInvestmentIncome(input),
     onSuccess: () => {
       setError(null)
       if (!initial) {
@@ -88,7 +88,7 @@ export function InvestmentIncomeForm({
       providerInvestmentId: targetKey,
       incomeType: incomeType as InvestmentIncomeInput['incomeType'],
       incomeDate,
-      amount: amount.trim().replace(',', '.'),
+      amount: normalizeMoneyInput(amount),
       description: description.trim() || undefined,
     })
   }

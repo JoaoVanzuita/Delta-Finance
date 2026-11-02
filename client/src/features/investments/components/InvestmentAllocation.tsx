@@ -3,10 +3,7 @@ import { useState } from 'react'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatMoney, formatPercent, toFiniteNumber } from '@/lib/format'
 import { buildDonutGradient } from '@/lib/donut'
-import type {
-  InvestmentAllocation as AllocationEntry,
-  InvestmentHolding,
-} from '@/features/integration/api'
+import type { InvestmentAllocation as AllocationEntry, InvestmentHolding } from '@/lib/api/finance'
 
 import { assetClassLabel } from '../labels'
 import { investmentVisual } from '../visuals'

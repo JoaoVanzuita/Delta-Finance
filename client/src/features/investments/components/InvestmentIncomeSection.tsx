@@ -1,3 +1,4 @@
+import { investmentsApi, type InvestmentIncome, type InvestmentIncomeItem } from '@/lib/api/finance'
 import { useState } from 'react'
 
 import { useMutation } from '@tanstack/react-query'
@@ -8,12 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { ApiError } from '@/lib/api/problem'
 import { addDecimals, formatMoney, formatPercent } from '@/lib/format'
-import {
-  financeApi,
-  type InvestmentIncome,
-  type InvestmentIncomeItem,
-} from '@/features/integration/api'
-
 import { formatReferenceDate } from '../format'
 import { InvestmentIncomeChart } from './InvestmentIncomeChart'
 
@@ -48,7 +43,7 @@ export function InvestmentIncomeSection({
   const [error, setError] = useState<string | null>(null)
 
   const remove = useMutation({
-    mutationFn: (id: string) => financeApi.deleteInvestmentIncome(id),
+    mutationFn: (id: string) => investmentsApi.deleteInvestmentIncome(id),
     onSuccess: () => {
       setConfirmingId(null)
       setError(null)

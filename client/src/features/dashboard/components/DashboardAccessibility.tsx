@@ -50,7 +50,3 @@ export function DashboardSection({
     </section>
   )
 }
-
-/** Classe compartilhada de foco e alvo mínimo para ações do dashboard. */
-export const dashboardActionClass =
-  'inline-flex min-h-11 items-center justify-center rounded-card border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'

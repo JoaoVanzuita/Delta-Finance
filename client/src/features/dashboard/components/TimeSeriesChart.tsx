@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react'
+import { formatCompactCurrency, formatShortMonthYear } from '@/lib/format'
 
 import { Button } from '@/components/ui/button'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
@@ -400,13 +401,7 @@ function aggregateForDisplay(buckets: readonly DashboardBucket[]): ChartBucket[]
     const start = first?.start ?? ''
     const end = last?.end ?? start
     const reference = start || end
-    const label = reference
-      ? new Intl.DateTimeFormat('pt-BR', {
-          month: 'short',
-          year: 'numeric',
-          timeZone: 'UTC',
-        }).format(new Date(`${reference}T12:00:00Z`))
-      : 'Período'
+    const label = reference ? formatShortMonthYear(reference) : 'Período'
     return {
       label,
       start,
@@ -427,13 +422,6 @@ function buildTicks(minimum: number, maximum: number, count: number): number[] {
   )
 }
 
-const compactFormatter = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-  notation: 'compact',
-  maximumFractionDigits: 1,
-})
-
 function formatCompact(value: number): string {
-  return compactFormatter.format(value)
+  return formatCompactCurrency(value)
 }

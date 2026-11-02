@@ -1,3 +1,8 @@
+import {
+  investmentsApi,
+  type InvestmentHolding,
+  type InvestmentIncomeItem,
+} from '@/lib/api/finance'
 import { useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -15,12 +20,6 @@ import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs'
 import { ApiError } from '@/lib/api/problem'
 import { invalidateInvestmentViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
-import {
-  financeApi,
-  type InvestmentHolding,
-  type InvestmentIncomeItem,
-} from '@/features/integration/api'
-
 import { InvestmentAllocation } from '../components/InvestmentAllocation'
 import { InvestmentContributionsSection } from '../components/InvestmentContributionsSection'
 import { InvestmentCoverage } from '../components/InvestmentCoverage'
@@ -89,28 +88,28 @@ export function InvestmentsPage() {
 
   const overviewQuery = useQuery({
     queryKey: queryKeys.investmentOverview,
-    queryFn: financeApi.investmentOverview,
+    queryFn: investmentsApi.investmentOverview,
   })
   const holdingsQuery = useQuery({
-    queryKey: [...queryKeys.investmentHoldings(status, assetClass || undefined), 'positions'],
-    queryFn: () => financeApi.investmentHoldings(status, assetClass || undefined),
+    queryKey: queryKeys.investmentHoldingsPositions(status, assetClass || undefined),
+    queryFn: () => investmentsApi.investmentHoldings(status, assetClass || undefined),
     enabled: tab === 'positions',
   })
   const activeHoldingsQuery = useQuery({
-    queryKey: [...queryKeys.investmentHoldings('ACTIVE'), 'active'],
-    queryFn: () => financeApi.investmentHoldings('ACTIVE'),
+    queryKey: queryKeys.investmentHoldingsActive,
+    queryFn: () => investmentsApi.investmentHoldings('ACTIVE'),
     enabled: tab === 'summary' || tab === 'income',
   })
   const incomeQuery = useQuery({
     queryKey: queryKeys.investmentIncome,
-    queryFn: () => financeApi.investmentIncome(),
+    queryFn: () => investmentsApi.investmentIncome(),
     enabled: tab === 'income',
   })
   const contributionsQuery = useQuery({
-    queryKey: [...queryKeys.investments, 'contributions', contributionMonths],
+    queryKey: queryKeys.investmentContributions(contributionMonths),
     queryFn: () => {
       const range = contributionRange(contributionMonths)
-      return financeApi.investmentContributions(range.from, range.to)
+      return investmentsApi.investmentContributions(range.from, range.to)
     },
     enabled: tab === 'contributions',
   })

@@ -1,14 +1,14 @@
+import {
+  investmentsApi,
+  type InvestmentAssetClassInput,
+  type InvestmentHolding,
+} from '@/lib/api/finance'
 import { useState } from 'react'
 
 import { useMutation } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/problem'
-
-import {
-  financeApi,
-  type InvestmentAssetClassInput,
-  type InvestmentHolding,
-} from '@/features/integration/api'
+import { normalizeMoneyInput } from '@/lib/format'
 
 import { ASSET_CLASS_LABELS } from '../labels'
 
@@ -30,8 +30,8 @@ export function HoldingSettingsForm({ holding, onChanged }: HoldingSettingsFormP
 
   const costMutation = useMutation({
     mutationFn: () =>
-      financeApi.updateInvestmentCostBasis(holding.id, {
-        costBasis: costBasis.trim() === '' ? null : costBasis.trim().replace(',', '.'),
+      investmentsApi.updateInvestmentCostBasis(holding.id, {
+        costBasis: costBasis.trim() === '' ? null : normalizeMoneyInput(costBasis),
       }),
     onSuccess: () => {
       setError(null)
@@ -46,7 +46,7 @@ export function HoldingSettingsForm({ holding, onChanged }: HoldingSettingsFormP
 
   const classMutation = useMutation({
     mutationFn: () =>
-      financeApi.updateInvestmentAssetClass(holding.id, {
+      investmentsApi.updateInvestmentAssetClass(holding.id, {
         assetClass:
           assetClass === '' ? null : (assetClass as InvestmentAssetClassInput['assetClass']),
       }),

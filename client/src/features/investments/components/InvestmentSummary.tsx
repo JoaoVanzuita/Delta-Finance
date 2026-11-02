@@ -1,5 +1,5 @@
 import { formatDateTime, formatMoney } from '@/lib/format'
-import type { InvestmentOverview } from '@/features/integration/api'
+import type { InvestmentOverview } from '@/lib/api/finance'
 
 import { formatReferenceDate } from '../format'
 

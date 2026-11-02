@@ -1,3 +1,4 @@
+import { investmentsApi, type InvestmentHistoryPoint } from '@/lib/api/finance'
 import { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
@@ -10,7 +11,6 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { ApiError } from '@/lib/api/problem'
 import { formatPercent, toFiniteNumber } from '@/lib/format'
 import { queryKeys } from '@/lib/query-keys'
-import { financeApi, type InvestmentHistoryPoint } from '@/features/integration/api'
 import { WealthSnapshotDrawer } from '@/features/wealth/components/WealthSnapshotDrawer'
 import { COMPLETENESS_LABELS } from '@/features/wealth/format'
 
@@ -38,8 +38,8 @@ export function InvestmentHistorySection() {
   const [range, setRange] = useState<(typeof RANGES)[number]['months']>(12)
   const [snapshotId, setSnapshotId] = useState<string | null>(null)
   const historyQuery = useQuery({
-    queryKey: [...queryKeys.investmentHistory, range],
-    queryFn: () => financeApi.investmentHistory(localDate(range - 1)),
+    queryKey: queryKeys.investmentHistoryRange(range),
+    queryFn: () => investmentsApi.investmentHistory(localDate(range - 1)),
   })
   const points = useMemo(
     () => (Array.isArray(historyQuery.data) ? historyQuery.data : []),

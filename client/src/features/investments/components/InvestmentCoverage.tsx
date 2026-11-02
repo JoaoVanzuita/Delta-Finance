@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime } from '@/lib/format'
 
-import type { InvestmentSource } from '@/features/integration/api'
+import type { InvestmentSource } from '@/lib/api/finance'
 
 import { SCOPE_HINTS, SCOPE_LABELS } from '../labels'
 

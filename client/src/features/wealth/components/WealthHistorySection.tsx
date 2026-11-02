@@ -1,3 +1,5 @@
+import { wealthApi, type WealthSnapshotSummary } from '@/lib/api/finance'
+import { formatCompactCurrency } from '@/lib/format'
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -12,8 +14,6 @@ import { ApiError } from '@/lib/api/problem'
 import { invalidateWealthViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
 import { toFiniteNumber } from '@/lib/format'
-import { financeApi, type WealthSnapshotSummary } from '@/features/integration/api'
-
 import { COMPLETENESS_LABELS, formatDate, formatMoney } from '../format'
 import { WealthSnapshotDrawer } from './WealthSnapshotDrawer'
 
@@ -40,11 +40,11 @@ export function WealthHistorySection() {
   const [message, setMessage] = useState<string | null>(null)
 
   const historyQuery = useQuery({
-    queryKey: [...queryKeys.wealthHistory, range],
-    queryFn: () => financeApi.wealthHistory(localDate(range - 1)),
+    queryKey: queryKeys.wealthHistoryRange(range),
+    queryFn: () => wealthApi.wealthHistory(localDate(range - 1)),
   })
   const capture = useMutation({
-    mutationFn: () => financeApi.createWealthSnapshot({}),
+    mutationFn: () => wealthApi.createWealthSnapshot({}),
     onSuccess: async () => {
       setMessage('Snapshot registrado.')
       await invalidateWealthViews(queryClient)
@@ -328,10 +328,5 @@ function Legend({ color, label }: { readonly color: string; readonly label: stri
 }
 
 function compactMoney(value: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value)
+  return formatCompactCurrency(value)
 }

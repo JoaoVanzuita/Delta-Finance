@@ -29,7 +29,6 @@ interface GoalFixture {
   unallocatedAmount: string
   excessAmount: string
   allocations: Array<Record<string, unknown>>
-  progressHistory: Array<Record<string, unknown>>
 }
 
 function goal(overrides: Partial<GoalFixture> = {}): GoalFixture {
@@ -61,15 +60,6 @@ function goal(overrides: Partial<GoalFixture> = {}): GoalFixture {
         contributionAmount: '200.00',
       },
     ],
-    progressHistory: [
-      {
-        referenceDate: '2026-10-24',
-        currentValue: '500.00',
-        percentage: '50.00',
-        remainingAmount: '500.00',
-        ruleVersion: 'v1',
-      },
-    ],
     ...overrides,
   }
 }
@@ -88,6 +78,21 @@ function stubApi(initialGoals: GoalFixture[]) {
     if (url.includes('/auth/me')) return jsonResponse(USER)
     if (url.endsWith('/goals') && method === 'GET') {
       return jsonResponse({ items: goals })
+    }
+    if (url.includes('/goals/') && url.includes('/progress') && method === 'GET') {
+      return jsonResponse({
+        items: [
+          {
+            referenceDate: '2026-10-24',
+            currentValue: '500.00',
+            percentage: '50.00',
+            remainingAmount: '500.00',
+            ruleVersion: 'v1',
+          },
+        ],
+        nextCursor: null,
+        hasMore: false,
+      })
     }
     if (url.endsWith('/accounts')) {
       return jsonResponse({

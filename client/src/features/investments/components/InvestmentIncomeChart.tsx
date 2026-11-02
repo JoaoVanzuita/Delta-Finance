@@ -1,5 +1,5 @@
 import { formatMoney } from '@/lib/format'
-import type { InvestmentIncome } from '@/features/integration/api'
+import type { InvestmentIncome } from '@/lib/api/finance'
 
 /**
  * Gráfico mensal de proventos. A tabela da seção é a representação acessível

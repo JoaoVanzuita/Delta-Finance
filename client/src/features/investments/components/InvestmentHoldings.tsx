@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { formatMoney } from '@/lib/format'
-import type { InvestmentHolding } from '@/features/integration/api'
+import type { InvestmentHolding } from '@/lib/api/finance'
 
 import { formatReferenceDate } from '../format'
 import { assetClassLabel, HOLDING_STATUS_LABELS } from '../labels'

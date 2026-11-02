@@ -42,10 +42,3 @@ export function isStale(value: string | null | undefined, now = Date.now()): boo
   if (Number.isNaN(reference)) return true
   return now - reference > 24 * 60 * 60 * 1000
 }
-
-export function formatPercentage(amount: string, total: number): number {
-  if (total <= 0) return 0
-  const value = Number(amount)
-  if (!Number.isFinite(value)) return 0
-  return Math.max(0, Math.min(100, Math.round((Math.abs(value) / total) * 100)))
-}

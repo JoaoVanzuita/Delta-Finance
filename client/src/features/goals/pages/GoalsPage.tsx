@@ -1,3 +1,4 @@
+import { goalsApi, type Goal, type GoalInput } from '@/lib/api/finance'
 import { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -14,8 +15,6 @@ import { ApiError } from '@/lib/api/problem'
 import { invalidateGoalViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
 
-import { financeApi, type Goal, type GoalInput } from '@/features/integration/api'
-
 import { GoalDetailDrawer } from '../components/GoalDetailDrawer'
 import { GoalForm } from '../components/GoalForm'
 import { STATUS_LABELS, TYPE_LABELS, formatDate, formatMoney } from '../format'
@@ -31,7 +30,7 @@ function messageFrom(caught: unknown, fallback: string): string {
  */
 export function GoalsPage() {
   const queryClient = useQueryClient()
-  const goalsQuery = useQuery({ queryKey: queryKeys.goals, queryFn: () => financeApi.goals() })
+  const goalsQuery = useQuery({ queryKey: queryKeys.goals, queryFn: () => goalsApi.goals() })
   const [form, setForm] = useState<'new' | Goal | null>(null)
   const [detail, setDetail] = useState<Goal | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -40,7 +39,7 @@ export function GoalsPage() {
 
   const save = useMutation({
     mutationFn: (input: GoalInput) =>
-      form && form !== 'new' ? financeApi.updateGoal(form.id, input) : financeApi.createGoal(input),
+      form && form !== 'new' ? goalsApi.updateGoal(form.id, input) : goalsApi.createGoal(input),
     onSuccess: async () => {
       setError(null)
       setFormError(null)

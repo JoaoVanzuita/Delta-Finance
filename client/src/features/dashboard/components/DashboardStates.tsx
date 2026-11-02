@@ -86,15 +86,16 @@ export function DashboardEmptyPeriod({
   readonly onPreviousPeriod?: () => void
   readonly onClearFilters?: () => void
 }) {
-  const action = filtered && onClearFilters ? (
-    <Button type="button" variant="secondary" onClick={onClearFilters}>
-      Limpar filtros
-    </Button>
-  ) : previousPeriodLabel && onPreviousPeriod ? (
-    <Button type="button" variant="secondary" onClick={onPreviousPeriod}>
-      Ver {previousPeriodLabel}
-    </Button>
-  ) : null
+  const action =
+    filtered && onClearFilters ? (
+      <Button type="button" variant="secondary" onClick={onClearFilters}>
+        Limpar filtros
+      </Button>
+    ) : previousPeriodLabel && onPreviousPeriod ? (
+      <Button type="button" variant="secondary" onClick={onPreviousPeriod}>
+        Ver {previousPeriodLabel}
+      </Button>
+    ) : null
   return (
     <EmptyState
       icon={filtered ? <SearchX className="size-5" /> : <WalletCards className="size-5" />}

@@ -1,7 +1,7 @@
 import { Drawer } from '@/components/ui/drawer'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime, formatMoney } from '@/lib/format'
-import type { InvestmentHolding } from '@/features/integration/api'
+import type { InvestmentHolding } from '@/lib/api/finance'
 
 import { formatQuantity, formatReferenceDate, formatUnitPrice } from '../format'
 import { assetClassLabel, CLASSIFICATION_SOURCE_LABELS, HOLDING_STATUS_LABELS } from '../labels'

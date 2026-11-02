@@ -12,8 +12,10 @@ import {
   type DashboardFilters as DashboardFiltersValue,
   type DashboardPeriod,
 } from '@/features/dashboard/api'
-import type { Account, Category } from '@/features/integration/api'
+import type { Account, Category } from '@/lib/api/finance'
+import { amountRangeError, dateRangeError, normalizeAmountInput } from '@/lib/filters'
 import { formatDate, formatMoney } from '@/lib/format'
+import { TRANSACTION_ORIGIN_LABELS, TRANSACTION_TYPE_LABELS } from '@/lib/labels'
 
 interface DashboardFiltersProps {
   readonly value: DashboardFiltersValue
@@ -28,52 +30,6 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: DashboardPeriod; label: string }> =
   { value: 'MONTH', label: 'Mês' },
   { value: 'YEAR', label: 'Ano' },
 ]
-
-const TYPE_LABELS: Record<string, string> = {
-  DEBIT: 'Despesa',
-  CREDIT: 'Receita',
-  REFUND: 'Reembolso',
-  CHARGEBACK: 'Chargeback',
-  ADJUSTMENT: 'Ajuste',
-}
-
-const ORIGIN_LABELS: Record<string, string> = {
-  IMPORTED: 'Importada',
-  MANUAL: 'Manual',
-}
-
-function normalizeAmount(value: string): string | undefined {
-  const trimmed = value.trim()
-  if (!trimmed) return undefined
-  const withoutGrouping = trimmed.includes(',') ? trimmed.replace(/\./g, '') : trimmed
-  const normalized = withoutGrouping.replace(',', '.')
-  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return undefined
-  return normalized
-}
-
-function compareAmounts(left: string, right: string): number {
-  return Number(left) - Number(right)
-}
-
-function dateRangeError(from?: string, to?: string): string | undefined {
-  if (!from || !to) return undefined
-  if (from > to) return 'A data inicial deve ser anterior à data final.'
-  const start = Date.parse(`${from}T12:00:00Z`)
-  const end = Date.parse(`${to}T12:00:00Z`)
-  if (Number.isNaN(start) || Number.isNaN(end)) return 'Informe datas válidas.'
-  if ((end - start) / 86_400_000 + 1 > 366) {
-    return 'O intervalo máximo é de 366 dias. Estreite o período.'
-  }
-  return undefined
-}
-
-function amountRangeError(minAmount?: string, maxAmount?: string): string | undefined {
-  if (!minAmount || !maxAmount) return undefined
-  if (compareAmounts(minAmount, maxAmount) > 0) {
-    return 'O valor mínimo não pode ser maior que o valor máximo.'
-  }
-  return undefined
-}
 
 function FilterChip({
   children,
@@ -101,8 +57,8 @@ function FilterChip({
  * Barra compacta de período e filtros do Dashboard.
  *
  * Período e intervalo ficam visíveis; conta, categoria, tipo, origem e faixa de
- * valor ficam em drawer. A URL é a fonte de verdade — aplicar/remover um filtro
- * navega, preservando voltar e recarregar.
+ * valor ficam em drawer. Aplicar/remover um filtro navega e atualiza a URL; os
+ * rascunhos locais permanecem apenas enquanto o drawer está aberto.
  */
 export function DashboardFilters({
   value,
@@ -118,14 +74,15 @@ export function DashboardFilters({
   const [advancedDraft, setAdvancedDraft] = useState(value)
   const [advancedError, setAdvancedError] = useState<string>()
 
-  const dateError = dateRangeError(fromDraft || undefined, toDraft || undefined)
+  const dateError = dateRangeError(fromDraft || undefined, toDraft || undefined, { maxDays: 366 })
   const advancedDateError = dateRangeError(
     advancedDraft.from || undefined,
     advancedDraft.to || undefined,
+    { maxDays: 366 },
   )
   const advancedAmountError = amountRangeError(
-    advancedDraft.minAmount ? normalizeAmount(advancedDraft.minAmount) : undefined,
-    advancedDraft.maxAmount ? normalizeAmount(advancedDraft.maxAmount) : undefined,
+    advancedDraft.minAmount ? normalizeAmountInput(advancedDraft.minAmount) : undefined,
+    advancedDraft.maxAmount ? normalizeAmountInput(advancedDraft.maxAmount) : undefined,
   )
   const visibleError = advancedAmountError ?? advancedDateError
 
@@ -157,14 +114,14 @@ export function DashboardFilters({
   if (value.type) {
     activeChips.push({
       key: 'type',
-      label: `Tipo: ${TYPE_LABELS[value.type] ?? value.type}`,
+      label: `Tipo: ${TRANSACTION_TYPE_LABELS[value.type] ?? value.type}`,
       remove: () => onApply({ ...value, type: undefined }),
     })
   }
   if (value.origin) {
     activeChips.push({
       key: 'origin',
-      label: `Origem: ${ORIGIN_LABELS[value.origin] ?? value.origin}`,
+      label: `Origem: ${TRANSACTION_ORIGIN_LABELS[value.origin] ?? value.origin}`,
       remove: () => onApply({ ...value, origin: undefined }),
     })
   }
@@ -233,8 +190,12 @@ export function DashboardFilters({
       setAdvancedError(visibleError)
       return
     }
-    const minAmount = advancedDraft.minAmount ? normalizeAmount(advancedDraft.minAmount) : undefined
-    const maxAmount = advancedDraft.maxAmount ? normalizeAmount(advancedDraft.maxAmount) : undefined
+    const minAmount = advancedDraft.minAmount
+      ? normalizeAmountInput(advancedDraft.minAmount)
+      : undefined
+    const maxAmount = advancedDraft.maxAmount
+      ? normalizeAmountInput(advancedDraft.maxAmount)
+      : undefined
     if (advancedDraft.minAmount && !minAmount) {
       setAdvancedError('Informe um valor mínimo decimal válido.')
       return
@@ -506,7 +467,7 @@ export function DashboardFilters({
                 }
               >
                 <option value="">Todos</option>
-                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                {Object.entries(TRANSACTION_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
@@ -523,7 +484,7 @@ export function DashboardFilters({
                 }
               >
                 <option value="">Todas</option>
-                {Object.entries(ORIGIN_LABELS).map(([value, label]) => (
+                {Object.entries(TRANSACTION_ORIGIN_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>

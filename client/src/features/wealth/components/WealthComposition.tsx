@@ -1,7 +1,7 @@
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { addDecimals, formatMoney, formatPercent, toFiniteNumber } from '@/lib/format'
-import type { WealthItem } from '@/features/integration/api'
+import type { WealthItem } from '@/lib/api/finance'
 
 import { ORIGIN_LABELS, SOURCE_LABELS, formatDate } from '../format'
 

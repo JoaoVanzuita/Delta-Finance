@@ -1,3 +1,9 @@
+import {
+  wealthApi,
+  type WealthManualItem,
+  type WealthManualItemInput,
+  type WealthOverview,
+} from '@/lib/api/finance'
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -14,13 +20,6 @@ import { ApiError } from '@/lib/api/problem'
 import { invalidateWealthViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
-
-import {
-  financeApi,
-  type WealthManualItem,
-  type WealthManualItemInput,
-  type WealthOverview,
-} from '@/features/integration/api'
 
 import { ManualItemForm } from '../components/ManualItemForm'
 import { WealthHistorySection } from '../components/WealthHistorySection'
@@ -39,11 +38,11 @@ export function WealthPage() {
   const queryClient = useQueryClient()
   const overviewQuery = useQuery({
     queryKey: queryKeys.wealthOverview,
-    queryFn: () => financeApi.wealthOverview(),
+    queryFn: () => wealthApi.wealthOverview(),
   })
   const manualQuery = useQuery({
     queryKey: queryKeys.wealthManualItems,
-    queryFn: () => financeApi.wealthManualItems(),
+    queryFn: () => wealthApi.wealthManualItems(),
   })
 
   const [message, setMessage] = useState<string | null>(null)
@@ -63,8 +62,8 @@ export function WealthPage() {
   const save = useMutation({
     mutationFn: (input: WealthManualItemInput) =>
       form && form !== 'new'
-        ? financeApi.updateWealthManualItem(form.id, input)
-        : financeApi.createWealthManualItem(input),
+        ? wealthApi.updateWealthManualItem(form.id, input)
+        : wealthApi.createWealthManualItem(input),
     onSuccess: async () => {
       setError(null)
       setFormError(null)
@@ -79,7 +78,7 @@ export function WealthPage() {
   })
 
   const remove = useMutation({
-    mutationFn: (item: WealthManualItem) => financeApi.deleteWealthManualItem(item.id),
+    mutationFn: (item: WealthManualItem) => wealthApi.deleteWealthManualItem(item.id),
     onSuccess: async () => {
       setDeleting(null)
       setDeleteError(null)

@@ -1,9 +1,17 @@
+import {
+  accountsApi,
+  investmentsApi,
+  wealthApi,
+  type Goal,
+  type GoalAllocationInput,
+  type GoalInput,
+} from '@/lib/api/finance'
 import { useId, useState, type FormEvent } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 
-import { financeApi } from '@/features/integration/api'
-import type { Goal, GoalAllocationInput, GoalInput } from '@/features/integration/api'
+import { normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
+import { queryKeys } from '@/lib/query-keys'
 
 type GoalType = Goal['type']
 type ProgressRule = Goal['progressRule']
@@ -27,30 +35,32 @@ interface GoalFormProps {
 }
 
 function normalizeDecimal(value: string): string {
-  return value.trim().replace(',', '.')
+  return normalizeMoneyInput(value)
 }
 
 function isPositive(value: string): boolean {
-  const number = Number(value)
+  if (!value.trim()) return false
+  const number = parseMoneyInput(value)
   return Number.isFinite(number) && number > 0
 }
 
 function isNonNegative(value: string): boolean {
-  const number = Number(value)
+  if (!value.trim()) return false
+  const number = parseMoneyInput(value)
   return Number.isFinite(number) && number >= 0
 }
 
 /** Formulário de meta com alocações explícitas; não oferece qualquer ação financeira. */
 export function GoalForm({ initial, pending, submitLabel, onSubmit, onCancel }: GoalFormProps) {
   const baseId = useId()
-  const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
   const investmentsQuery = useQuery({
-    queryKey: ['investments', 'goal-sources'],
-    queryFn: () => financeApi.investmentHoldings('ACTIVE'),
+    queryKey: queryKeys.goalInvestmentSources,
+    queryFn: () => investmentsApi.investmentHoldings('ACTIVE'),
   })
   const wealthQuery = useQuery({
-    queryKey: ['wealth', 'manual', 'goal-sources'],
-    queryFn: financeApi.wealthManualItems,
+    queryKey: queryKeys.goalManualSources,
+    queryFn: wealthApi.wealthManualItems,
   })
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')

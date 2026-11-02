@@ -1,3 +1,4 @@
+import { wealthApi } from '@/lib/api/finance'
 import { useQuery } from '@tanstack/react-query'
 
 import { Alert } from '@/components/ui/alert'
@@ -7,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
 import { formatDateTime, formatMoney as formatMoneyInCurrency } from '@/lib/format'
 import { queryKeys } from '@/lib/query-keys'
-import { financeApi } from '@/features/integration/api'
+
 import { ApiError } from '@/lib/api/problem'
 import { assetClassLabel } from '@/features/investments/labels'
 
@@ -22,8 +23,8 @@ interface WealthSnapshotDrawerProps {
 /** Detalhe de um snapshot: totais, composição e itens fora do cálculo. */
 export function WealthSnapshotDrawer({ open, snapshotId, onClose }: WealthSnapshotDrawerProps) {
   const query = useQuery({
-    queryKey: [...queryKeys.wealthHistory, snapshotId],
-    queryFn: () => financeApi.wealthSnapshot(snapshotId as string),
+    queryKey: queryKeys.wealthSnapshot(snapshotId),
+    queryFn: () => wealthApi.wealthSnapshot(snapshotId as string),
     enabled: open && Boolean(snapshotId),
   })
   const snapshot = query.data

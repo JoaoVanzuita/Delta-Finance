@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
-import { formatMoney, formatPercent } from '@/lib/format'
-import type { InvestmentContribution, InvestmentContributionFlow } from '@/features/integration/api'
+import { formatMoney, formatMonthKeyShort, formatPercent } from '@/lib/format'
+import type { InvestmentContribution, InvestmentContributionFlow } from '@/lib/api/finance'
 
 import { formatReferenceDate } from '../format'
 
@@ -29,20 +29,12 @@ const FEE_SOURCE_LABELS: Record<string, string> = {
 
 const PERIMETER_SOURCE_LABELS: Record<string, string> = {
   ACCOUNT_FLAG: 'conta marcada como investimento',
-  CONNECTION_FALLBACK: 'todas as contas da conexão',
+  CONNECTION_FALLBACK: 'todas as contas da conexão (legado)',
+  NOT_CONFIGURED: 'nenhuma conta marcada como investimento',
 }
 
 function monthLabel(month: string): string {
-  const [year, monthNumber] = month.split('-')
-  if (!year || !monthNumber) return month
-  const date = new Date(Date.UTC(Number(year), Number(monthNumber) - 1, 1))
-  return new Intl.DateTimeFormat('pt-BR', {
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-    .format(date)
-    .replace('.', '')
+  return formatMonthKeyShort(month)
 }
 
 function flowTitle(flow: InvestmentContributionFlow): string {
@@ -69,8 +61,10 @@ export function InvestmentContributionsSection({
   const hasFlows = contributions.flows.length > 0
   const difference = Number(contributions.reconciliationDifference ?? 0)
   const hasDifference = contributions.reconciliationDifference != null && difference !== 0
-  const fallbackSources = contributions.sources.filter(
-    (source) => source.perimeterSource === 'CONNECTION_FALLBACK',
+  const unconfiguredSources = contributions.sources.filter(
+    (source) =>
+      source.perimeterSource === 'NOT_CONFIGURED' ||
+      source.perimeterSource === 'CONNECTION_FALLBACK',
   )
 
   return (
@@ -88,6 +82,16 @@ export function InvestmentContributionsSection({
           do ativo. Um não substitui o outro.
         </p>
       </div>
+
+      {unconfiguredSources.length > 0 ? (
+        <p className="rounded-card border border-warning/40 bg-warning-soft p-3 text-body-sm text-ink">
+          {unconfiguredSources.length === 1
+            ? 'Uma conexão não tem conta marcada como investimento.'
+            : `${unconfiguredSources.length} conexões não têm conta marcada como investimento.`}{' '}
+          Os fluxos bancários dessas conexões não entram no relatório. Marque a conta onde o
+          dinheiro de investimento transita em Contas → Configurações.
+        </p>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
@@ -198,21 +202,17 @@ export function InvestmentContributionsSection({
             anterior. Ela não é somada como aporte.
           </p>
         ) : null}
-        <p className="mt-3 text-caption text-ink-muted">
-          Caixa atual no perímetro: {formatMoney(contributions.cashBalance, 'BRL')}. Saldo ocioso do
-          período: {formatMoney(contributions.idleCash, 'BRL')}.
-        </p>
+        {contributions.trackingAvailable ? (
+          <p className="mt-3 text-caption text-ink-muted">
+            Caixa atual no perímetro: {formatMoney(contributions.cashBalance, 'BRL')}. Saldo ocioso
+            do período: {formatMoney(contributions.idleCash, 'BRL')}.
+          </p>
+        ) : (
+          <p className="mt-3 text-caption text-ink-muted">
+            O relatório não soma fluxos bancários até que uma conta seja marcada como investimento.
+          </p>
+        )}
       </section>
-
-      {fallbackSources.length > 0 ? (
-        <p className="rounded-card border border-warning/40 bg-warning-soft p-3 text-body-sm text-ink">
-          {fallbackSources.length === 1
-            ? 'Uma conexão não tem conta marcada como investimento.'
-            : `${fallbackSources.length} conexões não têm conta marcada como investimento.`}{' '}
-          O relatório está usando todas as contas da conexão. Marque a conta de investimento em
-          Contas → Configurações para separar aporte de conta de passagem.
-        </p>
-      ) : null}
 
       {contributions.sources.length > 0 ? (
         <section aria-labelledby="investment-contribution-sources-heading" className="space-y-2">
@@ -238,7 +238,11 @@ export function InvestmentContributionsSection({
                   </span>
                 </span>
                 <Badge variant={source.perimeterSource === 'ACCOUNT_FLAG' ? 'income' : 'warning'}>
-                  {source.perimeterSource === 'ACCOUNT_FLAG' ? 'Conta marcada' : 'Fallback'}
+                  {source.perimeterSource === 'ACCOUNT_FLAG'
+                    ? 'Conta marcada'
+                    : source.perimeterSource === 'NOT_CONFIGURED'
+                      ? 'Não configurado'
+                      : 'Fallback'}
                 </Badge>
               </li>
             ))}

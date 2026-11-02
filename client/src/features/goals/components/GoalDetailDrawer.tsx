@@ -1,6 +1,7 @@
+import { goalsApi, type Goal } from '@/lib/api/finance'
 import { useState } from 'react'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -9,9 +10,7 @@ import { Drawer } from '@/components/ui/drawer'
 import { ApiError } from '@/lib/api/problem'
 import { invalidateGoalViews } from '@/lib/invalidation'
 import { formatMoney, formatPercent } from '@/lib/format'
-import type { Goal } from '@/features/integration/api'
-import { financeApi } from '@/features/integration/api'
-
+import { queryKeys } from '@/lib/query-keys'
 import {
   MODE_LABELS,
   RULE_LABELS,
@@ -37,9 +36,18 @@ export function GoalDetailDrawer({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const historyQuery = useInfiniteQuery({
+    queryKey: queryKeys.goalProgress(current?.id ?? ''),
+    queryFn: ({ pageParam }) => goalsApi.goalProgress(current?.id ?? '', pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    enabled: Boolean(current?.id) && open,
+  })
+  const history = historyQuery.data?.pages.flatMap((page) => page.items) ?? []
+
   const statusMutation = useMutation({
     mutationFn: (status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED') =>
-      financeApi.updateGoalStatus(current?.id ?? '', status),
+      goalsApi.updateGoalStatus(current?.id ?? '', status),
     onSuccess: async (updated) => {
       setCurrent(updated)
       setError(null)
@@ -53,7 +61,7 @@ export function GoalDetailDrawer({
   })
 
   const deleteMutation = useMutation({
-    mutationFn: () => financeApi.deleteGoal(current?.id ?? ''),
+    mutationFn: () => goalsApi.deleteGoal(current?.id ?? ''),
     onSuccess: async () => {
       setConfirmingDelete(false)
       await invalidateGoalViews(queryClient)
@@ -222,26 +230,44 @@ export function GoalDetailDrawer({
         )}
       </section>
 
-      {current.progressHistory.length > 0 ? (
-        <details className="rounded-card border border-line">
-          <summary className="min-h-11 cursor-pointer px-3 py-2.5 text-body-sm font-medium text-ink">
-            Histórico de progresso
-          </summary>
-          <div className="border-t border-line px-3 py-2">
-            <p className="text-caption text-ink-muted">
-              Registro sob demanda; dias sem consulta não geram ponto.
-            </p>
+      <details className="rounded-card border border-line">
+        <summary className="min-h-11 cursor-pointer px-3 py-2.5 text-body-sm font-medium text-ink">
+          Histórico de progresso
+        </summary>
+        <div className="border-t border-line px-3 py-2">
+          <p className="text-caption text-ink-muted">
+            Registro sob demanda; dias sem consulta não geram ponto.
+          </p>
+          {historyQuery.isPending ? (
+            <p className="mt-2 text-caption text-ink-muted">Carregando histórico…</p>
+          ) : historyQuery.isError ? (
+            <p className="mt-2 text-caption text-expense">Não foi possível carregar o histórico.</p>
+          ) : history.length === 0 ? (
+            <p className="mt-2 text-caption text-ink-muted">Nenhum ponto registrado ainda.</p>
+          ) : (
             <ul className="mt-2 space-y-1 text-caption text-ink-muted">
-              {current.progressHistory.map((entry) => (
-                <li key={entry.referenceDate}>
+              {history.map((entry) => (
+                <li key={`${entry.referenceDate}-${entry.currentValue}`}>
                   {formatDate(entry.referenceDate)} · {formatPercent(entry.percentage)} · atual{' '}
                   {formatMoney(entry.currentValue)} · restante {formatMoney(entry.remainingAmount)}
                 </li>
               ))}
             </ul>
-          </div>
-        </details>
-      ) : null}
+          )}
+          {historyQuery.hasNextPage ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-3"
+              loading={historyQuery.isFetchingNextPage}
+              loadingLabel="Carregando…"
+              onClick={() => void historyQuery.fetchNextPage()}
+            >
+              Carregar mais
+            </Button>
+          ) : null}
+        </div>
+      </details>
 
       {current.notes ? (
         <section>

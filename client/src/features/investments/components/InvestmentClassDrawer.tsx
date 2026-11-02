@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Drawer } from '@/components/ui/drawer'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatMoney, formatPercent } from '@/lib/format'
-import type { InvestmentAllocation, InvestmentHolding } from '@/features/integration/api'
+import type { InvestmentAllocation, InvestmentHolding } from '@/lib/api/finance'
 
 import { assetClassLabel, HOLDING_STATUS_LABELS, positionCountLabel } from '../labels'
 import { investmentVisual } from '../visuals'
