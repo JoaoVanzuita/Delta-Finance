@@ -18,7 +18,6 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
     restoreMocks: true,
-    passWithNoTests: true,
     reporters: process.env.CI ? ['default', 'junit'] : ['default'],
     outputFile: {
       junit: './test-results/vitest-junit.xml',

@@ -34,6 +34,43 @@ export interface Account {
   notes?: string
   cardProfile?: CardProfile
   connectionStatus?: string | null
+  investmentAccount?: boolean
+  hasReservedBalance?: boolean
+  reservedBalanceTotal?: string
+  reservedBalanceTreatment?: 'UNKNOWN' | 'INCLUDED_IN_BALANCE' | 'SEPARATE_ASSET'
+  reservedBalanceTreatmentSource?: 'ACCOUNT' | 'CONNECTION' | 'UNKNOWN'
+}
+
+export interface ReservedBalanceAmount {
+  amount: string
+  currency: string
+  indexer?: string | null
+  rateType?: string | null
+  calculation?: string | null
+  ratePeriodicity?: string | null
+  preFixedRate?: string | null
+  postFixedIndexerPercentage?: string | null
+  indexerAdditionalInfo?: string | null
+}
+
+export interface ReservedBalance {
+  id: string
+  accountId: string
+  name: string
+  providerName?: string | null
+  nameCustomized: boolean
+  amount: string
+  currency: string
+  referenceDate?: string | null
+  stale: boolean
+  amounts?: ReservedBalanceAmount[]
+}
+
+export interface ReservedBalanceHistoryPoint {
+  referenceDate: string
+  value: string
+  currency: string
+  included: boolean
 }
 
 export interface CardProfile {
@@ -203,6 +240,7 @@ export interface Connection {
   lastSyncAt?: string
   lastErrorCode?: string
   accountCount?: number
+  reservedBalanceTreatment?: 'UNKNOWN' | 'INCLUDED_IN_BALANCE' | 'SEPARATE_ASSET'
 }
 
 export interface InvestmentHolding {
@@ -264,7 +302,8 @@ export interface WealthManualItem {
 }
 
 export interface WealthItem {
-  sourceType: 'ACCOUNT' | 'CARD' | 'INVESTMENT' | 'MANUAL_ASSET' | 'MANUAL_LIABILITY'
+  sourceType:
+    'ACCOUNT' | 'RESERVED_BALANCE' | 'CARD' | 'INVESTMENT' | 'MANUAL_ASSET' | 'MANUAL_LIABILITY'
   sourceId: string
   description: string
   value: string
@@ -347,6 +386,8 @@ export interface Db {
   holdings: InvestmentHolding[]
   incomeItems: InvestmentIncomeItem[]
   wealthItems: WealthItem[]
+  reservedBalances: ReservedBalance[]
+  reservedBalanceHistory: ReservedBalanceHistoryPoint[]
   wealthManualItems: WealthManualItem[]
   goals: Goal[]
 }
@@ -371,7 +412,7 @@ function accounts(): Account[] {
       referenceBalance: '1250.00',
       balanceReferenceAt: '2026-10-01T12:00:00Z',
       status: 'ACTIVE',
-      notes: 'Dinheiro físico da família.',
+      notes: 'Dinheiro físico.',
     },
     {
       id: 'acc-bank',
@@ -387,6 +428,11 @@ function accounts(): Account[] {
       status: 'ACTIVE',
       lastSyncAt: '2026-10-27T09:30:00Z',
       connectionStatus: 'SYNCED',
+      investmentAccount: true,
+      hasReservedBalance: true,
+      reservedBalanceTotal: '9000.00',
+      reservedBalanceTreatment: 'SEPARATE_ASSET',
+      reservedBalanceTreatmentSource: 'CONNECTION',
     },
     {
       id: 'acc-card',
@@ -855,6 +901,7 @@ function connections(): Connection[] {
       consentExpiresAt: '2027-10-22T12:00:00Z',
       lastSyncAt: '2026-10-27T09:30:00Z',
       accountCount: 3,
+      reservedBalanceTreatment: 'SEPARATE_ASSET',
     },
   ]
 }
@@ -1073,6 +1120,43 @@ function incomeItems(): InvestmentIncomeItem[] {
   ]
 }
 
+function reservedBalances(): ReservedBalance[] {
+  return [
+    {
+      id: 'res-1',
+      accountId: 'acc-bank',
+      name: 'Reserva de emergência',
+      providerName: 'Cofrinho Vai Brasil',
+      nameCustomized: true,
+      amount: '9000.00',
+      currency: 'BRL',
+      referenceDate: TODAY,
+      stale: false,
+      amounts: [
+        {
+          amount: '9000.00',
+          currency: 'BRL',
+          indexer: 'CDI',
+          rateType: 'EXPONENCIAL',
+          calculation: 'DIAS_UTEIS',
+          ratePeriodicity: 'ANUAL',
+          preFixedRate: null,
+          postFixedIndexerPercentage: '1.149992',
+          indexerAdditionalInfo: null,
+        },
+      ],
+    },
+  ]
+}
+
+function reservedBalanceHistory(): ReservedBalanceHistoryPoint[] {
+  return [
+    { referenceDate: '2026-10-31', value: '9000.00', currency: 'BRL', included: true },
+    { referenceDate: '2026-09-30', value: '8400.00', currency: 'BRL', included: true },
+    { referenceDate: '2026-08-31', value: '7800.00', currency: 'BRL', included: true },
+  ]
+}
+
 function wealthItems(): WealthItem[] {
   return [
     {
@@ -1081,6 +1165,16 @@ function wealthItems(): WealthItem[] {
       description: 'Conta Corrente',
       origin: 'IMPORTED',
       value: '5432.10',
+      included: true,
+      referenceDate: TODAY,
+      stale: false,
+    },
+    {
+      sourceType: 'RESERVED_BALANCE',
+      sourceId: 'res-1',
+      description: 'Reserva de emergência',
+      origin: 'IMPORTED',
+      value: '9000.00',
       included: true,
       referenceDate: TODAY,
       stale: false,
@@ -1196,7 +1290,7 @@ function goals(): Goal[] {
     },
     {
       id: 'goal-2',
-      name: 'Viagem em família',
+      name: 'Viagem planejada',
       type: 'TRAVEL',
       targetAmount: '15000.00',
       targetDate: '2027-07-15',
@@ -1258,6 +1352,8 @@ export function seedDb(): Db {
     holdings: holdings(),
     incomeItems: incomeItems(),
     wealthItems: wealthItems(),
+    reservedBalances: reservedBalances(),
+    reservedBalanceHistory: reservedBalanceHistory(),
     wealthManualItems: wealthManualItems(),
     goals: goals(),
   }
@@ -1282,6 +1378,8 @@ export function emptyDb(): Db {
     holdings: [],
     incomeItems: [],
     wealthItems: [],
+    reservedBalances: [],
+    reservedBalanceHistory: [],
     wealthManualItems: [],
     goals: [],
     investmentOverview: {

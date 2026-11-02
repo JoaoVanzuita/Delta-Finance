@@ -213,13 +213,29 @@ export const CAPTURES: readonly Capture[] = [
   { slug: '12-account-manual', name: 'Detalhe da conta manual', route: '/accounts/acc-cash' },
   { slug: '13-account-imported', name: 'Detalhe da conta importada', route: '/accounts/acc-bank' },
   {
+    slug: '13-account-imported-reserved-history',
+    name: 'Detalhe da conta importada — evolução da reserva',
+    route: '/accounts/acc-bank',
+    variantMode: 'state',
+    setup: async (page) => {
+      await page.getByText('Evolução mensal da reserva').click()
+      await page.getByText('No patrimônio').first().waitFor({ timeout: 5000 })
+    },
+  },
+  {
+    slug: '13-account-imported-settings',
+    name: 'Detalhe da conta importada — configurações',
+    route: '/accounts/acc-bank?tab=settings',
+  },
+  {
     slug: '13-account-imported-rename',
     name: 'Detalhe da conta importada — renomear',
     route: '/accounts/acc-bank',
     variantMode: 'state',
     setup: async (page) => {
       await page.getByRole('tab', { name: 'Configurações' }).click()
-      await page.getByRole('button', { name: 'Renomear' }).first().click()
+      const settings = page.getByRole('tabpanel', { name: 'Configurações' })
+      await settings.getByRole('button', { name: 'Renomear' }).click()
       await page.getByLabel('Nome de exibição').waitFor({ timeout: 5000 })
     },
   },
@@ -381,6 +397,11 @@ export const CAPTURES: readonly Capture[] = [
     route: '/investments?tab=income',
   },
   {
+    slug: '26-investments-contributions',
+    name: 'Investimentos — aportes',
+    route: '/investments?tab=contributions',
+  },
+  {
     slug: '26-investments-holding-details',
     name: 'Investimentos — detalhes da posição',
     route: '/investments',
@@ -412,6 +433,19 @@ export const CAPTURES: readonly Capture[] = [
     fixture: 'empty',
   },
   { slug: '27-wealth', name: 'Patrimônio', route: '/wealth', dark: true },
+  {
+    slug: '27-wealth-history-detail',
+    name: 'Patrimônio — detalhe do snapshot',
+    route: '/wealth',
+    variantMode: 'state',
+    fullPage: false,
+    setup: async (page) => {
+      const history = page.getByRole('region', { name: 'Evolução patrimonial' })
+      await history.getByText('Ver tabela do histórico').click()
+      await history.getByRole('button', { name: 'Detalhe' }).first().click()
+      await page.getByRole('dialog', { name: /Posição de/ }).waitFor({ timeout: 5000 })
+    },
+  },
   {
     slug: '27-wealth-empty',
     name: 'Patrimônio — sem dados',

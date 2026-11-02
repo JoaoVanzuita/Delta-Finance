@@ -90,6 +90,10 @@ function dashboardSummary(db: Db) {
     pendingInternalMatches: db.internalMatches.length,
     lastSuccessfulSyncAt: empty ? null : '2026-10-27T09:30:00Z',
     cardOutstandingBalance: cardOverview(db).totalOutstanding,
+    investmentContributions: empty ? '0.00' : '3000.00',
+    investmentWithdrawals: empty ? '0.00' : '500.00',
+    netInvestmentContributions: empty ? '0.00' : '2500.00',
+    investmentTrackingAvailable: !empty,
   }
 }
 
@@ -102,6 +106,110 @@ function cardOverview(db: Db) {
     nextDueDate: items.find((item) => item.nextDueDate)?.nextDueDate ?? null,
     items,
   }
+}
+
+function scaledMoney(value: string, factor: number): string {
+  return (Number(value) * factor).toFixed(2)
+}
+
+function wealthHistory(db: Db) {
+  const overview = wealthOverview(db)
+  return [
+    {
+      id: 'snap-3',
+      referenceDate: '2026-10-31',
+      capturedAt: '2026-11-01T03:10:00Z',
+      trigger: 'SCHEDULED',
+      completeness: overview.completeness,
+      grossAssets: overview.grossAssets,
+      liabilities: overview.liabilities,
+      netWorth: overview.netWorth,
+      itemCount: overview.items.length,
+      includedItemCount: overview.items.filter((item) => item.included).length,
+      hasPartialData: overview.completeness !== 'COMPLETE',
+    },
+    {
+      id: 'snap-2',
+      referenceDate: '2026-09-30',
+      capturedAt: '2026-10-01T03:10:00Z',
+      trigger: 'SCHEDULED',
+      completeness: 'COMPLETE',
+      grossAssets: scaledMoney(overview.grossAssets, 0.94),
+      liabilities: scaledMoney(overview.liabilities, 0.9),
+      netWorth: scaledMoney(overview.netWorth, 0.94),
+      itemCount: overview.items.length,
+      includedItemCount: overview.items.filter((item) => item.included).length,
+      hasPartialData: false,
+    },
+    {
+      id: 'snap-1',
+      referenceDate: '2026-08-31',
+      capturedAt: '2026-09-01T03:10:00Z',
+      trigger: 'SCHEDULED',
+      completeness: 'COMPLETE',
+      grossAssets: scaledMoney(overview.grossAssets, 0.88),
+      liabilities: scaledMoney(overview.liabilities, 0.8),
+      netWorth: scaledMoney(overview.netWorth, 0.88),
+      itemCount: overview.items.length,
+      includedItemCount: overview.items.filter((item) => item.included).length,
+      hasPartialData: false,
+    },
+  ]
+}
+
+function wealthSnapshotDetail(db: Db, id: string) {
+  const summary = wealthHistory(db).find((snapshot) => snapshot.id === id) ?? wealthHistory(db)[0]
+  const overview = wealthOverview(db)
+  return {
+    ...summary,
+    items: overview.items.map((item) => ({
+      ...item,
+      currency: 'BRL',
+      assetClass:
+        item.sourceType === 'INVESTMENT'
+          ? (db.holdings.find((holding) => holding.id === item.sourceId)?.assetClass ?? null)
+          : null,
+      exclusionReason: 'exclusionReason' in item ? (item.exclusionReason ?? null) : null,
+      referenceDate: item.referenceDate ?? null,
+    })),
+  }
+}
+
+function investmentHistory(db: Db) {
+  const overview = db.investmentOverview as {
+    totalValue: string
+    allocation: Array<{ assetClass: string; value: string; count: number; percentage: string }>
+  }
+  const allocation = overview.allocation
+  return [
+    {
+      snapshotId: 'snap-1',
+      referenceDate: '2026-08-31',
+      totalValue: scaledMoney(overview.totalValue, 0.88),
+      completeness: 'COMPLETE',
+      allocation: allocation.map((entry) => ({
+        ...entry,
+        value: scaledMoney(entry.value, 0.88),
+      })),
+    },
+    {
+      snapshotId: 'snap-2',
+      referenceDate: '2026-09-30',
+      totalValue: scaledMoney(overview.totalValue, 0.94),
+      completeness: 'COMPLETE',
+      allocation: allocation.map((entry) => ({
+        ...entry,
+        value: scaledMoney(entry.value, 0.94),
+      })),
+    },
+    {
+      snapshotId: 'snap-3',
+      referenceDate: '2026-10-31',
+      totalValue: overview.totalValue,
+      completeness: 'COMPLETE',
+      allocation,
+    },
+  ]
 }
 
 function wealthOverview(db: Db) {
@@ -139,6 +247,123 @@ function wealthOverview(db: Db) {
     completeness: 'PARTIAL',
     hasData: true,
     items,
+  }
+}
+
+function investmentContribution() {
+  return {
+    from: '2026-09-01',
+    to: '2026-11-01',
+    currency: 'BRL',
+    contributions: '3000.00',
+    withdrawals: '500.00',
+    netContributions: '2500.00',
+    applied: '2800.00',
+    redeemed: '0.00',
+    income: '12.50',
+    fees: '15.00',
+    idleCash: '185.00',
+    portfolioValue: '1500.00',
+    cashBalance: '5432.10',
+    settlementDebits: '2815.00',
+    result: '600.00',
+    resultPercentage: '6.67',
+    cumulativeContributions: '9000.00',
+    cumulativeWithdrawals: '1000.00',
+    feeSource: 'DERIVED',
+    reconciliationDifference: '0.00',
+    contributionCount: 3,
+    withdrawalCount: 1,
+    applicationCount: 2,
+    positionCount: 2,
+    months: [
+      {
+        month: '2026-11',
+        contributions: '1000.00',
+        withdrawals: '0.00',
+        netContributions: '1000.00',
+        applied: '1000.00',
+        redeemed: '0.00',
+        income: '0.00',
+        fees: '5.00',
+        idleCash: '0.00',
+      },
+      {
+        month: '2026-10',
+        contributions: '1000.00',
+        withdrawals: '500.00',
+        netContributions: '500.00',
+        applied: '1000.00',
+        redeemed: '0.00',
+        income: '12.50',
+        fees: '5.00',
+        idleCash: '185.00',
+      },
+      {
+        month: '2026-09',
+        contributions: '1000.00',
+        withdrawals: '0.00',
+        netContributions: '1000.00',
+        applied: '800.00',
+        redeemed: '0.00',
+        income: '0.00',
+        fees: '5.00',
+        idleCash: '0.00',
+      },
+    ],
+    flows: [
+      {
+        date: '2026-10-05',
+        kind: 'CONTRIBUTION',
+        amount: '1000.00',
+        description: 'Transferência para corretora',
+        accountId: 'acc-bank',
+        connectionId: 'connection-1',
+        transactionId: 'tx-transfer-out',
+        investmentId: null,
+        investmentName: null,
+        investmentCode: null,
+        source: 'BANK',
+        status: 'CONFIRMED',
+      },
+      {
+        date: '2026-10-08',
+        kind: 'APPLICATION',
+        amount: '-1000.00',
+        description: 'Compra de FII Alfa',
+        accountId: null,
+        connectionId: 'connection-1',
+        transactionId: null,
+        investmentId: 'holding-1',
+        investmentName: 'FII Alfa',
+        investmentCode: 'AAAA11',
+        source: 'PROVIDER',
+        status: 'PROVIDER',
+      },
+      {
+        date: '2026-10-20',
+        kind: 'WITHDRAWAL',
+        amount: '-500.00',
+        description: 'Resgate para conta corrente',
+        accountId: 'acc-bank',
+        connectionId: 'connection-1',
+        transactionId: 'tx-transfer-in',
+        investmentId: null,
+        investmentName: null,
+        investmentCode: null,
+        source: 'BANK',
+        status: 'CONFIRMED',
+      },
+    ],
+    sources: [
+      {
+        connectionId: 'connection-1',
+        name: 'Banco Alfa',
+        accountCount: 2,
+        positionCount: 2,
+        perimeterSource: 'ACCOUNT_FLAG',
+      },
+    ],
   }
 }
 
@@ -222,6 +447,31 @@ export async function installMockApi(
     if (path === '/accounts' && method === 'POST') {
       return json(route, 201, { ...(db.accounts[0] ?? {}), id: 'acc-new' })
     }
+    if (path.startsWith('/accounts/') && path.endsWith('/reserved-balances') && method === 'GET') {
+      const accountId = path.split('/')[2]
+      const items = db.reservedBalances.filter((item) => item.accountId === accountId)
+      return json(route, 200, { items })
+    }
+    if (
+      path.startsWith('/accounts/') &&
+      path.endsWith('/reserved-balance-treatment') &&
+      method === 'PUT'
+    ) {
+      const accountId = path.split('/')[2]
+      const account = db.accounts.find((item) => item.id === accountId)
+      return account
+        ? json(route, 200, {
+            ...account,
+            reservedBalanceTreatment: 'SEPARATE_ASSET',
+            reservedBalanceTreatmentSource: 'ACCOUNT',
+          })
+        : notFound(route)
+    }
+    if (path.startsWith('/accounts/') && path.endsWith('/investment') && method === 'PUT') {
+      const accountId = path.split('/')[2]
+      const account = db.accounts.find((item) => item.id === accountId)
+      return account ? json(route, 200, { ...account, investmentAccount: true }) : notFound(route)
+    }
     if (path.startsWith('/accounts/') && method === 'GET') {
       const id = path.split('/')[2]
       const account = db.accounts.find((item) => item.id === id)
@@ -241,6 +491,19 @@ export async function installMockApi(
       const id = path.split('/')[2]
       const account = db.accounts.find((item) => item.id === id)
       return account ? json(route, 200, account) : notFound(route)
+    }
+    if (path.startsWith('/reserved-balances/') && path.endsWith('/display-name')) {
+      const id = path.split('/')[2]
+      const reserved = db.reservedBalances.find((item) => item.id === id)
+      if (!reserved) return notFound(route)
+      if (method === 'DELETE') {
+        return json(route, 200, {
+          ...reserved,
+          name: reserved.providerName ?? reserved.name,
+          nameCustomized: false,
+        })
+      }
+      return json(route, 200, { ...reserved, name: 'Reserva de emergência', nameCustomized: true })
     }
 
     // Categorias.
@@ -404,6 +667,17 @@ export async function installMockApi(
     if (path.startsWith('/connections/') && path.endsWith('/sync') && method === 'POST') {
       return json(route, 202, { jobId: 'job-1', status: 'QUEUED' })
     }
+    if (
+      path.startsWith('/connections/') &&
+      path.endsWith('/reserved-balance-treatment') &&
+      method === 'PUT'
+    ) {
+      const id = path.split('/')[2]
+      const connection = db.connections.find((item) => item.id === id)
+      return connection
+        ? json(route, 200, { ...connection, reservedBalanceTreatment: 'SEPARATE_ASSET' })
+        : notFound(route)
+    }
     if (path.startsWith('/connections/') && method === 'DELETE') {
       return noContent(route)
     }
@@ -421,6 +695,12 @@ export async function installMockApi(
     }
 
     // Investimentos.
+    if (path === '/investments/history') {
+      return json(route, 200, investmentHistory(db))
+    }
+    if (path === '/investments/contributions') {
+      return json(route, 200, investmentContribution())
+    }
     if (path === '/investments/overview') {
       return json(route, 200, db.investmentOverview)
     }
@@ -469,6 +749,18 @@ export async function installMockApi(
     }
 
     // Patrimônio.
+    if (path.startsWith('/wealth/reserved-balances/') && path.endsWith('/history')) {
+      return json(route, 200, { items: db.reservedBalanceHistory })
+    }
+    if (path === '/wealth/history' && method === 'GET') {
+      return json(route, 200, wealthHistory(db))
+    }
+    if (path.startsWith('/wealth/history/') && method === 'GET') {
+      return json(route, 200, wealthSnapshotDetail(db, path.split('/').pop() ?? 'snap-3'))
+    }
+    if (path === '/wealth/history' && method === 'POST') {
+      return json(route, 201, wealthSnapshotDetail(db, 'snap-3'))
+    }
     if (path === '/wealth/overview') {
       return json(route, 200, wealthOverview(db))
     }
