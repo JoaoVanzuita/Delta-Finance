@@ -163,6 +163,8 @@ demais mutações não gravam nesta tabela.
 | `external_item_id_enc` | bytea | enc | itemId bruto. |
 | `external_item_id_hash` | bytea | hmac | busca e unicidade. |
 | `institution_name_enc` | bytea | enc | nome da instituição. |
+| `display_name_enc` | bytea | enc | nome local da conexão. |
+| `reserved_balance_treatment` | text | plain | `UNKNOWN`, `INCLUDED_IN_BALANCE` ou `SEPARATE_ASSET`; padrão herdado pelas contas. |
 | `status` | text | plain | espelha o estado do item e o estado local. |
 | `consent_expires_at` | timestamptz | plain | `consentExpiresAt` quando disponível. |
 | `next_auto_sync_at` | timestamptz | plain | `nextAutoSyncAt` quando disponível. |
@@ -244,6 +246,10 @@ segredos ou jobs de webhook no schema ativo desde a baseline
 | `currency` | char(3) | plain | BRL inicialmente. |
 | `balance_enc` | bytea | enc | saldo disponível/referência; para `CREDIT`, é snapshot/limite do cartão e NÃO entra no saldo atual consolidado. |
 | `balance_reference_at` | timestamptz | plain | data do saldo. |
+| `investment_account` | boolean | plain | `true` quando a conta é a fronteira de caixa do perímetro de investimento. Créditos são aportes; débitos de corretagem são aplicações. |
+| `has_reserved_balance` | boolean | plain | Espelho de `bankData.hasReservedBalance`; indica que o provedor sinalizou reserva ativa. |
+| `reserved_balance_checked_at` | timestamptz | plain | Última leitura em que o campo de reserva foi verificado. |
+| `reserved_balance_treatment` | text | plain | Override da conta: `UNKNOWN`, `INCLUDED_IN_BALANCE` ou `SEPARATE_ASSET`. `UNKNOWN` herda o padrão da conexão. |
 | `status` | text | plain | `ACTIVE`, `INACTIVE`, `UNAVAILABLE`, `CLOSED`; `INACTIVE` para conta manual desativada. |
 | `last_sync_at` | timestamptz | plain | nullable. |
 | `created_at`, `updated_at` | timestamptz | plain | auditoria. |
@@ -289,6 +295,46 @@ Restrições:
 | `version` | bigint | plain | locking otimista. |
 
 Único: `(user_id, account_id)`. Só existe para `financial_account.type=CREDIT`.
+
+### 5.2.1 `reserved_balance`
+
+Saldo reservado dentro de uma conta bancária (cofrinho, caixinha, bloqueio judicial,
+Pix agendado). Não é conta nem investimento.
+
+| Campo | Tipo | Classificação | Regra |
+|---|---|---|---|
+| `id` | uuid | plain | PK. |
+| `user_id` | uuid | plain | proprietário. |
+| `account_id` | uuid | plain | FK `(user_id, account_id)`. |
+| `connection_id` | uuid | plain | conexão de origem. |
+| `provider_identification_enc` | bytea | enc | `identification` do provedor. |
+| `provider_identification_hash` | bytea | hmac | dedup por conta; fallback `name + índice` quando ausente. |
+| `provider_name_enc` | bytea | enc | nome devolvido pelo provedor. |
+| `display_name_enc` | bytea | enc | nome local; não sobrescreve o provedor. |
+| `currency` | varchar(3) | plain | moeda do valor. |
+| `amount_enc` | bytea | enc | soma de `availableAmounts[].amount`. |
+| `details_enc` | bytea | enc | JSON das faixas e remuneração, para uso futuro. |
+| `reference_date` | date | plain | data da leitura. |
+| `last_seen_at` | timestamptz | plain | controle de presença. |
+| `removed_at` | timestamptz | plain | ausência em leitura completa; não apaga. |
+| `created_at`, `updated_at`, `version` | — | plain | auditoria/locking. |
+
+Único: `(user_id, account_id, provider_identification_hash)`.
+
+Regras:
+
+- `hasReservedBalance=true` com lista nula/ausente é lacuna, não zero.
+- Mercado Pago validado como `SEPARATE_ASSET`: `balance` não inclui a reserva e o
+  patrimônio soma `balance + reservas` uma única vez.
+- `UNKNOWN` e `INCLUDED_IN_BALANCE` não somam a reserva de novo.
+- O nome exibido é `display_name` → `provider_name` → “Reserva sem nome”.
+- A reserva nunca vira `transaction`, `provider_investment`, receita ou despesa.
+- `details_enc` guarda `availableAmounts` com remuneração; a leitura expõe as
+  faixas e o histórico mensal vem de `wealth_snapshot_item` (fonte
+  `RESERVED_BALANCE`), sem cálculo de rendimento.
+- O inline de `/accounts` é a fonte principal. Itens Open Finance com
+  `hasReservedBalance=true` e inline vazio podem usar o fallback
+  `/accounts/{id}/reserved-balances`; itens MeuPluggy não usam esse endpoint.
 
 ### 5.3 `transaction`
 
@@ -711,6 +757,32 @@ o complemento manual. A coluna `investment_position_id` foi removida na migraç�
 `V009__remove_manual_investment_positions.sql`. O provento
 manual é identificado como tal no painel e não é somado automaticamente às
 receitas do dashboard principal.
+
+### 7.4.1 Relatório de aportes
+
+Não há tabela nova. O relatório é derivado de:
+
+- `financial_account.investment_account` (fronteira de caixa);
+- `transaction` (créditos, débitos e transferências do período);
+- `internal_match` (transferências internas e conciliação);
+- `provider_investment_transaction` (`BUY`, `SELL`, `AMORTIZATION`, `INTEREST` e
+  `expenses`).
+
+Regras:
+
+- crédito na conta marcada vindo de fora = aporte;
+- débito para fora = resgate;
+- débito de liquidação de corretagem = aplicação, não resgate;
+- transferência entre contas do perímetro = interna e fora dos totais;
+- `applied` = soma de `netAmount` (ou `amount`) dos `BUY`;
+- custos = `expenses` do provedor ou `débito de corretagem - applied` quando a
+  diferença é plausível;
+- saldo ocioso = aportes - resgates - aplicado + resgatado + proventos - custos;
+- resultado = posições + caixa do perímetro - aportes líquidos acumulados,
+  disponível apenas para o período que termina hoje.
+
+Sem conta marcada, o relatório usa todas as contas não-cartão da conexão com
+investimentos e sinaliza `CONNECTION_FALLBACK` na resposta.
 
 ### 7.5 `manual_asset_liability`
 

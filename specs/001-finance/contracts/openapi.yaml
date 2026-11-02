@@ -360,6 +360,89 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: deleteConnectionsId
+  /connections/{id}/display-name:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    put:
+      tags:
+      - Connections
+      summary: Define o nome de exibição de uma conexão
+      description: Salva um nome local sem alterar o nome original recebido do
+        Pluggy. Não sincroniza nem altera o itemId.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionDisplayNameRequest'
+      responses:
+        '200':
+          description: Conexão com o nome de exibição atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putConnectionsIdDisplayName
+    delete:
+      tags:
+      - Connections
+      summary: Restaura o nome original do Pluggy
+      description: Remove o nome de exibição personalizado. A operação é idempotente.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '200':
+          description: Conexão com o nome original restaurado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: deleteConnectionsIdDisplayName
+  /connections/{id}/reserved-balance-treatment:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    put:
+      tags:
+      - Connections
+      summary: Define o tratamento padrão de saldos reservados da conexão
+      description: As contas herdam este valor quando não têm override próprio.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionReservedBalanceTreatmentRequest'
+      responses:
+        '200':
+          description: Conexão com o tratamento atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putConnectionsIdReservedBalanceTreatment
   /connections/{id}/sync:
     post:
       tags:
@@ -477,6 +560,216 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
       operationId: patchAccountsId
+  /accounts/{id}/display-name:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    put:
+      tags:
+      - Accounts
+      summary: Define o nome de exibição de uma conta ou cartão importado
+      description: Salva um nome local sem alterar o nome original recebido do
+        Pluggy. Contas manuais continuam sendo renomeadas pelo PATCH da conta.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountDisplayNameRequest'
+      responses:
+        '200':
+          description: Conta com o nome de exibição atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conta manual não aceita nome de exibição separado
+            (código `ACCOUNT_NOT_IMPORTED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putAccountsIdDisplayName
+    delete:
+      tags:
+      - Accounts
+      summary: Restaura o nome original do Pluggy
+      description: Remove o nome de exibição personalizado de uma conta ou cartão
+        importado. A operação é idempotente.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '200':
+          description: Conta com o nome original restaurado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conta manual não possui nome original de provedor
+            (código `ACCOUNT_NOT_IMPORTED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: deleteAccountsIdDisplayName
+  /accounts/{id}/investment:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    put:
+      tags:
+      - Accounts
+      summary: Marca ou desmarca uma conta como perímetro de investimento
+      description: Créditos nessa conta passam a ser aportes e débitos de
+        corretagem passam a ser aplicações. Cartões não podem ser marcados.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountInvestmentRequest'
+      responses:
+        '200':
+          description: Conta com a marcação atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cartão ou conta manual não pode ser marcado como conta de
+            investimento (`ACCOUNT_IS_CARD`/`ACCOUNT_NOT_IMPORTED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putAccountsIdInvestment
+  /accounts/{id}/reserved-balances:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    get:
+      tags:
+      - Accounts
+      summary: Lista os saldos reservados de uma conta
+      responses:
+        '200':
+          description: Saldos reservados ativos, com nome local e nome do provedor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservedBalanceList'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: getAccountsIdReservedBalances
+  /accounts/{id}/reserved-balance-treatment:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    put:
+      tags:
+      - Accounts
+      summary: Define como o saldo reservado entra no patrimônio
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservedBalanceTreatmentRequest'
+      responses:
+        '200':
+          description: Conta com o tratamento atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conta manual ou cartão não aceita tratamento de saldo
+            reservado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putAccountsIdReservedBalanceTreatment
+  /reserved-balances/{id}/display-name:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    put:
+      tags:
+      - Accounts
+      summary: Define o nome local de um saldo reservado
+      description: O nome do provedor é preservado e pode ser restaurado.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservedBalanceDisplayNameRequest'
+      responses:
+        '200':
+          description: Saldo reservado com o nome atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservedBalance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putReservedBalancesIdDisplayName
+    delete:
+      tags:
+      - Accounts
+      summary: Restaura o nome do provedor de um saldo reservado
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      responses:
+        '200':
+          description: Saldo reservado com o nome original restaurado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservedBalance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: deleteReservedBalancesIdDisplayName
   /cards/overview:
     get:
       tags:
@@ -1059,6 +1352,16 @@ paths:
       - $ref: '#/components/parameters/Origin'
       - $ref: '#/components/parameters/MinAmount'
       - $ref: '#/components/parameters/MaxAmount'
+      - name: direction
+        in: query
+        required: false
+        description: Direção da distribuição. O padrão é EXPENSE para compatibilidade.
+        schema:
+          type: string
+          enum:
+          - EXPENSE
+          - INCOME
+          default: EXPENSE
       responses:
         '200':
           description: Categorias.
@@ -1121,6 +1424,15 @@ paths:
       - $ref: '#/components/parameters/Origin'
       - $ref: '#/components/parameters/MinAmount'
       - $ref: '#/components/parameters/MaxAmount'
+      - name: direction
+        in: query
+        required: false
+        description: Filtra entradas de receita ou despesa. Ausente inclui as duas direções.
+        schema:
+          type: string
+          enum:
+          - EXPENSE
+          - INCOME
       - $ref: '#/components/parameters/Cursor'
       - $ref: '#/components/parameters/Limit'
       responses:
@@ -1334,6 +1646,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
       operationId: getInvestmentsSources
+  /investments/contributions:
+    x-phase: post-mvp
+    get:
+      tags:
+      - Investments
+      summary: Aportes, resgates e aplicações do perímetro de investimento
+      description: Separa o caixa que entra ou sai da conta de investimento das
+        compras e vendas de ativos registradas pelo provedor. Não soma aporte e
+        aplicação como o mesmo evento.
+      parameters:
+      - name: from
+        in: query
+        required: false
+        description: Data inicial; o padrão é o primeiro dia do mês atual.
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        description: Data final; o padrão é hoje.
+        schema:
+          type: string
+          format: date
+      - name: connectionId
+        in: query
+        required: false
+        description: Restringe o relatório a uma conexão com investimentos.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Aportes, resgates, aplicações, custos e conciliação.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestmentContribution'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getInvestmentsContributions
   /investments/income:
     x-phase: post-mvp
     get:
@@ -1512,6 +1869,137 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
       operationId: getWealthOverview
+  /wealth/history:
+    x-phase: phase-7
+    get:
+      tags:
+      - Wealth
+      summary: Histórico de snapshots patrimoniais
+      description: Série mensal imutável; não reconstrói meses anteriores à ativação.
+      parameters:
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      responses:
+        '200':
+          description: Snapshots do período, mais recentes primeiro.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WealthSnapshotSummary'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getWealthHistory
+    post:
+      tags:
+      - Wealth
+      summary: Captura manual de snapshot patrimonial
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WealthSnapshotCaptureRequest'
+      responses:
+        '201':
+          description: Snapshot criado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthSnapshot'
+        '409':
+          description: Já existe snapshot para a data.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: postWealthHistory
+  /wealth/history/{id}:
+    x-phase: phase-7
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    get:
+      tags:
+      - Wealth
+      summary: Detalhe de um snapshot patrimonial
+      responses:
+        '200':
+          description: Snapshot com composição e lacunas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WealthSnapshot'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getWealthHistoryId
+  /wealth/reserved-balances/{id}/history:
+    x-phase: phase-7
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    get:
+      tags:
+      - Wealth
+      summary: Evolução mensal de um saldo reservado
+      description: Derivada dos snapshots patrimoniais que incluíram a reserva;
+        não calcula rendimento.
+      responses:
+        '200':
+          description: Pontos mensais da reserva.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservedBalanceHistory'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getWealthReservedBalancesIdHistory
+  /investments/history:
+    x-phase: phase-7
+    get:
+      tags:
+      - Investments
+      summary: Histórico mensal de investimentos
+      description: Derivado dos snapshots patrimoniais; não calcula rentabilidade.
+      parameters:
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      responses:
+        '200':
+          description: Pontos mensais com total e alocação por classe.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvestmentHistoryPoint'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getInvestmentsHistory
   /wealth/manual-items:
     x-phase: post-mvp
     get:
@@ -1775,6 +2263,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
       operationId: postGoalsIdStatus
+  /goals/{id}/progress:
+    x-phase: post-mvp
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    - $ref: '#/components/parameters/Cursor'
+    - $ref: '#/components/parameters/Limit'
+    get:
+      tags:
+      - Goals
+      summary: Lista o histórico diário de progresso em páginas
+      responses:
+        '200':
+          description: Página do histórico, mais recente primeiro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalProgressPage'
+        4XX:
+          description: Erro do cliente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+      operationId: getGoalsIdProgress
 components:
   securitySchemes:
     sessionCookie:
@@ -2114,6 +2626,17 @@ components:
           type: string
         institutionName:
           type: string
+          description: Nome original recebido do Pluggy. Não muda quando o nome
+            de exibição é personalizado.
+        displayName:
+          type:
+          - string
+          - 'null'
+          description: Nome efetivamente exibido; usa o nome personalizado quando
+            existir, senão o nome original.
+        nameCustomized:
+          type: boolean
+          description: true quando o usuário definiu um nome de exibição local.
         status:
           type: string
           enum:
@@ -2135,6 +2658,14 @@ components:
           type: string
         accountCount:
           type: integer
+        reservedBalanceTreatment:
+          type: string
+          enum:
+          - UNKNOWN
+          - INCLUDED_IN_BALANCE
+          - SEPARATE_ASSET
+          description: Tratamento padrão dos saldos reservados para as contas
+            desta conexão. A conta pode sobrescrever.
     ConnectionCreateRequest:
       type: object
       required:
@@ -2158,6 +2689,28 @@ components:
             aplicação Meu Pluggy (não o UUID da conta). Não altera o ID local da
             conexão; item inválido/inexistente retorna 422 e mantém o vínculo
             anterior.
+    ConnectionDisplayNameRequest:
+      type: object
+      required:
+      - displayName
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Nome local exibido para o item. Não é enviado ao Pluggy.
+    ConnectionReservedBalanceTreatmentRequest:
+      type: object
+      required:
+      - treatment
+      properties:
+        treatment:
+          type: string
+          enum:
+          - UNKNOWN
+          - INCLUDED_IN_BALANCE
+          - SEPARATE_ASSET
+          description: Tratamento padrão das contas da conexão.
     ConnectionPage:
       type: object
       required:
@@ -2203,6 +2756,48 @@ components:
           type: string
         alias:
           type: string
+          description: Nome efetivamente exibido; usa o nome personalizado
+            quando existir, senão o nome original. Em conta manual, é o apelido
+            informado pelo usuário.
+        providerName:
+          type:
+          - string
+          - 'null'
+          description: Nome original recebido do Pluggy. Nulo em conta manual.
+        nameCustomized:
+          type: boolean
+          description: true quando o usuário definiu um nome de exibição local
+            para uma conta importada.
+        investmentAccount:
+          type: boolean
+          description: true quando a conta é a fronteira de caixa do perímetro
+            de investimento. Créditos nessa conta são aportes; débitos de
+            corretagem são aplicações, não resgates.
+        hasReservedBalance:
+          type: boolean
+          description: true quando o provedor sinalizou saldo reservado ativo
+            nesta conta.
+        reservedBalanceTotal:
+          type: string
+          description: Soma dos saldos reservados ativos na moeda da conta. Não
+            é somada automaticamente ao saldo disponível.
+        reservedBalanceTreatment:
+          type: string
+          enum:
+          - UNKNOWN
+          - INCLUDED_IN_BALANCE
+          - SEPARATE_ASSET
+          description: Como o saldo reservado entra no patrimônio. UNKNOWN não
+            soma; INCLUDED_IN_BALANCE apenas detalha; SEPARATE_ASSET soma como
+            ativo separado.
+        reservedBalanceTreatmentSource:
+          type: string
+          enum:
+          - ACCOUNT
+          - CONNECTION
+          - UNKNOWN
+          description: Origem do tratamento efetivo (override da conta, padrão da
+            conexão ou não definido).
         currency:
           type: string
         currentBalance:
@@ -2290,6 +2885,147 @@ components:
           enum:
           - ACTIVE
           - INACTIVE
+    AccountDisplayNameRequest:
+      type: object
+      required:
+      - displayName
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Nome local exibido para a conta ou cartão importado. Não é
+            enviado ao Pluggy e não altera o nome original.
+    AccountInvestmentRequest:
+      type: object
+      required:
+      - investmentAccount
+      properties:
+        investmentAccount:
+          type: boolean
+          description: Marca a conta como fronteira de caixa do perímetro de
+            investimento.
+    ReservedBalanceTreatmentRequest:
+      type: object
+      required:
+      - treatment
+      properties:
+        treatment:
+          type: string
+          enum:
+          - UNKNOWN
+          - INCLUDED_IN_BALANCE
+          - SEPARATE_ASSET
+          description: Como o saldo reservado entra no patrimônio.
+    ReservedBalanceDisplayNameRequest:
+      type: object
+      required:
+      - displayName
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Nome local exibido; não altera o nome do provedor.
+    ReservedBalance:
+      type: object
+      required:
+      - id
+      - accountId
+      - name
+      - nameCustomized
+      - amount
+      - currency
+      - stale
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Nome exibido (local quando existir; senão o do provedor).
+        providerName:
+          type: [string, 'null']
+          description: Nome original devolvido pelo provedor.
+        nameCustomized:
+          type: boolean
+        amount:
+          type: string
+        currency:
+          type: string
+        referenceDate:
+          type: [string, 'null']
+          format: date
+        stale:
+          type: boolean
+        amounts:
+          type: array
+          description: Faixas do saldo reservado com remuneração, quando o provedor
+            informa.
+          items:
+            $ref: '#/components/schemas/ReservedBalanceAmount'
+    ReservedBalanceAmount:
+      type: object
+      required:
+      - amount
+      - currency
+      properties:
+        amount:
+          type: string
+        currency:
+          type: string
+        indexer:
+          type: [string, 'null']
+        rateType:
+          type: [string, 'null']
+        calculation:
+          type: [string, 'null']
+        ratePeriodicity:
+          type: [string, 'null']
+        preFixedRate:
+          type: [string, 'null']
+          description: Taxa pré-fixada como fração (0,3 = 30%).
+        postFixedIndexerPercentage:
+          type: [string, 'null']
+          description: Percentual do indexador como fração (1,149992 = 114,9992%).
+        indexerAdditionalInfo:
+          type: [string, 'null']
+    ReservedBalanceList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservedBalance'
+    ReservedBalanceHistory:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required:
+            - referenceDate
+            - value
+            - currency
+            - included
+            properties:
+              referenceDate:
+                type: string
+                format: date
+              value:
+                type: string
+              currency:
+                type: string
+              included:
+                type: boolean
     AccountList:
       type: object
       required:
@@ -2376,11 +3112,20 @@ components:
       - creditBalance
       - usedAmount
       - outstanding
+      - invoicedOutstanding
+      - unbilledAmount
       - utilization
       - nextDueDate
       - currentInvoice
       - nextDueInvoice
+      - pendingCount
       - unallocatedCount
+      - pendingPurchaseCount
+      - pendingPurchaseTotal
+      - unallocatedPurchaseCount
+      - unallocatedPurchaseTotal
+      - unallocatedCreditCount
+      - unallocatedCreditTotal
       properties:
         accountId:
           type: string
@@ -2424,6 +3169,13 @@ components:
           type: string
         outstanding:
           type: string
+          description: Dívida total do cartão, considerando faturas não pagas e saldo do provedor.
+        invoicedOutstanding:
+          type: string
+          description: Parte da dívida já faturada (faturas não pagas).
+        unbilledAmount:
+          type: string
+          description: Parte da dívida ainda não faturada, segundo o saldo do provedor.
         utilization:
           type: [string, 'null']
           description: Percentual utilizado do limite, com duas casas decimais.
@@ -2438,9 +3190,30 @@ components:
           oneOf:
           - $ref: '#/components/schemas/Invoice'
           - type: 'null'
+        pendingCount:
+          type: integer
+          minimum: 0
+          description: Total de transações PENDING do cartão, sem o limite da listagem.
         unallocatedCount:
           type: integer
           minimum: 0
+        pendingPurchaseCount:
+          type: integer
+          minimum: 0
+          description: Compras PENDING (débito) no ciclo aberto atual, sem limite de listagem.
+        pendingPurchaseTotal:
+          type: string
+          description: Soma absoluta das compras PENDING no ciclo aberto atual.
+        unallocatedPurchaseCount:
+          type: integer
+          minimum: 0
+        unallocatedPurchaseTotal:
+          type: string
+        unallocatedCreditCount:
+          type: integer
+          minimum: 0
+        unallocatedCreditTotal:
+          type: string
     CardProfileRequest:
       type: object
       required:
@@ -3171,6 +3944,21 @@ components:
         cardOutstandingBalance:
           type: string
           description: Saldo devedor total de cartões no período. Não é somado a currentBalance.
+        investmentContributions:
+          type: string
+          description: Créditos externos que entraram nas contas marcadas como
+            investimento no período. Não compõem income.
+        investmentWithdrawals:
+          type: string
+          description: Débitos externos que saíram das contas marcadas como
+            investimento no período. Não compõem expenses.
+        netInvestmentContributions:
+          type: string
+          description: investmentContributions - investmentWithdrawals.
+        investmentTrackingAvailable:
+          type: boolean
+          description: true quando existe ao menos uma conexão com investimentos
+            importados e o indicador pode ser exibido.
       description: Resumo do dashboard em períodos calendário America/Sao_Paulo. currentBalance soma apenas
         contas BANK, CASH e WALLET; cartões são exibidos separadamente em cardOutstandingBalance.
     DashboardCategory:
@@ -3524,7 +4312,9 @@ components:
           minimum: 0
         estimatedProfit:
           type: [string, 'null']
-          description: Resultado estimado com custo informado ou custo original do provedor, incluindo proventos e resgates; nulo quando nenhuma posição tem custo.
+          description: Resultado estimado com custo manual, custo original do
+            provedor ou custo derivado das compras; inclui proventos e resgates.
+            Nulo quando nenhuma posição tem custo conhecido.
         estimatedProfitCoverageCount:
           type: integer
           minimum: 0
@@ -3620,6 +4410,238 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InvestmentSource'
+    InvestmentContribution:
+      type: object
+      required:
+      - from
+      - to
+      - currency
+      - contributions
+      - withdrawals
+      - netContributions
+      - applied
+      - redeemed
+      - income
+      - fees
+      - idleCash
+      - portfolioValue
+      - cashBalance
+      - settlementDebits
+      - cumulativeContributions
+      - cumulativeWithdrawals
+      - feeSource
+      - trackingAvailable
+      - contributionCount
+      - withdrawalCount
+      - applicationCount
+      - positionCount
+      - months
+      - flows
+      - sources
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        currency:
+          type: string
+        contributions:
+          type: string
+          description: Créditos externos que entraram na conta de investimento.
+        withdrawals:
+          type: string
+          description: Débitos externos que saíram da conta de investimento.
+        netContributions:
+          type: string
+          description: contributions - withdrawals.
+        applied:
+          type: string
+          description: Soma das compras (BUY) registradas pelo provedor.
+        redeemed:
+          type: string
+          description: Soma das vendas, amortizações e resgates de ativos.
+        income:
+          type: string
+          description: Proventos INTEREST do provedor no período.
+        fees:
+          type: string
+          description: Custos informados pelo provedor ou derivados da diferença
+            entre o débito de corretagem e as compras.
+        idleCash:
+          type: string
+          description: Caixa gerado no período e ainda não aplicado.
+        portfolioValue:
+          type: string
+          description: Soma do saldo das posições ativas no perímetro.
+        cashBalance:
+          type: string
+          description: Saldo atual das contas de caixa do perímetro.
+        settlementDebits:
+          type: string
+          description: Débitos de liquidação de corretagem identificados no período.
+        result:
+          type: [string, 'null']
+          description: portfolioValue + cashBalance - aportes líquidos acumulados;
+            nulo quando o período não termina hoje ou não há aportes rastreados.
+        resultPercentage:
+          type: [string, 'null']
+        cumulativeContributions:
+          type: string
+          description: Aportes desde o primeiro lançamento rastreado até `to`.
+        cumulativeWithdrawals:
+          type: string
+        feeSource:
+          type: string
+          enum:
+          - PROVIDER
+          - DERIVED
+          - UNAVAILABLE
+        trackingAvailable:
+          type: boolean
+          description: Falso quando alguma conexão não tem conta marcada como
+            investimento; os fluxos bancários do perímetro ficam zerados.
+        reconciliationDifference:
+          type: [string, 'null']
+          description: settlementDebits - applied - fees; nulo sem débito de
+            corretagem no período.
+        contributionCount:
+          type: integer
+          minimum: 0
+        withdrawalCount:
+          type: integer
+          minimum: 0
+        applicationCount:
+          type: integer
+          minimum: 0
+        positionCount:
+          type: integer
+          minimum: 0
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvestmentContributionMonth'
+        flows:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvestmentContributionFlow'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvestmentContributionSource'
+    InvestmentContributionMonth:
+      type: object
+      required:
+      - month
+      - contributions
+      - withdrawals
+      - netContributions
+      - applied
+      - redeemed
+      - income
+      - fees
+      - idleCash
+      properties:
+        month:
+          type: string
+          description: Ano e mês no formato YYYY-MM.
+        contributions:
+          type: string
+        withdrawals:
+          type: string
+        netContributions:
+          type: string
+        applied:
+          type: string
+        redeemed:
+          type: string
+        income:
+          type: string
+        fees:
+          type: string
+        idleCash:
+          type: string
+    InvestmentContributionFlow:
+      type: object
+      required:
+      - date
+      - kind
+      - amount
+      - source
+      - status
+      properties:
+        date:
+          type: string
+          format: date
+        kind:
+          type: string
+          enum:
+          - CONTRIBUTION
+          - WITHDRAWAL
+          - INTERNAL_TRANSFER
+          - APPLICATION
+          - REDEMPTION
+          - INCOME
+          - FEE
+        amount:
+          type: string
+          description: Valor assinado; transferências internas aparecem com valor
+            absoluto e não entram nos totais.
+        description:
+          type: [string, 'null']
+        accountId:
+          type: [string, 'null']
+          format: uuid
+        connectionId:
+          type: [string, 'null']
+          format: uuid
+        transactionId:
+          type: [string, 'null']
+          format: uuid
+        investmentId:
+          type: [string, 'null']
+          format: uuid
+        investmentName:
+          type: [string, 'null']
+        investmentCode:
+          type: [string, 'null']
+        source:
+          type: string
+          enum:
+          - BANK
+          - PROVIDER
+        status:
+          type: string
+          enum:
+          - CONFIRMED
+          - SUGGESTED
+          - PROVIDER
+    InvestmentContributionSource:
+      type: object
+      required:
+      - connectionId
+      - accountCount
+      - positionCount
+      - perimeterSource
+      properties:
+        connectionId:
+          type: string
+          format: uuid
+        name:
+          type: [string, 'null']
+        accountCount:
+          type: integer
+          minimum: 0
+        positionCount:
+          type: integer
+          minimum: 0
+        perimeterSource:
+          type: string
+          enum:
+          - ACCOUNT_FLAG
+          - CONNECTION_FALLBACK
+          - NOT_CONFIGURED
     InvestmentHolding:
       type: object
       required:
@@ -3733,6 +4755,7 @@ components:
           enum:
           - MANUAL
           - PROVIDER
+          - DERIVED
           - UNAVAILABLE
         incomeTotal:
           type: string
@@ -3892,6 +4915,154 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WealthItem'
+    WealthSnapshotSummary:
+      type: object
+      required:
+      - id
+      - referenceDate
+      - capturedAt
+      - trigger
+      - completeness
+      - grossAssets
+      - liabilities
+      - netWorth
+      - itemCount
+      - includedItemCount
+      - hasPartialData
+      properties:
+        id:
+          type: string
+          format: uuid
+        referenceDate:
+          type: string
+          format: date
+        capturedAt:
+          type: string
+          format: date-time
+        trigger:
+          type: string
+          enum:
+          - SCHEDULED
+          - MANUAL
+        completeness:
+          type: string
+          enum:
+          - COMPLETE
+          - PARTIAL
+          - ESTIMATED
+        grossAssets:
+          type: string
+        liabilities:
+          type: string
+        netWorth:
+          type: string
+        itemCount:
+          type: integer
+        includedItemCount:
+          type: integer
+        hasPartialData:
+          type: boolean
+    WealthSnapshotItem:
+      type: object
+      required:
+      - sourceType
+      - description
+      - value
+      - currency
+      - included
+      - stale
+      properties:
+        sourceType:
+          type: string
+          enum:
+          - ACCOUNT
+          - CARD
+          - INVESTMENT
+          - MANUAL_ASSET
+          - MANUAL_LIABILITY
+        sourceId:
+          type: [string, "null"]
+          format: uuid
+        description:
+          type: string
+        value:
+          type: string
+          description: Valor na moeda original; não é cotação.
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        assetClass:
+          type: [string, "null"]
+        included:
+          type: boolean
+        exclusionReason:
+          type: [string, "null"]
+        referenceDate:
+          type: [string, "null"]
+          format: date
+        stale:
+          type: boolean
+    WealthSnapshot:
+      allOf:
+      - $ref: '#/components/schemas/WealthSnapshotSummary'
+      - type: object
+        required:
+        - items
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/WealthSnapshotItem'
+    WealthSnapshotCaptureRequest:
+      type: object
+      properties:
+        referenceDate:
+          type: [string, "null"]
+          format: date
+    InvestmentClassSlice:
+      type: object
+      required:
+      - assetClass
+      - value
+      - percentage
+      - positionCount
+      properties:
+        assetClass:
+          type: string
+        value:
+          type: string
+        percentage:
+          type: string
+        positionCount:
+          type: integer
+    InvestmentHistoryPoint:
+      type: object
+      required:
+      - snapshotId
+      - referenceDate
+      - totalValue
+      - completeness
+      - allocation
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+        referenceDate:
+          type: string
+          format: date
+        totalValue:
+          type: string
+        completeness:
+          type: string
+          enum:
+          - COMPLETE
+          - PARTIAL
+          - ESTIMATED
+        allocation:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvestmentClassSlice'
     WealthItem:
       type: object
       required:
@@ -4019,7 +5190,6 @@ components:
       - unallocatedAmount
       - excessAmount
       - allocations
-      - progressHistory
       properties:
         id:
           type: string
@@ -4080,10 +5250,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GoalAllocation'
-        progressHistory:
-          type: array
-          items:
-            $ref: '#/components/schemas/GoalProgressEntry'
     GoalAllocation:
       type: object
       required:
@@ -4143,6 +5309,20 @@ components:
           type: string
         ruleVersion:
           type: string
+    GoalProgressPage:
+      type: object
+      required:
+      - items
+      - hasMore
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoalProgressEntry'
+        nextCursor:
+          type: string
+        hasMore:
+          type: boolean
     GoalRequest:
       type: object
       required:

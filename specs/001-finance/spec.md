@@ -717,6 +717,13 @@ ausência de movimentação financeira.
   resolvidos pela menor diferença de data, depois pela menor diferença de valor
   e, por fim, pelo menor identificador local. Nenhuma correspondência DEVE ser
   confirmada automaticamente; o usuário DEVE confirmar ou rejeitar.
+  Transferências genéricas do provedor (`Transfer - TED/PIX/DOC/Bank slip`,
+  `Transfers`) NÃO DEVEM ser tratadas como internas apenas pelo nome: entradas
+  são receita e saídas são despesa até que o usuário confirme a correspondência
+  interna. Apenas `Same person transfer`, `Transfer - Internal` e
+  `Credit card payment` são internas por definição do provedor. Movimentos de
+  investimento do provedor DEVEM ser tratados como patrimoniais: débitos em
+  `Aportes` e créditos em `Resgates`, sem compor receitas ou despesas.
 - **FR-056**: O sistema DEVE distinguir, com rótulos e cálculos próprios:
   - **gasto efetivo** (`expenses`): despesas por competência, incluindo compras
     de cartão e itens de fatura com `EXPENSE_INCREASE`, excluindo pagamentos de
@@ -858,13 +865,16 @@ ausência de movimentação financeira.
 #### Dashboard e relatórios
 
 - **FR-086**: O dashboard DEVE mostrar receitas, despesas, resultado do período
-  e a distribuição de despesas por categoria, por semana, mês e ano, além do
+  e a distribuição de despesas e receitas por categoria, por semana, mês e ano,
+  além do
   saldo atual consolidado apenas de contas bancárias e manuais (`BANK`, `CASH`,
   `WALLET`) com status `ACTIVE`; contas `INACTIVE`, `CLOSED` ou `UNAVAILABLE`
   NÃO DEVEM compor o saldo atual, mas permanecem no histórico e nos relatórios
   do período em que tiveram movimento. O saldo DEVE ter rótulo e data de
   referência distintos daqueles usados para o resultado do período. “Gastos” é a
-  visão de despesas por categoria e NÃO DEVE ser um total paralelo. Saldos
+  visão de despesas por categoria e NÃO DEVE ser um total paralelo. A visão de
+  receitas por categoria segue a mesma regra e também NÃO DEVE ser um total
+  paralelo. Saldos
   devedores de cartões DEVEM ser exibidos separadamente e NÃO DEVEM ser somados a
   esse saldo.
 - **FR-087**: O dashboard DEVE consolidar todas as contas e cartões do usuário e
@@ -1021,11 +1031,19 @@ ausência de movimentação financeira.
   duplicar o mesmo valor em fontes diferentes.
 - **FR-125**: O sistema DEVE permitir cadastrar ativos e passivos manuais com
   tipo, descrição, valor de referência, data da posição e observações.
-- **FR-126**: O sistema NÃO DEVE manter snapshots patrimoniais datados nem
-  séries históricas de valor de portfólio; a visão consolidada representa apenas
-  a posição atual e não reconstrói o passado. O histórico de proventos e
-  movimentações de investimento É permitido porque deriva de eventos datados, não
-  de snapshots de valor.
+- **FR-126**: O sistema DEVE manter snapshots patrimoniais mensais, imutáveis e
+  idempotentes por usuário e data de referência. Cada snapshot DEVE registrar
+  ativos, passivos, patrimônio líquido, composição por fonte, moeda original,
+  completude e data de captura, usando as mesmas regras da visão patrimonial
+  vigente. Valores ausentes, indisponíveis ou em moeda diferente de BRL NÃO DEVEM
+  ser tratados como zero e DEVEM ser registrados como itens excluídos com motivo.
+  O snapshot NÃO DEVE calcular rentabilidade, retorno ou projeção.
+- **FR-126.1**: O histórico NÃO DEVE ser reconstruído para meses anteriores à
+  ativação; a série começa no primeiro snapshot real. O histórico derivado de
+  eventos datados (proventos e movimentações de investimento) continua permitido
+  como série separada, sem substituir a posição patrimonial.
+- **FR-126.2**: Snapshots DEVEM ter retenção, exportação, exclusão e criptografia
+  definidas, incluindo expurgo por retenção e exclusão por encerramento de conta.
 - **FR-127**: O sistema DEVE explicar que dados antigos só podem ser
   reconstruídos quando houver histórico suficiente e NÃO DEVE inferir saldos
   passados a partir de dados atuais incompletos.
@@ -1249,7 +1267,7 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
 - importação automática de investimentos para conectores, instituições ou tipos
   não validados;
 - séries históricas de valor de portfólio, snapshots patrimoniais datados e
-  reconstrução de saldos passados;
+  reconstrução de saldos passados (Fase 7 define snapshots mensais; ver FR-126);
 - aplicativos nativos para celular;
 - conversão automática entre moedas ou suporte completo a moedas diferentes de
   BRL;

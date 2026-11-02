@@ -1190,6 +1190,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/goals/{id}/progress": {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Lista o histórico diário de progresso em páginas */
+        get: operations["getGoalsIdProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1505,6 +1527,14 @@ export interface components {
             /** @description Total de transações PENDING do cartão, sem o limite da listagem. */
             pendingCount: number;
             unallocatedCount: number;
+            /** @description Compras PENDING (débito) no ciclo aberto atual, sem limite de listagem. */
+            pendingPurchaseCount: number;
+            /** @description Soma absoluta das compras PENDING no ciclo aberto atual. */
+            pendingPurchaseTotal: string;
+            unallocatedPurchaseCount: number;
+            unallocatedPurchaseTotal: string;
+            unallocatedCreditCount: number;
+            unallocatedCreditTotal: string;
         };
         CardProfileRequest: {
             closingDay: number;
@@ -2074,6 +2104,8 @@ export interface components {
             cumulativeWithdrawals: string;
             /** @enum {string} */
             feeSource: "PROVIDER" | "DERIVED" | "UNAVAILABLE";
+            /** @description Falso quando alguma conexão não tem conta marcada como investimento; os fluxos bancários do perímetro ficam zerados. */
+            trackingAvailable: boolean;
             /** @description settlementDebits - applied - fees; nulo sem débito de corretagem no período. */
             reconciliationDifference?: string | null;
             contributionCount: number;
@@ -2126,7 +2158,7 @@ export interface components {
             accountCount: number;
             positionCount: number;
             /** @enum {string} */
-            perimeterSource: "ACCOUNT_FLAG" | "CONNECTION_FALLBACK";
+            perimeterSource: "ACCOUNT_FLAG" | "CONNECTION_FALLBACK" | "NOT_CONFIGURED";
         };
         InvestmentHolding: {
             /** Format: uuid */
@@ -2380,7 +2412,6 @@ export interface components {
             /** @description Valor acima da meta; o progresso permanece limitado a 100%. */
             excessAmount: string;
             allocations: components["schemas"]["GoalAllocation"][];
-            progressHistory: components["schemas"]["GoalProgressEntry"][];
         };
         GoalAllocation: {
             /** Format: uuid */
@@ -2407,6 +2438,11 @@ export interface components {
             percentage: string;
             remainingAmount: string;
             ruleVersion: string;
+        };
+        GoalProgressPage: {
+            items: components["schemas"]["GoalProgressEntry"][];
+            nextCursor?: string;
+            hasMore: boolean;
         };
         GoalRequest: {
             name: string;
@@ -5060,6 +5096,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Goal"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getGoalsIdProgress: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Página do histórico, mais recente primeiro. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalProgressPage"];
                 };
             };
             /** @description Erro do cliente. */
