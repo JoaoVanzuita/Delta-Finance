@@ -11,6 +11,7 @@ import {
   type User,
 } from '@/lib/api/client'
 import { ApiError } from '@/lib/api/problem'
+import { clearSessionExpired, markSessionExpired } from '@/lib/session-expiry'
 
 import { authApi, type LoginInput, type PasswordChangeInput, type RegisterInput } from '../api'
 
@@ -21,26 +22,56 @@ const ABSOLUTE_TIMEOUT_MS = 12 * 60 * 60 * 1000
 const CHECK_INTERVAL_MS = 15 * 1000
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart'] as const
 
+const SESSION_STARTED_KEY = 'delta.session.startedAt'
+
 let sessionStartedAt: number | null = null
 let lastActivityAt = Date.now()
+
+function readSessionStartedAt(): number | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_STARTED_KEY)
+    if (!raw) return null
+    const value = Number(raw)
+    return Number.isFinite(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
+function writeSessionStartedAt(value: number | null): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (value === null) {
+      window.sessionStorage.removeItem(SESSION_STARTED_KEY)
+    } else {
+      window.sessionStorage.setItem(SESSION_STARTED_KEY, String(value))
+    }
+  } catch {
+    // sessionStorage indisponível: o limite absoluto volta a valer por carregamento.
+  }
+}
 
 /** Reinicia apenas o relógio em memória entre testes. */
 export function resetSessionClockForTesting(): void {
   sessionStartedAt = null
   lastActivityAt = Date.now()
+  writeSessionStartedAt(null)
 }
 
 /** Marca o início de uma sessão recém-autenticada. */
 function startSessionClock(): void {
   sessionStartedAt = Date.now()
   lastActivityAt = Date.now()
+  writeSessionStartedAt(sessionStartedAt)
 }
 
 /** Mantém o início absoluto ao recarregar a página com sessão já existente. */
 function ensureSessionClock(): void {
   if (sessionStartedAt === null) {
-    sessionStartedAt = Date.now()
+    sessionStartedAt = readSessionStartedAt() ?? Date.now()
   }
+  writeSessionStartedAt(sessionStartedAt)
   lastActivityAt = Date.now()
 }
 
@@ -54,6 +85,7 @@ function clearFinancialCache(queryClient: QueryClient): void {
 function clearSessionState(queryClient: QueryClient): void {
   markSessionCleared()
   sessionStartedAt = null
+  writeSessionStartedAt(null)
   clearFinancialCache(queryClient)
   queryClient.setQueryData(SESSION_QUERY_KEY, null)
 }
@@ -73,12 +105,15 @@ export function useSession() {
       try {
         const user = await authApi.me()
         markSessionEstablished()
+        clearSessionExpired()
         ensureSessionClock()
         return user
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           markSessionCleared()
+          markSessionExpired()
           sessionStartedAt = null
+          writeSessionStartedAt(null)
           clearFinancialCache(queryClient)
           return null
         }
@@ -124,6 +159,7 @@ export function useSessionExpiryListener(): void {
       if (!idle && !absolute) {
         return false
       }
+      markSessionExpired()
       clearSessionState(queryClient)
       window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT))
       return true
@@ -143,7 +179,10 @@ export function useSessionExpiryListener(): void {
       }
     }
 
-    const handleUnauthenticated = () => clearSessionState(queryClient)
+    const handleUnauthenticated = () => {
+      markSessionExpired()
+      clearSessionState(queryClient)
+    }
     const interval = window.setInterval(expireIfNeeded, CHECK_INTERVAL_MS)
 
     for (const event of ACTIVITY_EVENTS) {
@@ -174,6 +213,7 @@ export function useLogin() {
     mutationFn: (input: LoginInput) => authApi.login(input),
     onSuccess: (user) => {
       // Troca de usuário nunca pode reaproveitar dados financeiros do anterior.
+      clearSessionExpired()
       clearFinancialCache(queryClient)
       startSessionClock()
       markSessionEstablished()
@@ -194,6 +234,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => authApi.logout(),
     onSuccess: () => {
+      clearSessionExpired()
       clearSessionState(queryClient)
       void refreshCsrfToken().catch(() => {
         // O próximo POST tenta renovar o token novamente.

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/problem'
 import { queryKeys } from '@/lib/query-keys'
 
-import { financeApi, type Integration } from '../api'
+import { integrationsApi, type Integration } from '@/lib/api/finance'
 import { SecretField } from './SecretField'
 
 interface CredentialsDialogProps {
@@ -36,7 +36,7 @@ export function CredentialsDialog({ open, onClose, integration, onSaved }: Crede
 
   const save = useMutation({
     mutationFn: () =>
-      financeApi.saveCredentials({
+      integrationsApi.saveCredentials({
         clientId: clientId.trim(),
         clientSecret,
       }),
@@ -61,7 +61,8 @@ export function CredentialsDialog({ open, onClose, integration, onSaved }: Crede
   })
 
   const validate = useMutation({
-    mutationFn: () => financeApi.validateCredentials({ clientId: clientId.trim(), clientSecret }),
+    mutationFn: () =>
+      integrationsApi.validateCredentials({ clientId: clientId.trim(), clientSecret }),
     onSuccess: () => {
       setError(null)
       setMessage('Credenciais válidas. Salve para ativar a integração.')

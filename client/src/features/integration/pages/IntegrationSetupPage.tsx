@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card'
 import { SectionHeader, PageHeader } from '@/components/ui/page-header'
 import { queryKeys } from '@/lib/query-keys'
 
-import { financeApi } from '../api'
+import { connectionsApi, integrationsApi } from '@/lib/api/finance'
 import { ConnectionForm } from '../components/ConnectionForm'
 import { ConnectionLimitNotice } from '../components/ConnectionLimitNotice'
 import { ConnectionsList } from '../components/ConnectionsList'
@@ -31,11 +31,11 @@ export function IntegrationSetupPage() {
 
   const integrationQuery = useQuery({
     queryKey: queryKeys.integration,
-    queryFn: financeApi.integration,
+    queryFn: integrationsApi.integration,
   })
   const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
-    queryFn: financeApi.connections,
+    queryFn: connectionsApi.connections,
   })
 
   const integration = integrationQuery.data

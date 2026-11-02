@@ -1,4 +1,5 @@
-import type { Connection, Integration, SyncRun } from './api'
+import type { Connection, Integration, SyncRun } from '@/lib/api/finance'
+import { formatDateTime as formatDateTimeShared } from '@/lib/format'
 
 export const connectionStatusLabels: Record<string, string> = {
   INCOMPLETE: 'Configuração incompleta',
@@ -90,14 +91,7 @@ export function errorMessage(code: string | null | undefined): string {
 }
 
 export function formatDateTime(value: string | null | undefined): string {
-  if (!value) return 'não informado'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: 'America/Sao_Paulo',
-  }).format(date)
+  return formatDateTimeShared(value, { fallback: 'não informado' })
 }
 
 export interface OverallSyncState {

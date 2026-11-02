@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { UNAUTHENTICATED_EVENT } from '@/lib/api/client'
+import { clearSessionExpired, hasSessionExpired } from '@/lib/session-expiry'
 
 /**
  * Aviso de sessão expirada.
@@ -9,7 +10,8 @@ import { UNAUTHENTICATED_EVENT } from '@/lib/api/client'
  * visitante anônimo não dispara o evento.
  */
 export function SessionExpiredBanner() {
-  const [visible, setVisible] = useState(false)
+  // Lido no primeiro render: cobre o evento que disparou antes do redirect para /login.
+  const [visible, setVisible] = useState(hasSessionExpired)
 
   useEffect(() => {
     const handleExpired = () => setVisible(true)
@@ -31,7 +33,10 @@ export function SessionExpiredBanner() {
       </p>
       <button
         type="button"
-        onClick={() => setVisible(false)}
+        onClick={() => {
+          clearSessionExpired()
+          setVisible(false)
+        }}
         className="self-start rounded-card border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:bg-surface-muted sm:self-auto"
       >
         Fechar aviso

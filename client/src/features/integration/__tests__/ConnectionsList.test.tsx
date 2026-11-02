@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Connection } from '@/features/integration/api'
+import type { Connection } from '@/lib/api/finance'
 import { ConnectionsList } from '@/features/integration/components/ConnectionsList'
 import { renderWithProviders } from '@/test/render'
 

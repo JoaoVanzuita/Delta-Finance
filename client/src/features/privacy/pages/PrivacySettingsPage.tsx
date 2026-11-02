@@ -1,3 +1,4 @@
+import { integrationsApi, type Integration } from '@/lib/api/finance'
 import { useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -17,7 +18,6 @@ import { markSessionCleared } from '@/lib/api/client'
 import { invalidateIntegrationViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
 
-import { financeApi, type Integration } from '@/features/integration/api'
 import { connectionStatusLabels } from '@/features/integration/syncLabels'
 import { privacyApi } from '@/features/privacy/api'
 
@@ -33,7 +33,7 @@ export function PrivacySettingsPage() {
   const queryClient = useQueryClient()
   const integrationQuery = useQuery({
     queryKey: queryKeys.integration,
-    queryFn: financeApi.integration,
+    queryFn: integrationsApi.integration,
     retry: false,
   })
 
@@ -83,7 +83,7 @@ export function PrivacySettingsPage() {
   }
 
   const disconnectMutation = useMutation({
-    mutationFn: () => financeApi.disconnect(deleteImportedData),
+    mutationFn: () => integrationsApi.disconnect(deleteImportedData),
     onSuccess: () => {
       setConfirmDisconnect(false)
       setDisconnectError(null)

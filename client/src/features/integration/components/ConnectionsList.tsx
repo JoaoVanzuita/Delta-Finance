@@ -14,7 +14,7 @@ import { Select } from '@/components/ui/select'
 import { ApiError } from '@/lib/api/problem'
 import { invalidateIntegrationViews } from '@/lib/invalidation'
 
-import { financeApi, type Connection, type ReservedBalanceTreatment } from '../api'
+import { connectionsApi, type Connection, type ReservedBalanceTreatment } from '@/lib/api/finance'
 import {
   connectionStatusLabels,
   errorMessage,
@@ -60,7 +60,7 @@ export function ConnectionsList({
   }
 
   const sync = useMutation({
-    mutationFn: (id: string) => financeApi.syncConnection(id),
+    mutationFn: (id: string) => connectionsApi.syncConnection(id),
     onSuccess: () => {
       setError(null)
       setMessage('Consulta enfileirada. O resultado aparece no histórico em instantes.')
@@ -76,7 +76,7 @@ export function ConnectionsList({
 
   const update = useMutation({
     mutationFn: (input: { id: string; itemId: string }) =>
-      financeApi.updateConnection(input.id, input.itemId),
+      connectionsApi.updateConnection(input.id, input.itemId),
     onSuccess: () => {
       setEditingId(null)
       setNewItemId('')
@@ -96,7 +96,7 @@ export function ConnectionsList({
 
   const remove = useMutation({
     mutationFn: (input: { id: string; deleteHistory: boolean }) =>
-      financeApi.removeConnection(input.id, input.deleteHistory),
+      connectionsApi.removeConnection(input.id, input.deleteHistory),
     onSuccess: (_result, input) => {
       setRemovingId(null)
       setError(null)
@@ -115,7 +115,7 @@ export function ConnectionsList({
 
   const treatment = useMutation({
     mutationFn: (input: { id: string; treatment: ReservedBalanceTreatment }) =>
-      financeApi.updateConnectionReservedBalanceTreatment(input.id, input.treatment),
+      connectionsApi.updateConnectionReservedBalanceTreatment(input.id, input.treatment),
     onSuccess: () => {
       setError(null)
       setMessage('Tratamento padrão de saldos reservados atualizado.')
@@ -131,17 +131,16 @@ export function ConnectionsList({
     },
   })
 
-  const busy =
-    sync.isPending || update.isPending || remove.isPending || treatment.isPending
+  const busy = sync.isPending || update.isPending || remove.isPending || treatment.isPending
 
   async function renameConnection(id: string, displayName: string) {
-    const updated = await financeApi.renameConnection(id, displayName)
+    const updated = await connectionsApi.renameConnection(id, displayName)
     refresh()
     return updated
   }
 
   async function resetConnectionName(id: string) {
-    const updated = await financeApi.resetConnectionName(id)
+    const updated = await connectionsApi.resetConnectionName(id)
     refresh()
     return updated
   }

@@ -11,7 +11,8 @@ import { Drawer } from '@/components/ui/drawer'
 import { SectionHeader } from '@/components/ui/page-header'
 import { ApiError } from '@/lib/api/problem'
 
-import { financeApi, type Connection, type SyncRun } from '../api'
+import { syncApi, type Connection, type SyncRun } from '@/lib/api/finance'
+import { queryKeys } from '@/lib/query-keys'
 import {
   connectionStatusLabels,
   errorMessage,
@@ -53,10 +54,10 @@ function runSummary(run: SyncRun): string {
 export function SyncStatusPanel({ connections, integrationConfigured }: SyncStatusPanelProps) {
   const [historyOpen, setHistoryOpen] = useState(false)
 
-  const statusQuery = useQuery({ queryKey: ['syncStatus'], queryFn: financeApi.syncStatus })
+  const statusQuery = useQuery({ queryKey: queryKeys.syncStatus, queryFn: syncApi.syncStatus })
   const runsQuery = useInfiniteQuery({
-    queryKey: ['syncRuns'],
-    queryFn: ({ pageParam }) => financeApi.syncRuns(pageParam),
+    queryKey: queryKeys.syncRuns,
+    queryFn: ({ pageParam }) => syncApi.syncRuns(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
       lastPage.hasMore && lastPage.nextCursor ? lastPage.nextCursor : undefined,

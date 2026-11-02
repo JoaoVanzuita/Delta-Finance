@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Connection, SyncRunPage, SyncStatus } from '@/features/integration/api'
+import type { Connection, SyncRunPage, SyncStatus } from '@/lib/api/finance'
 import { SyncStatusPanel } from '@/features/integration/components/SyncStatusPanel'
 import { renderWithProviders } from '@/test/render'
 

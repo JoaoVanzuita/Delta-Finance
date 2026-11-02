@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/problem'
 import { invalidateIntegrationViews } from '@/lib/invalidation'
 
-import { financeApi } from '../api'
+import { connectionsApi } from '@/lib/api/finance'
 
 interface ConnectionFormProps {
   readonly disabled?: boolean
@@ -21,7 +21,7 @@ export function ConnectionForm({ disabled, onAdded }: ConnectionFormProps) {
   const [itemId, setItemId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const addConnection = useMutation({
-    mutationFn: (value: string) => financeApi.addConnection(value),
+    mutationFn: (value: string) => connectionsApi.addConnection(value),
     onSuccess: () => {
       setItemId('')
       setError(null)

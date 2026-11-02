@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { PageHeader, SectionHeader } from '@/components/ui/page-header'
+import { formatDateLong } from '@/lib/format'
 import { ApiError } from '@/lib/api/problem'
 
 import { FormErrorSummary, type FormIssue } from '../components/FormErrorSummary'
@@ -242,15 +243,5 @@ export function AccountSettingsPage() {
 }
 
 function formatDate(value?: string): string {
-  if (!value) {
-    return '—'
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return '—'
-  }
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'long',
-    timeZone: 'America/Sao_Paulo',
-  }).format(date)
+  return formatDateLong(value, { fallback: '—' })
 }

@@ -1,4 +1,5 @@
 import { Alert } from '@/components/ui/alert'
+import { formatDateMedium } from '@/lib/format'
 
 interface ConnectionLimitNoticeProps {
   readonly count: number
@@ -9,10 +10,7 @@ interface ConnectionLimitNoticeProps {
 /** Aviso versionado e datado do limite da modalidade Meu Pluggy (FR-022). */
 export function ConnectionLimitNotice({ count, limit, checkedAt }: ConnectionLimitNoticeProps) {
   const reached = count >= limit
-  const date = new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'medium',
-    timeZone: 'America/Sao_Paulo',
-  }).format(new Date(`${checkedAt}T12:00:00Z`))
+  const date = formatDateMedium(`${checkedAt}T12:00:00Z`)
 
   return (
     <Alert variant={reached ? 'warning' : 'neutral'}>

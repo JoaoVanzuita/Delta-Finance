@@ -372,4 +372,12 @@ describe('fluxo de autenticação', () => {
     expect(await screen.findByText(/Sua sessão expirou/)).toBeVisible()
     expect(screen.getByRole('status')).toBeInTheDocument()
   })
+
+  it('mostra aviso de sessão expirada após o redirect para o login', async () => {
+    window.sessionStorage.setItem('delta.session.expired', '1')
+    renderWithProviders(<SessionExpiredBanner />)
+
+    expect(await screen.findByText(/Sua sessão expirou/)).toBeVisible()
+    window.sessionStorage.clear()
+  })
 })
