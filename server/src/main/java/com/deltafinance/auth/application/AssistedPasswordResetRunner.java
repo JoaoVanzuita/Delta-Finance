@@ -9,7 +9,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Component;
 
 /**
- * Execução operacional da recuperação assistida de senha (T197).
+ * Execução operacional da recuperação assistida de senha.
  *
  * <p>Ativada apenas quando {@code delta.operator.reset.target} está definido, o que só acontece no
  * comando explícito de {@code deploy/scripts/reset-password.sh}. O processo não atende HTTP ({@code

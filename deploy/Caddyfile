@@ -21,6 +21,8 @@
 	}
 
 	reverse_proxy client:80 {
+		# Sobrescreve X-Forwarded-For na borda: o valor enviado pelo cliente nunca é confiado.
+		header_up X-Forwarded-For {remote_host}
 		health_uri /healthz
 		health_interval 30s
 		health_timeout 5s

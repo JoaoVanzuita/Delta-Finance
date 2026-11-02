@@ -6,6 +6,7 @@ import com.deltafinance.auth.application.PasswordChangeCommand;
 import com.deltafinance.auth.application.RegisterCommand;
 import com.deltafinance.auth.application.RegistrationRateLimiter;
 import com.deltafinance.security.AuthenticatedUser;
+import com.deltafinance.security.ClientAddressResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -28,14 +29,17 @@ public class AuthController {
   private final AuthService authService;
   private final AuthenticatedUser authenticatedUser;
   private final RegistrationRateLimiter registrationRateLimiter;
+  private final ClientAddressResolver clientAddressResolver;
 
   public AuthController(
       AuthService authService,
       AuthenticatedUser authenticatedUser,
-      RegistrationRateLimiter registrationRateLimiter) {
+      RegistrationRateLimiter registrationRateLimiter,
+      ClientAddressResolver clientAddressResolver) {
     this.authService = authService;
     this.authenticatedUser = authenticatedUser;
     this.registrationRateLimiter = registrationRateLimiter;
+    this.clientAddressResolver = clientAddressResolver;
   }
 
   /** Garante o cookie CSRF. O valor é escrito pelo filtro do Spring Security; o corpo é vazio. */
@@ -48,7 +52,7 @@ public class AuthController {
   @ResponseStatus(HttpStatus.CREATED)
   public UserResponse register(
       @Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
-    registrationRateLimiter.checkAndRecord(httpRequest.getRemoteAddr());
+    registrationRateLimiter.checkAndRecord(clientAddressResolver.resolve(httpRequest));
     return UserResponse.from(
         authService.register(new RegisterCommand(request.username(), request.password())));
   }
@@ -82,6 +86,7 @@ public class AuthController {
     authService.changePassword(
         authenticatedUser.requireId(),
         new PasswordChangeCommand(request.currentPassword(), request.newPassword()),
-        session == null ? null : session.getId());
+        session == null ? null : session.getId(),
+        clientAddressResolver.resolve(httpRequest));
   }
 }

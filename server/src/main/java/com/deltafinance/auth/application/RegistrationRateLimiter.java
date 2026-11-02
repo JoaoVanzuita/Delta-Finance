@@ -17,8 +17,8 @@ import org.springframework.stereotype.Component;
  * Limite de cadastros por IP antes do custo de Argon2id.
  *
  * <p>Controle em memória, adequado à implantação de instância única do MVP. O IP é guardado apenas
- * como HMAC e o mapa é podado a cada verificação. Reinícios zeram a janela; para múltiplas
- * instâncias seria necessário persistir o contador.
+ * como HMAC e as janelas expiradas são removidas nas verificações seguintes. Reinícios zeram a
+ * janela; para múltiplas instâncias seria necessário persistir o contador.
  */
 @Component
 public class RegistrationRateLimiter {

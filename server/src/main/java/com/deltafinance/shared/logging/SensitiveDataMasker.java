@@ -19,7 +19,6 @@ public final class SensitiveDataMasker {
           "(?i)(client[_-]?secret|client[_-]?id|api[_-]?key|access[_-]?token|refresh[_-]?token|"
               + "password|passwd|authorization|token|cookie)\\s*[:=]\\s*(\"[^\"]*\"|'[^']*'|[^\\s,;&]+)");
   private static final Pattern BEARER = Pattern.compile("(?i)(Bearer)\\s+[A-Za-z0-9._~+/-]+=*");
-  private static final Pattern LONG_SECRET_LIKE = Pattern.compile("[A-Za-z0-9_-]{40,}");
 
   private SensitiveDataMasker() {}
 
@@ -35,16 +34,5 @@ public final class SensitiveDataMasker {
     }
     matcher.appendTail(builder);
     return builder.toString();
-  }
-
-  /**
-   * Evita registrar identificadores opacos longos (possíveis API Keys) fora de um par chave/valor.
-   * Use apenas em mensagens que não deveriam conter identificadores externos.
-   */
-  public static String maskOpaqueIdentifiers(String value) {
-    if (value == null || value.isEmpty()) {
-      return value;
-    }
-    return LONG_SECRET_LIKE.matcher(value).replaceAll(MASK);
   }
 }

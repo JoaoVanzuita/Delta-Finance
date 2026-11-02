@@ -41,6 +41,11 @@ spring:
   jackson:
     time-zone: America/Sao_Paulo
 
+  mvc:
+    async:
+      # Exportação em streaming pode exceder o timeout padrão do container.
+      request-timeout: ${DELTA_HTTP_ASYNC_TIMEOUT:5m}
+
   lifecycle:
     timeout-per-shutdown-phase: 30s
 
@@ -140,6 +145,9 @@ delta:
   security:
     sessions:
       absolute-timeout: 12h
+    # Proxies reversos confiáveis entre o cliente e a aplicação (edge Caddy + client Caddy).
+    # O IP de rate limit é lido da direita para a esquerda; 0 ignora X-Forwarded-For.
+    trusted-proxy-hops: ${DELTA_TRUSTED_PROXY_HOPS:2}
     # Mantido por compatibilidade com instalações que usavam o nome anterior.
     # Token exclusivo do operador para recuperação assistida de senha (T197).
     # Vazio desabilita o mecanismo. Nunca é exposto por HTTP.

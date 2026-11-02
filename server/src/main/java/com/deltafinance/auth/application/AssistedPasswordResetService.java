@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Recuperação assistida de senha (T197 / FR-139).
+ * Recuperação assistida de senha (FR-139).
  *
  * <p>Não há e-mail transacional no MVP. O operador executa o mecanismo no host, após verificar a
  * identidade por um canal independente. O serviço:

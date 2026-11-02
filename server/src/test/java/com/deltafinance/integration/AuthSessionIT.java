@@ -133,6 +133,28 @@ class AuthSessionIT extends PostgresTestBase {
   }
 
   @Test
+  void trocaDeSenhaLimitaTentativasDaSenhaAtual() throws Exception {
+    alice.register(USERNAME, PASSWORD).login(USERNAME, PASSWORD);
+
+    for (int attempt = 1; attempt <= 5; attempt++) {
+      alice
+          .put(
+              "/api/v1/auth/password",
+              Map.of(
+                  "currentPassword", "senha atual errada bem longa",
+                  "newPassword", "janela azul montanha serena"))
+          .andExpect(status().isUnprocessableEntity());
+    }
+
+    alice
+        .put(
+            "/api/v1/auth/password",
+            Map.of("currentPassword", PASSWORD, "newPassword", "janela azul montanha serena"))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(header().exists("Retry-After"));
+  }
+
+  @Test
   void limiteDeTentativasDeLoginRetorna429ComRetryAfter() throws Exception {
     alice.register(USERNAME, PASSWORD);
     for (int attempt = 1; attempt <= 5; attempt++) {

@@ -5,6 +5,7 @@ import com.deltafinance.auth.domain.AppUserRepository;
 import com.deltafinance.auth.domain.PasswordPolicy;
 import com.deltafinance.auth.domain.PasswordPolicyException;
 import com.deltafinance.auth.domain.Usernames;
+import com.deltafinance.security.ClientAddressResolver;
 import com.deltafinance.security.SessionAttributes;
 import com.deltafinance.security.UserPrincipal;
 import com.deltafinance.shared.errors.ConflictException;
@@ -42,6 +43,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthService {
 
+  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
   private static final String ROLE_USER = "ROLE_USER";
   private static final String CSRF_COOKIE = "XSRF-TOKEN";
 
@@ -51,6 +54,7 @@ public class AuthService {
   private final LoginAttemptService loginAttemptService;
   private final AuthAuditService authAuditService;
   private final SecurityContextRepository securityContextRepository;
+  private final ClientAddressResolver clientAddressResolver;
   private final JdbcTemplate jdbcTemplate;
   private final Clock clock;
   private final String dummyPasswordHash;
@@ -62,6 +66,7 @@ public class AuthService {
       LoginAttemptService loginAttemptService,
       AuthAuditService authAuditService,
       SecurityContextRepository securityContextRepository,
+      ClientAddressResolver clientAddressResolver,
       JdbcTemplate jdbcTemplate,
       Clock clock) {
     this.userRepository = userRepository;
@@ -70,6 +75,7 @@ public class AuthService {
     this.loginAttemptService = loginAttemptService;
     this.authAuditService = authAuditService;
     this.securityContextRepository = securityContextRepository;
+    this.clientAddressResolver = clientAddressResolver;
     this.jdbcTemplate = jdbcTemplate;
     this.clock = clock;
     this.dummyPasswordHash =
@@ -108,7 +114,7 @@ public class AuthService {
       LoginCommand command, HttpServletRequest request, HttpServletResponse response) {
     Objects.requireNonNull(command, "command");
     String normalized = Usernames.normalize(command.username());
-    String ipAddress = request.getRemoteAddr();
+    String ipAddress = clientAddressResolver.resolve(request);
 
     LoginAttemptService.Decision decision = loginAttemptService.check(normalized, ipAddress);
     if (decision.blocked()) {
@@ -154,16 +160,26 @@ public class AuthService {
     return toView(user);
   }
 
-  public void changePassword(UUID userId, PasswordChangeCommand command, String currentSessionId) {
+  public void changePassword(
+      UUID userId, PasswordChangeCommand command, String currentSessionId, String ipAddress) {
     AppUser user =
         userRepository
             .findById(userId)
             .filter(AppUser::isActive)
             .orElseThrow(UnauthenticatedException::new);
 
+    LoginAttemptService.Decision decision =
+        loginAttemptService.check(user.getUsernameNormalized(), ipAddress);
+    if (decision.blocked()) {
+      throw new TooManyRequestsException(
+          "Muitas tentativas. Aguarde antes de tentar novamente.",
+          decision.retryAfter().toSeconds());
+    }
     if (!passwordEncoder.matches(command.currentPassword(), user.getPasswordHash())) {
+      loginAttemptService.recordFailure(user.getUsernameNormalized(), ipAddress);
       throw new ValidationException("currentPassword", "Senha atual incorreta.");
     }
+    loginAttemptService.recordSuccess(user.getUsernameNormalized(), ipAddress);
     validatePassword(user.getUsernameNormalized(), command.newPassword());
     if (passwordEncoder.matches(command.newPassword(), user.getPasswordHash())) {
       throw new ValidationException(
@@ -180,15 +196,25 @@ public class AuthService {
    * Confirma a senha do titular para uma operação destrutiva e devolve o nome normalizado usado nos
    * índices de tentativas de login.
    */
-  public String verifyPasswordForDestructiveAction(UUID userId, String password) {
+  public String verifyPasswordForDestructiveAction(UUID userId, String password, String ipAddress) {
     AppUser user =
         userRepository
             .findById(userId)
             .filter(AppUser::isActive)
             .orElseThrow(UnauthenticatedException::new);
+
+    LoginAttemptService.Decision decision =
+        loginAttemptService.check(user.getUsernameNormalized(), ipAddress);
+    if (decision.blocked()) {
+      throw new TooManyRequestsException(
+          "Muitas tentativas. Aguarde antes de tentar novamente.",
+          decision.retryAfter().toSeconds());
+    }
     if (!passwordEncoder.matches(password == null ? "" : password, user.getPasswordHash())) {
+      loginAttemptService.recordFailure(user.getUsernameNormalized(), ipAddress);
       throw new ValidationException("password", "Senha incorreta.");
     }
+    loginAttemptService.recordSuccess(user.getUsernameNormalized(), ipAddress);
     return user.getUsernameNormalized();
   }
 
@@ -284,7 +310,7 @@ public class AuthService {
 
   private static byte[] randomBytes(int length) {
     byte[] bytes = new byte[length];
-    new SecureRandom().nextBytes(bytes);
+    SECURE_RANDOM.nextBytes(bytes);
     return bytes;
   }
 

@@ -4,6 +4,7 @@ import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.errors.ProblemFactory;
 import com.deltafinance.shared.time.Clock;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -70,12 +71,13 @@ public class SecurityConfig {
       CryptoService cryptoService,
       ProblemFactory problemFactory,
       JsonMapper jsonMapper,
-      AuditService auditService)
+      AuditService auditService,
+      @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookie)
       throws Exception {
 
     CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
     csrfTokenRepository.setCookieCustomizer(
-        cookie -> cookie.path("/").sameSite("Lax").secure(true));
+        cookie -> cookie.path("/").sameSite("Lax").secure(secureCookie));
 
     http.csrf(
             csrf ->

@@ -146,7 +146,7 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ProblemDetail> handleUnexpected(
       Exception exception, HttpServletRequest request) {
     // O resumo é sanitizado; o stack completo fica em DEBUG para não vazar
-    // valores financeiros/SQL em logs de produção (T029).
+    // valores financeiros/SQL em logs de produção.
     LOG.error(
         "Erro inesperado ao processar requisição {} {}: {}",
         request.getMethod(),
