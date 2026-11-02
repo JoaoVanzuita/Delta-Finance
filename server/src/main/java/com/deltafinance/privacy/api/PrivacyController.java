@@ -4,6 +4,7 @@ import com.deltafinance.privacy.application.AccountDeletionService;
 import com.deltafinance.privacy.application.DisconnectService;
 import com.deltafinance.privacy.application.ExportService;
 import com.deltafinance.security.AuthenticatedUser;
+import com.deltafinance.security.ClientAddressResolver;
 import com.deltafinance.shared.time.Clock;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,6 +34,7 @@ public class PrivacyController {
   private final DisconnectService disconnectService;
   private final AccountDeletionService accountDeletionService;
   private final AuthenticatedUser authenticatedUser;
+  private final ClientAddressResolver clientAddressResolver;
   private final Clock clock;
 
   public PrivacyController(
@@ -40,11 +42,13 @@ public class PrivacyController {
       DisconnectService disconnectService,
       AccountDeletionService accountDeletionService,
       AuthenticatedUser authenticatedUser,
+      ClientAddressResolver clientAddressResolver,
       Clock clock) {
     this.exportService = exportService;
     this.disconnectService = disconnectService;
     this.accountDeletionService = accountDeletionService;
     this.authenticatedUser = authenticatedUser;
+    this.clientAddressResolver = clientAddressResolver;
     this.clock = clock;
   }
 
@@ -60,14 +64,15 @@ public class PrivacyController {
         .body(body);
   }
 
-  /** Exclusão síncrona com confirmação; retorna 202 e encerra as sessões. */
+  /** Exclusão síncrona com confirmação; responde 202 por compatibilidade e encerra as sessões. */
   @PostMapping("/me/delete")
   @ResponseStatus(HttpStatus.ACCEPTED)
   public void delete(
       @Valid @RequestBody DeleteAccountRequest request,
       HttpServletRequest httpRequest,
       HttpServletResponse httpResponse) {
-    accountDeletionService.delete(authenticatedUser.requireId(), request);
+    accountDeletionService.delete(
+        authenticatedUser.requireId(), request, clientAddressResolver.resolve(httpRequest));
     new SecurityContextLogoutHandler().logout(httpRequest, httpResponse, null);
   }
 

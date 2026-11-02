@@ -52,13 +52,13 @@ public class AccountDeletionService {
   }
 
   @Transactional
-  public DeletionResult delete(UUID userId, DeleteAccountRequest request) {
+  public DeletionResult delete(UUID userId, DeleteAccountRequest request, String ipAddress) {
     if (!"EXCLUIR".equals(request.confirmation() == null ? null : request.confirmation().trim())) {
       throw new ValidationException(
           "confirmation", "Digite EXCLUIR (em maiúsculas) para confirmar a exclusão.");
     }
     String usernameNormalized =
-        authService.verifyPasswordForDestructiveAction(userId, request.password());
+        authService.verifyPasswordForDestructiveAction(userId, request.password(), ipAddress);
 
     authService.requestDeletion(userId);
     syncJobService.cancelActiveForUser(userId);
