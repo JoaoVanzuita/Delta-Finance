@@ -7,12 +7,11 @@ import com.deltafinance.accounts.application.ReservedBalanceView;
 import com.deltafinance.investments.application.InvestmentHoldingView;
 import com.deltafinance.investments.application.InvestmentQueryService;
 import com.deltafinance.invoices.application.CardDebtService;
-import com.deltafinance.invoices.application.InvoiceQueryService;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.money.Money;
@@ -24,14 +23,11 @@ import com.deltafinance.wealth.domain.ManualItemKind;
 import com.deltafinance.wealth.domain.WealthCompleteness;
 import com.deltafinance.wealth.domain.WealthSourceType;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -58,10 +54,10 @@ public class WealthService {
   private final ManualAssetLiabilityRepository manualRepository;
   private final AccountQueryService accountQueryService;
   private final ReservedBalanceQueryService reservedBalanceQueryService;
-  private final InvoiceQueryService invoiceQueryService;
   private final CardDebtService cardDebtService;
   private final InvestmentQueryService investmentQueryService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -69,19 +65,19 @@ public class WealthService {
       ManualAssetLiabilityRepository manualRepository,
       AccountQueryService accountQueryService,
       ReservedBalanceQueryService reservedBalanceQueryService,
-      InvoiceQueryService invoiceQueryService,
       CardDebtService cardDebtService,
       InvestmentQueryService investmentQueryService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService,
       Clock clock) {
     this.manualRepository = manualRepository;
     this.accountQueryService = accountQueryService;
     this.reservedBalanceQueryService = reservedBalanceQueryService;
-    this.invoiceQueryService = invoiceQueryService;
     this.cardDebtService = cardDebtService;
     this.investmentQueryService = investmentQueryService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -92,19 +88,6 @@ public class WealthService {
     Accumulator accumulator = new Accumulator();
 
     List<AccountView> accounts = accountQueryService.list(userId);
-    Set<UUID> cardIds = new LinkedHashSet<>();
-    for (AccountView account : accounts) {
-      if ("CREDIT".equals(account.type())) {
-        cardIds.add(account.id());
-      }
-    }
-    for (UUID cardId : cardIds) {
-      try {
-        invoiceQueryService.ensureInvoices(userId, cardId);
-      } catch (ValidationException ignored) {
-        // Sem ciclo configurado: o cartão aparece como lacuna, não como erro fatal.
-      }
-    }
     Map<UUID, CardDebtService.CardDebt> cardOutstanding = cardDebtService.byCard(userId);
 
     for (AccountView account : accounts) {
@@ -341,7 +324,7 @@ public class WealthService {
               false));
       return;
     }
-    BigDecimal value = debt.outstanding().setScale(2, RoundingMode.HALF_EVEN);
+    BigDecimal value = Money.scaled(debt.outstanding());
     if (!"ACTIVE".equals(account.status()) && value.signum() == 0) {
       accumulator.exclude(
           item(
@@ -596,7 +579,7 @@ public class WealthService {
   }
 
   private static String format(BigDecimal value) {
-    return value.setScale(2, RoundingMode.HALF_EVEN).toPlainString();
+    return Money.plain(value);
   }
 
   private static ManualItemKind parseKind(String value) {
@@ -669,15 +652,7 @@ public class WealthService {
 
   private String decrypt(
       UUID userId, String table, String column, UUID recordId, byte[] ciphertext) {
-    if (ciphertext == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          ciphertext, new CryptoContext(userId, table, column, recordId));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    return encryptedValueReader.tryRead(userId, table, column, recordId, ciphertext).orElse(null);
   }
 
   private static final class Accumulator {

@@ -1,6 +1,7 @@
 package com.deltafinance.wealth.api;
 
 import com.deltafinance.security.AuthenticatedUser;
+import com.deltafinance.wealth.application.InvestmentHistoryPointView;
 import com.deltafinance.wealth.application.WealthSnapshotService;
 import java.time.LocalDate;
 import java.util.List;
@@ -30,11 +31,10 @@ public class InvestmentHistoryController {
   }
 
   @GetMapping("/history")
-  public List<InvestmentHistoryPointResponse> history(
+  public List<InvestmentHistoryPointView> history(
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
     return snapshotService.investmentHistory(authenticatedUser.requireId(), from, to).stream()
-        .map(InvestmentHistoryPointResponse::from)
         .toList();
   }
 }

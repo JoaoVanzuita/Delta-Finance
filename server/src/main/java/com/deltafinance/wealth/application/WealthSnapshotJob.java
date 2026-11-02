@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 /**
  * Captura mensal dos snapshots patrimoniais.
  *
- * <p>Roda no primeiro dia do mês e usa como referência o último dia do mês anterior. É idempotente:
+ * <p>Roda no primeiro dia do mês e usa como referência o dia anterior à execução. É idempotente:
  * snapshots já existentes não são sobrescritos. Falhas por falta de dados são puladas; falhas
  * inesperadas são contadas e registradas sem valores financeiros.
  */

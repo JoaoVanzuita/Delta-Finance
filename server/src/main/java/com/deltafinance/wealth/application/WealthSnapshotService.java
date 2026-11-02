@@ -8,9 +8,11 @@ import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.wealth.domain.SnapshotTrigger;
 import com.deltafinance.wealth.domain.WealthCompleteness;
@@ -57,6 +59,7 @@ public class WealthSnapshotService {
   private final AccountQueryService accountQueryService;
   private final InvestmentQueryService investmentQueryService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
   private final JdbcTemplate jdbcTemplate;
   private final Clock clock;
@@ -69,6 +72,7 @@ public class WealthSnapshotService {
       AccountQueryService accountQueryService,
       InvestmentQueryService investmentQueryService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService,
       JdbcTemplate jdbcTemplate,
       Clock clock,
@@ -79,6 +83,7 @@ public class WealthSnapshotService {
     this.accountQueryService = accountQueryService;
     this.investmentQueryService = investmentQueryService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
     this.jdbcTemplate = jdbcTemplate;
     this.clock = clock;
@@ -276,7 +281,7 @@ public class WealthSnapshotService {
         byClass.merge(assetClass, value, BigDecimal::add);
       }
       BigDecimal total =
-          byClass.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2);
+          Money.scaled(byClass.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add));
       if (total.signum() <= 0) {
         continue;
       }
@@ -471,7 +476,7 @@ public class WealthSnapshotService {
   }
 
   private static String format(BigDecimal value) {
-    return value.setScale(2, RoundingMode.HALF_EVEN).toPlainString();
+    return Money.plain(value);
   }
 
   private static String truncate(String value, int max) {
@@ -487,13 +492,11 @@ public class WealthSnapshotService {
   }
 
   private String decrypt(UUID userId, WealthSnapshot snapshot, String column, byte[] payload) {
-    return cryptoService.decryptString(
-        payload, new CryptoContext(userId, SNAPSHOT_TABLE, column, snapshot.getId()));
+    return encryptedValueReader.read(userId, SNAPSHOT_TABLE, column, snapshot.getId(), payload);
   }
 
   private String decrypt(UUID userId, WealthSnapshotItem item, String column, byte[] payload) {
-    return cryptoService.decryptString(
-        payload, new CryptoContext(userId, ITEM_TABLE, column, item.getId()));
+    return encryptedValueReader.read(userId, ITEM_TABLE, column, item.getId(), payload);
   }
 
   private Range range(LocalDate from, LocalDate to) {

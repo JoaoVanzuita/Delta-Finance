@@ -32,6 +32,7 @@ public record InvestmentContributionView(
     String cumulativeContributions,
     String cumulativeWithdrawals,
     String feeSource,
+    boolean trackingAvailable,
     String reconciliationDifference,
     int contributionCount,
     int withdrawalCount,

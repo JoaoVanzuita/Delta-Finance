@@ -1,6 +1,7 @@
 package com.deltafinance.investments.api;
 
 import com.deltafinance.investments.application.InvestmentOverviewView;
+import com.deltafinance.investments.application.InvestmentSourceView;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -22,7 +23,7 @@ public record InvestmentOverviewResponse(
     Instant lastSyncedAt,
     boolean stale,
     List<AllocationResponse> allocation,
-    List<InvestmentSourceResponse> coverage) {
+    List<InvestmentSourceView> coverage) {
 
   public record AllocationResponse(String assetClass, String value, int count, String percentage) {}
 
@@ -51,6 +52,6 @@ public record InvestmentOverviewResponse(
                         allocation.count(),
                         allocation.percentage()))
             .toList(),
-        view.coverage().stream().map(InvestmentSourceResponse::from).toList());
+        view.coverage().stream().toList());
   }
 }

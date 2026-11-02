@@ -175,6 +175,20 @@ class InvestmentImportIT extends PostgresTestBase {
   }
 
   @Test
+  void listaVaziaDePosicoesComRecursosDisponiveisNaoMarcaPosicoesComoIndisponiveis()
+      throws Exception {
+    assertThat(countInvestments()).isEqualTo(3);
+    assertThat(unavailableInvestments()).isZero();
+
+    // Recursos continuam AVAILABLE: uma página vazia não prova que as posições sumiram.
+    PLUGGY.setInvestments(ITEM, List.of());
+    syncNow();
+
+    assertThat(countInvestments()).isEqualTo(3);
+    assertThat(unavailableInvestments()).isZero();
+  }
+
+  @Test
   void ressincronizacaoNaoDuplicaEMarcaPosicaoAusente() throws Exception {
     assertThat(countInvestments()).isEqualTo(3);
 
@@ -309,6 +323,11 @@ class InvestmentImportIT extends PostgresTestBase {
 
   private int countInvestments() {
     return jdbcTemplate.queryForObject("select count(*) from provider_investment", Integer.class);
+  }
+
+  private int unavailableInvestments() {
+    return jdbcTemplate.queryForObject(
+        "select count(*) from provider_investment where unavailable_at is not null", Integer.class);
   }
 
   private void syncNow() throws Exception {

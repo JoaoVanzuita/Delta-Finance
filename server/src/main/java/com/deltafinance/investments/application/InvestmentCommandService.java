@@ -8,9 +8,9 @@ import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -108,6 +108,6 @@ public class InvestmentCommandService {
     if (parsed.signum() < 0) {
       throw new ValidationException("costBasis", "O custo informado não pode ser negativo.");
     }
-    return parsed.setScale(2, RoundingMode.HALF_EVEN);
+    return Money.scaled(parsed);
   }
 }

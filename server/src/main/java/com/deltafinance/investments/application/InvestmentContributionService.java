@@ -13,10 +13,10 @@ import com.deltafinance.investments.domain.ProviderInvestmentTransactionReposito
 import com.deltafinance.reconciliation.domain.InternalMatch;
 import com.deltafinance.reconciliation.domain.InternalMatchRepository;
 import com.deltafinance.reconciliation.domain.InternalMatchStatus;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.application.TransactionQueryService;
 import com.deltafinance.transactions.application.TransactionView;
@@ -66,7 +66,7 @@ public class InvestmentContributionService {
   private final AccountQueryService accountQueryService;
   private final CategoryService categoryService;
   private final InvestmentQueryService investmentQueryService;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final Clock clock;
 
   public InvestmentContributionService(
@@ -77,7 +77,7 @@ public class InvestmentContributionService {
       AccountQueryService accountQueryService,
       CategoryService categoryService,
       InvestmentQueryService investmentQueryService,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       Clock clock) {
     this.investmentRepository = investmentRepository;
     this.transactionRepository = transactionRepository;
@@ -86,7 +86,7 @@ public class InvestmentContributionService {
     this.accountQueryService = accountQueryService;
     this.categoryService = categoryService;
     this.investmentQueryService = investmentQueryService;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.clock = clock;
   }
 
@@ -126,16 +126,22 @@ public class InvestmentContributionService {
               .toList();
       List<AccountView> flagged =
           connectionAccounts.stream().filter(AccountView::investmentAccount).toList();
-      List<AccountView> chosen = flagged.isEmpty() ? connectionAccounts : flagged;
       if (!flagged.isEmpty()) {
         perimeterSources.put(selected, "ACCOUNT_FLAG");
-      } else if (!connectionAccounts.isEmpty()) {
-        perimeterSources.put(selected, "CONNECTION_FALLBACK");
+      } else {
+        // Sem conta marcada não há como saber qual saldo é caixa de investimento. Não infira
+        // todas as contas: isso transformaria salário em aporte e débito em resgate.
+        perimeterSources.put(selected, "NOT_CONFIGURED");
       }
-      for (AccountView account : chosen) {
+      for (AccountView account : flagged) {
         perimeter.put(account.id(), selected);
       }
     }
+
+    boolean trackingAvailable =
+        !selectedConnections.isEmpty()
+            && selectedConnections.stream()
+                .noneMatch(id -> "NOT_CONFIGURED".equals(perimeterSources.get(id)));
 
     Map<UUID, CategoryKind> categoryKinds = categoryKinds(userId);
     Map<UUID, InternalMatch> matches = matches(userId);
@@ -170,12 +176,14 @@ public class InvestmentContributionService {
     }
 
     BigDecimal idleCash =
-        bank.contributions()
-            .subtract(bank.withdrawals())
-            .subtract(provider.applied())
-            .add(provider.redeemed())
-            .add(provider.income())
-            .subtract(totalFees);
+        trackingAvailable
+            ? bank.contributions()
+                .subtract(bank.withdrawals())
+                .subtract(provider.applied())
+                .add(provider.redeemed())
+                .add(provider.income())
+                .subtract(totalFees)
+            : BigDecimal.ZERO;
 
     List<InvestmentHoldingView> active =
         investmentQueryService.holdings(userId, "ACTIVE", null).stream()
@@ -199,11 +207,7 @@ public class InvestmentContributionService {
     BigDecimal result = null;
     String resultPercentage = null;
     if (!period.to().isBefore(today) && cumulativeNet.signum() > 0) {
-      result =
-          portfolioValue
-              .add(cashBalance)
-              .subtract(cumulativeNet)
-              .setScale(2, RoundingMode.HALF_EVEN);
+      result = Money.scaled(portfolioValue.add(cashBalance).subtract(cumulativeNet));
       resultPercentage =
           format(
               result
@@ -214,10 +218,7 @@ public class InvestmentContributionService {
     BigDecimal reconciliationDifference = null;
     if (bank.settlementDebits().signum() > 0) {
       reconciliationDifference =
-          bank.settlementDebits()
-              .subtract(provider.applied())
-              .subtract(totalFees)
-              .setScale(2, RoundingMode.HALF_EVEN);
+          Money.scaled(bank.settlementDebits().subtract(provider.applied()).subtract(totalFees));
     }
 
     List<InvestmentContributionView.Flow> flows = new ArrayList<>();
@@ -251,6 +252,7 @@ public class InvestmentContributionService {
         format(cumulative.contributions()),
         format(cumulative.withdrawals()),
         feeSource,
+        trackingAvailable,
         reconciliationDifference == null ? null : format(reconciliationDifference),
         bank.contributionCount(),
         bank.withdrawalCount(),
@@ -411,6 +413,11 @@ public class InvestmentContributionService {
         transactionRepository.findByUserIdAndRemovedAtIsNull(userId)) {
       ProviderInvestment investment = investmentsById.get(transaction.getProviderInvestmentId());
       if (investment == null || !selectedConnections.contains(investment.getConnectionId())) {
+        continue;
+      }
+      // O relatório é consolidado em BRL. Fluxos de posições em outra moeda não podem ser somados
+      // como reais; a conversão cambial não é inferida.
+      if (!"BRL".equalsIgnoreCase(investment.getCurrency())) {
         continue;
       }
       LocalDate date =
@@ -582,8 +589,8 @@ public class InvestmentContributionService {
 
   private Map<UUID, InternalMatch> matches(UUID userId) {
     Map<UUID, InternalMatch> matches = new HashMap<>();
-    // Somente correspondências confirmadas podem excluir os dois lados dos totais. Sugestões
-    // pendentes continuam aparecendo como fluxo "SUGGESTED" até a confirmação do usuário.
+    // Somente correspondências confirmadas podem excluir os dois lados dos totais. Fluxos sem
+    // correspondência confirmada aparecem como "SUGGESTED" para o usuário revisar.
     for (InternalMatch match :
         matchRepository.findByUserIdAndStatusOrderByScoreDescCreatedAtAsc(
             userId, InternalMatchStatus.CONFIRMED)) {
@@ -630,28 +637,16 @@ public class InvestmentContributionService {
           case "expenses" -> transaction.getExpensesEnc();
           default -> null;
         };
-    if (value == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          value, new CryptoContext(userId, TRANSACTION_TABLE, column, transaction.getId()));
-    } catch (RuntimeException exception) {
-      return null;
-    }
+    return encryptedValueReader
+        .tryRead(userId, TRANSACTION_TABLE, column, transaction.getId(), value)
+        .orElse(null);
   }
 
   private String decryptInvestment(UUID userId, ProviderInvestment investment, String column) {
     byte[] value = "name".equals(column) ? investment.getNameEnc() : investment.getCodeEnc();
-    if (value == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          value, new CryptoContext(userId, INVESTMENT_TABLE, column, investment.getId()));
-    } catch (RuntimeException exception) {
-      return null;
-    }
+    return encryptedValueReader
+        .tryRead(userId, INVESTMENT_TABLE, column, investment.getId(), value)
+        .orElse(null);
   }
 
   private static BigDecimal decimal(String value) {
@@ -670,7 +665,7 @@ public class InvestmentContributionService {
   }
 
   private static String format(BigDecimal value) {
-    return value.setScale(2, RoundingMode.HALF_EVEN).toPlainString();
+    return Money.plain(value);
   }
 
   private record Period(LocalDate from, LocalDate to, LocalDate toExclusive) {}

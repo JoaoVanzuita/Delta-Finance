@@ -1,8 +1,12 @@
 package com.deltafinance.wealth.api;
 
 import com.deltafinance.security.AuthenticatedUser;
+import com.deltafinance.wealth.application.ManualItemView;
+import com.deltafinance.wealth.application.WealthOverviewView;
 import com.deltafinance.wealth.application.WealthService;
 import com.deltafinance.wealth.application.WealthSnapshotService;
+import com.deltafinance.wealth.application.WealthSnapshotSummaryView;
+import com.deltafinance.wealth.application.WealthSnapshotView;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -39,22 +43,20 @@ public class WealthController {
   }
 
   @GetMapping("/overview")
-  public WealthOverviewResponse overview() {
-    return WealthOverviewResponse.from(wealthService.overview(authenticatedUser.requireId()));
+  public WealthOverviewView overview() {
+    return wealthService.overview(authenticatedUser.requireId());
   }
 
   @GetMapping("/history")
-  public List<WealthSnapshotSummaryResponse> history(
+  public List<WealthSnapshotSummaryView> history(
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-    return snapshotService.history(authenticatedUser.requireId(), from, to).stream()
-        .map(WealthSnapshotSummaryResponse::from)
-        .toList();
+    return snapshotService.history(authenticatedUser.requireId(), from, to).stream().toList();
   }
 
   @GetMapping("/history/{id}")
-  public WealthSnapshotResponse historyDetail(@PathVariable UUID id) {
-    return WealthSnapshotResponse.from(snapshotService.detail(authenticatedUser.requireId(), id));
+  public WealthSnapshotView historyDetail(@PathVariable UUID id) {
+    return snapshotService.detail(authenticatedUser.requireId(), id);
   }
 
   @GetMapping("/reserved-balances/{id}/history")
@@ -65,38 +67,33 @@ public class WealthController {
 
   @PostMapping("/history")
   @ResponseStatus(HttpStatus.CREATED)
-  public WealthSnapshotResponse captureHistory(
+  public WealthSnapshotView captureHistory(
       @RequestBody(required = false) WealthSnapshotCaptureRequest request) {
-    return WealthSnapshotResponse.from(
-        snapshotService.captureManual(
-            authenticatedUser.requireId(), request == null ? null : request.referenceDate()));
+    return snapshotService.captureManual(
+        authenticatedUser.requireId(), request == null ? null : request.referenceDate());
   }
 
   @GetMapping("/manual-items")
   public ManualItemListResponse listManualItems() {
     return new ManualItemListResponse(
-        wealthService.listManual(authenticatedUser.requireId()).stream()
-            .map(ManualItemResponse::from)
-            .toList());
+        wealthService.listManual(authenticatedUser.requireId()).stream().toList());
   }
 
   @GetMapping("/manual-items/{id}")
-  public ManualItemResponse getManualItem(@PathVariable UUID id) {
-    return ManualItemResponse.from(wealthService.getManual(authenticatedUser.requireId(), id));
+  public ManualItemView getManualItem(@PathVariable UUID id) {
+    return wealthService.getManual(authenticatedUser.requireId(), id);
   }
 
   @PostMapping("/manual-items")
   @ResponseStatus(HttpStatus.CREATED)
-  public ManualItemResponse createManualItem(@Valid @RequestBody ManualItemRequest request) {
-    return ManualItemResponse.from(
-        wealthService.createManual(authenticatedUser.requireId(), request));
+  public ManualItemView createManualItem(@Valid @RequestBody ManualItemRequest request) {
+    return wealthService.createManual(authenticatedUser.requireId(), request);
   }
 
   @PatchMapping("/manual-items/{id}")
-  public ManualItemResponse updateManualItem(
+  public ManualItemView updateManualItem(
       @PathVariable UUID id, @Valid @RequestBody ManualItemRequest request) {
-    return ManualItemResponse.from(
-        wealthService.updateManual(authenticatedUser.requireId(), id, request));
+    return wealthService.updateManual(authenticatedUser.requireId(), id, request);
   }
 
   @DeleteMapping("/manual-items/{id}")

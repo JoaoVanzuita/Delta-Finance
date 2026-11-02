@@ -8,13 +8,13 @@ import com.deltafinance.investments.domain.ProviderInvestmentRepository;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -40,6 +40,7 @@ public class InvestmentIncomeService {
   private final InvestmentIncomeRepository incomeRepository;
   private final ProviderInvestmentRepository investmentRepository;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
   private final Clock clock;
 
@@ -47,11 +48,13 @@ public class InvestmentIncomeService {
       InvestmentIncomeRepository incomeRepository,
       ProviderInvestmentRepository investmentRepository,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService,
       Clock clock) {
     this.incomeRepository = incomeRepository;
     this.investmentRepository = investmentRepository;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
     this.clock = clock;
   }
@@ -200,14 +203,7 @@ public class InvestmentIncomeService {
   }
 
   private String decrypt(UUID userId, String table, UUID recordId, String column, byte[] value) {
-    if (value == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(value, new CryptoContext(userId, table, column, recordId));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    return encryptedValueReader.tryRead(userId, table, column, recordId, value).orElse(null);
   }
 
   private static String parseType(String value) {
@@ -231,7 +227,7 @@ public class InvestmentIncomeService {
     } catch (NumberFormatException exception) {
       throw new ValidationException("amount", "Valor do provento inválido.");
     }
-    BigDecimal scaled = parsed.setScale(2, RoundingMode.HALF_EVEN);
+    BigDecimal scaled = Money.scaled(parsed);
     if (scaled.signum() <= 0) {
       throw new ValidationException("amount", "O valor do provento deve ser positivo.");
     }

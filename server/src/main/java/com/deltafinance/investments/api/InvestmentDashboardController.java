@@ -1,6 +1,7 @@
 package com.deltafinance.investments.api;
 
 import com.deltafinance.investments.application.InvestmentContributionService;
+import com.deltafinance.investments.application.InvestmentHoldingView;
 import com.deltafinance.investments.application.InvestmentQueryService;
 import com.deltafinance.security.AuthenticatedUser;
 import java.time.LocalDate;
@@ -40,22 +41,18 @@ public class InvestmentDashboardController {
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String assetClass) {
     return new InvestmentHoldingListResponse(
-        queryService.holdings(authenticatedUser.requireId(), status, assetClass).stream()
-            .map(InvestmentHoldingResponse::from)
-            .toList());
+        queryService.holdings(authenticatedUser.requireId(), status, assetClass).stream().toList());
   }
 
   @GetMapping("/holdings/{id}")
-  public InvestmentHoldingResponse holding(@PathVariable UUID id) {
-    return InvestmentHoldingResponse.from(queryService.holding(authenticatedUser.requireId(), id));
+  public InvestmentHoldingView holding(@PathVariable UUID id) {
+    return queryService.holding(authenticatedUser.requireId(), id);
   }
 
   @GetMapping("/sources")
   public InvestmentSourceListResponse sources() {
     return new InvestmentSourceListResponse(
-        queryService.sources(authenticatedUser.requireId()).stream()
-            .map(InvestmentSourceResponse::from)
-            .toList());
+        queryService.sources(authenticatedUser.requireId()).stream().toList());
   }
 
   @GetMapping("/income")

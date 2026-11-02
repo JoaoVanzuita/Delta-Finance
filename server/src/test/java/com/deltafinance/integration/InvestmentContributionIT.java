@@ -121,6 +121,28 @@ class InvestmentContributionIT extends PostgresTestBase {
   }
 
   @Test
+  void semContaMarcadaNaoInventaPerimetroDeInvestimento() throws Exception {
+    JsonNode report =
+        json(
+            alice
+                .get("/api/v1/investments/contributions")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+    assertThat(report.path("trackingAvailable").asBoolean()).isFalse();
+    assertThat(report.path("contributions").asString()).isEqualTo("0.00");
+    assertThat(report.path("withdrawals").asString()).isEqualTo("0.00");
+    // Posições e aplicações do provedor continuam válidas; só o caixa não é inferido.
+    assertThat(report.path("applied").asString()).isEqualTo("1000.00");
+    assertThat(report.path("portfolioValue").asString()).isEqualTo("1100.00");
+    assertThat(report.path("sources").get(0).path("perimeterSource").asString())
+        .isEqualTo("NOT_CONFIGURED");
+    assertThat(report.path("sources").get(0).path("accountCount").asInt()).isZero();
+  }
+
+  @Test
   void separaAporteDeAplicacaoEConciliaCustos() throws Exception {
     String investmentAccountId = accountIdByName("XP Investimentos");
     JsonNode marked =
@@ -189,6 +211,48 @@ class InvestmentContributionIT extends PostgresTestBase {
     assertThat(holding.path("items").get(0).path("costBasis").asString()).isEqualTo("1000.00");
     assertThat(holding.path("items").get(0).path("costBasisSource").asString())
         .isEqualTo("DERIVED");
+  }
+
+  @Test
+  void fluxosDePosicaoEmOutraMoedaNaoEntramNoRelatorioEmBrl() throws Exception {
+    String investmentAccountId = accountIdByName("XP Investimentos");
+    alice
+        .put(
+            "/api/v1/accounts/" + investmentAccountId + "/investment",
+            Map.of("investmentAccount", true))
+        .andExpect(status().isOk());
+    String today = LocalDate.now().toString();
+
+    Map<String, Object> usdInvestment = investment(today);
+    usdInvestment.put("id", "inv-usd");
+    usdInvestment.put("name", "Stock USD");
+    usdInvestment.put("code", "USD1");
+    usdInvestment.put("currencyCode", "USD");
+    usdInvestment.put("balance", "500.00");
+    PLUGGY.addInvestment(INVESTMENT_ITEM, usdInvestment);
+
+    Map<String, Object> usdBuy = buy(today);
+    usdBuy.put("id", "tx-buy-usd");
+    usdBuy.put("amount", "500.00");
+    usdBuy.put("netAmount", "500.00");
+    PLUGGY.addInvestmentTransaction("inv-usd", usdBuy);
+
+    alice
+        .post("/api/v1/connections/" + connectionIdByName("XP") + "/sync", null)
+        .andExpect(status().isAccepted());
+    syncJobService.processNext("worker", "contribution-usd");
+
+    JsonNode report =
+        json(
+            alice
+                .get("/api/v1/investments/contributions")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(report.path("applied").asString()).isEqualTo("1000.00");
+    assertThat(report.path("portfolioValue").asString()).isEqualTo("1100.00");
+    assertThat(report.path("positionCount").asInt()).isEqualTo(1);
   }
 
   @Test

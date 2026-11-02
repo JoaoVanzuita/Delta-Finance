@@ -6,11 +6,10 @@ import com.deltafinance.investments.domain.ProviderInvestmentSync;
 import com.deltafinance.investments.domain.ProviderInvestmentSyncRepository;
 import com.deltafinance.investments.domain.ProviderInvestmentTransaction;
 import com.deltafinance.investments.domain.ProviderInvestmentTransactionRepository;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -46,7 +45,7 @@ public class InvestmentQueryService {
   private final ProviderInvestmentTransactionRepository transactionRepository;
   private final ProviderInvestmentSyncRepository syncRepository;
   private final InvestmentIncomeService incomeService;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final Clock clock;
 
   public InvestmentQueryService(
@@ -54,13 +53,13 @@ public class InvestmentQueryService {
       ProviderInvestmentTransactionRepository transactionRepository,
       ProviderInvestmentSyncRepository syncRepository,
       InvestmentIncomeService incomeService,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       Clock clock) {
     this.investmentRepository = investmentRepository;
     this.transactionRepository = transactionRepository;
     this.syncRepository = syncRepository;
     this.incomeService = incomeService;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.clock = clock;
   }
 
@@ -390,11 +389,7 @@ public class InvestmentQueryService {
     String estimatedReturn = null;
     if (costBasis != null && balance != null) {
       estimatedProfit =
-          balance
-              .add(incomeTotal)
-              .add(flow.proceeds)
-              .subtract(costBasis)
-              .setScale(2, RoundingMode.HALF_EVEN);
+          Money.scaled(balance.add(incomeTotal).add(flow.proceeds).subtract(costBasis));
       if (costBasis.signum() > 0) {
         estimatedReturn =
             estimatedProfit
@@ -548,15 +543,7 @@ public class InvestmentQueryService {
 
   private String decrypt(
       UUID userId, String table, String column, UUID recordId, byte[] ciphertext) {
-    if (ciphertext == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          ciphertext, new CryptoContext(userId, table, column, recordId));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    return encryptedValueReader.tryRead(userId, table, column, recordId, ciphertext).orElse(null);
   }
 
   private static BigDecimal balance(InvestmentHoldingView holding) {
@@ -576,7 +563,7 @@ public class InvestmentQueryService {
   }
 
   private static String format(BigDecimal value) {
-    return value.setScale(2, RoundingMode.HALF_EVEN).toPlainString();
+    return Money.plain(value);
   }
 
   private static String percentage(BigDecimal value, BigDecimal total) {

@@ -121,7 +121,11 @@ public class InvestmentImportService {
             upsertInvestment(userId, connectionId, imported, now, integration, apiKey);
         stats = stats.plus(investmentStats);
       }
-      if (page.complete()) {
+      // Página vazia só é conclusiva quando o item explicitamente não compartilha investimentos.
+      // Com recursos AVAILABLE, uma resposta vazia pode ser falha transitória do provedor.
+      boolean conclusive =
+          !page.items().isEmpty() || scope.scope() != ProviderInvestmentScope.AVAILABLE;
+      if (page.complete() && conclusive) {
         markMissingInvestments(userId, connectionId, seen, now);
       }
       if (!page.items().isEmpty()) {

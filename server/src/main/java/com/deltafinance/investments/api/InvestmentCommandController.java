@@ -1,6 +1,7 @@
 package com.deltafinance.investments.api;
 
 import com.deltafinance.investments.application.InvestmentCommandService;
+import com.deltafinance.investments.application.InvestmentIncomeEntryView;
 import com.deltafinance.investments.application.InvestmentIncomeService;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -35,17 +36,15 @@ public class InvestmentCommandController {
 
   @PostMapping("/income")
   @ResponseStatus(HttpStatus.CREATED)
-  public InvestmentIncomeEntryResponse createIncome(
+  public InvestmentIncomeEntryView createIncome(
       @Valid @RequestBody InvestmentIncomeRequest request) {
-    return InvestmentIncomeEntryResponse.from(
-        incomeService.create(authenticatedUser.requireId(), request));
+    return incomeService.create(authenticatedUser.requireId(), request);
   }
 
   @PatchMapping("/income/{id}")
-  public InvestmentIncomeEntryResponse updateIncome(
+  public InvestmentIncomeEntryView updateIncome(
       @PathVariable UUID id, @Valid @RequestBody InvestmentIncomeRequest request) {
-    return InvestmentIncomeEntryResponse.from(
-        incomeService.update(authenticatedUser.requireId(), id, request));
+    return incomeService.update(authenticatedUser.requireId(), id, request);
   }
 
   @DeleteMapping("/income/{id}")
