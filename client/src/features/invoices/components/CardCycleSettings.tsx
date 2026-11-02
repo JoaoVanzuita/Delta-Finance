@@ -1,3 +1,4 @@
+import { cardsApi, type CardProfile } from '@/lib/api/finance'
 import { useEffect, useRef, useState } from 'react'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -6,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/problem'
+import { normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
 
-import { financeApi, type CardProfile } from '@/features/integration/api'
 import { invalidateCardViews } from '@/lib/invalidation'
 
 interface CardCycleSettingsProps {
@@ -51,10 +52,10 @@ export function CardCycleSettings({
 
   const save = useMutation({
     mutationFn: () =>
-      financeApi.updateCardProfile(accountId, {
+      cardsApi.updateCardProfile(accountId, {
         closingDay: Number(closingDay),
         dueDay: Number(dueDay),
-        creditLimit: creditLimit.trim() ? creditLimit.replace(',', '.') : undefined,
+        creditLimit: creditLimit.trim() ? normalizeMoneyInput(creditLimit) : undefined,
       }),
     onSuccess: async () => {
       setError(null)
@@ -85,7 +86,7 @@ export function CardCycleSettings({
       return
     }
     if (creditLimit.trim()) {
-      const limit = Number(creditLimit.replace(',', '.'))
+      const limit = parseMoneyInput(creditLimit)
       if (Number.isNaN(limit) || limit < 0) {
         setError('O limite deve ser maior ou igual a zero.')
         return

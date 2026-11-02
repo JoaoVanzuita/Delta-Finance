@@ -1,15 +1,8 @@
 import { formatDate } from '@/lib/format'
+import { INVOICE_STATUS_LABELS } from '@/lib/labels'
 
 import { formatMoney } from '@/features/accounts/format'
-import type { Invoice } from '@/features/integration/api'
-
-const STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Aberta',
-  CLOSED: 'Fechada',
-  PARTIALLY_PAID: 'Parcialmente paga',
-  PAID: 'Paga',
-  OVERDUE: 'Vencida',
-}
+import type { Invoice } from '@/lib/api/finance'
 
 interface InvoiceStatusProps {
   readonly invoice: Invoice
@@ -21,7 +14,8 @@ interface InvoiceStatusProps {
 export function InvoiceStatus({ invoice, creditBalance, currency = 'BRL' }: InvoiceStatusProps) {
   const total = Number(invoice.total)
   const paid = Number(invoice.paymentsTotal)
-  const percent = total <= 0 ? 100 : Math.min(100, Math.round((paid / total) * 100))
+  // Sem total ainda não há pagamento: não exiba uma barra cheia em fatura vazia.
+  const percent = total <= 0 ? 0 : Math.min(100, Math.round((paid / total) * 100))
 
   return (
     <section
@@ -51,7 +45,7 @@ export function InvoiceStatus({ invoice, creditBalance, currency = 'BRL' }: Invo
                   : 'border-line bg-surface-muted text-ink',
             ].join(' ')}
           >
-            {STATUS_LABELS[invoice.status] ?? invoice.status}
+            {INVOICE_STATUS_LABELS[invoice.status] ?? invoice.status}
           </span>
           {invoice.hasAdjustments ? (
             <span className="rounded-card border border-warning/40 bg-warning/5 px-3 py-1 text-sm text-ink">

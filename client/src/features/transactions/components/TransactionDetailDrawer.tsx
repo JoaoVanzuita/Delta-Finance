@@ -7,25 +7,10 @@ import { Drawer } from '@/components/ui/drawer'
 import { formatDate, formatMoney } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
-import type { Transaction } from '@/features/integration/api'
+import type { Transaction } from '@/lib/api/finance'
+import { TRANSACTION_STATUS_LABELS, TRANSACTION_TYPE_LABELS } from '@/lib/labels'
 
 import { DeleteManualTransaction } from './DeleteManualTransaction'
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Pendente',
-  POSTED: 'Efetivada',
-  SOURCE_REMOVED: 'Removida na origem',
-  RECONCILED: 'Reconciliada',
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  DEBIT: 'Despesa',
-  CREDIT: 'Receita',
-  TRANSFER: 'Transferência',
-  REFUND: 'Reembolso',
-  CHARGEBACK: 'Chargeback',
-  ADJUSTMENT: 'Ajuste',
-}
 
 const FIELD_LABELS: Record<string, string> = {
   description: 'Descrição',
@@ -99,7 +84,7 @@ export function TransactionDetailDrawer({
                 </h3>
                 <p className="mt-1 text-caption text-ink-muted">
                   {formatDate(transaction.postedOn)} ·{' '}
-                  {TYPE_LABELS[transaction.type] ?? transaction.type}
+                  {TRANSACTION_TYPE_LABELS[transaction.type] ?? transaction.type}
                 </p>
               </div>
               <p
@@ -113,7 +98,7 @@ export function TransactionDetailDrawer({
             </div>
             <div className="mt-3 flex flex-wrap gap-1">
               <Badge variant={transaction.status === 'PENDING' ? 'warning' : 'neutral'}>
-                {STATUS_LABELS[transaction.status] ?? transaction.status}
+                {TRANSACTION_STATUS_LABELS[transaction.status] ?? transaction.status}
               </Badge>
               <Badge variant="neutral">
                 {transaction.source === 'IMPORTED' ? 'Importada' : 'Manual'}
@@ -136,7 +121,9 @@ export function TransactionDetailDrawer({
             <dt className="text-ink-muted">Moeda</dt>
             <dd className="text-ink">{transaction.currency}</dd>
             <dt className="text-ink-muted">Estado</dt>
-            <dd className="text-ink">{STATUS_LABELS[transaction.status] ?? transaction.status}</dd>
+            <dd className="text-ink">
+              {TRANSACTION_STATUS_LABELS[transaction.status] ?? transaction.status}
+            </dd>
             <dt className="text-ink-muted">Conciliação</dt>
             <dd className="text-ink">
               {RECONCILIATION_LABELS[transaction.reconciliationState ?? ''] ?? 'Não informada'}

@@ -1,3 +1,10 @@
+import {
+  cardsApi,
+  transactionsApi,
+  type InvoiceItem,
+  type InvoiceItemInput,
+} from '@/lib/api/finance'
+import { todayIsoDate } from '@/lib/format'
 import { useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -9,9 +16,9 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { ApiError } from '@/lib/api/problem'
+import { normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
 import { invalidateInvoiceViews } from '@/lib/invalidation'
-
-import { financeApi, type InvoiceItem, type InvoiceItemInput } from '@/features/integration/api'
+import { queryKeys } from '@/lib/query-keys'
 
 const KINDS = [
   { value: 'PURCHASE', label: 'Compra' },
@@ -43,6 +50,7 @@ interface InvoiceItemDialogProps {
   readonly invoiceId: string
   readonly cardAccountId: string
   readonly item?: InvoiceItem
+  readonly currency?: string
   readonly onClose: () => void
 }
 
@@ -51,6 +59,7 @@ export function InvoiceItemDialog({
   invoiceId,
   cardAccountId,
   item,
+  currency = 'BRL',
   onClose,
 }: InvoiceItemDialogProps) {
   const queryClient = useQueryClient()
@@ -72,8 +81,8 @@ export function InvoiceItemDialog({
   const descriptionRef = useRef<HTMLInputElement>(null)
 
   const transactionsQuery = useQuery({
-    queryKey: ['transactions', 'invoice-items', cardAccountId],
-    queryFn: () => financeApi.transactions({ limit: 100, accountId: cardAccountId }),
+    queryKey: queryKeys.invoiceItems(cardAccountId),
+    queryFn: () => transactionsApi.transactions({ limit: 100, accountId: cardAccountId }),
   })
   const candidates = useMemo(
     () =>
@@ -88,9 +97,7 @@ export function InvoiceItemDialog({
 
   const save = useMutation({
     mutationFn: (input: InvoiceItemInput) =>
-      item
-        ? financeApi.updateInvoiceItem(item.id, input)
-        : financeApi.addInvoiceItem(invoiceId, input),
+      item ? cardsApi.updateInvoiceItem(item.id, input) : cardsApi.addInvoiceItem(invoiceId, input),
     onSuccess: async () => {
       await invalidateInvoiceViews(queryClient, invoiceId)
       onClose()
@@ -108,7 +115,7 @@ export function InvoiceItemDialog({
       setError('Informe a descrição.')
       return
     }
-    const parsed = Number(amount.replace(',', '.'))
+    const parsed = parseMoneyInput(amount)
     if (!amount.trim() || Number.isNaN(parsed) || parsed <= 0) {
       setError('Informe um valor positivo.')
       return
@@ -121,7 +128,7 @@ export function InvoiceItemDialog({
       kind,
       reportingEffect,
       description: description.trim(),
-      amount: amount.replace(',', '.'),
+      amount: normalizeMoneyInput(amount),
       occurredOn,
       transactionId: transactionId || undefined,
       installmentNumber: installmentNumber ? Number(installmentNumber) : undefined,
@@ -201,7 +208,11 @@ export function InvoiceItemDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
             id="invoice-item-amount"
-            label={Number(totalInstallments) > 1 ? 'Valor de cada parcela (R$)' : 'Valor (R$)'}
+            label={
+              Number(totalInstallments) > 1
+                ? `Valor de cada parcela (${currency === 'BRL' ? 'R$' : currency})`
+                : `Valor (${currency === 'BRL' ? 'R$' : currency})`
+            }
           >
             <Input
               id="invoice-item-amount"
@@ -284,5 +295,5 @@ export function InvoiceItemDialog({
 }
 
 function today(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+  return todayIsoDate()
 }

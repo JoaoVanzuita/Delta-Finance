@@ -11,7 +11,7 @@ import {
   normalizeAmountInput,
   type TransactionFilterState,
 } from '@/features/transactions/filters'
-import type { Account, Category } from '@/features/integration/api'
+import type { Account, Category } from '@/lib/api/finance'
 
 const STATUS_OPTIONS = [
   { value: 'PENDING', label: 'Pendente' },

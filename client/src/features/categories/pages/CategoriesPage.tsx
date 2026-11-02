@@ -1,3 +1,4 @@
+import { categoriesApi, type Category } from '@/lib/api/finance'
 import { useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -18,8 +19,6 @@ import { ApiError } from '@/lib/api/problem'
 import { invalidateCategoryViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
-
-import { financeApi, type Category } from '@/features/integration/api'
 
 const KIND_OPTIONS = [
   { value: 'EXPENSE', label: 'Despesa' },
@@ -51,7 +50,7 @@ export function CategoriesPage() {
   const queryClient = useQueryClient()
   const categoriesQuery = useQuery({
     queryKey: queryKeys.categories,
-    queryFn: financeApi.categories,
+    queryFn: categoriesApi.categories,
   })
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
@@ -240,14 +239,20 @@ function CategoryRow({
         </div>
       </div>
       <div className="flex flex-wrap gap-2 sm:ml-auto">
-        <Button type="button" variant="secondary" size="sm" onClick={onEdit}>
-          Editar
-        </Button>
-        {category.active ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onDeactivate}>
-            Desativar
-          </Button>
-        ) : null}
+        {category.predefined ? (
+          <span className="text-caption text-ink-muted">Gerenciada pela taxonomia</span>
+        ) : (
+          <>
+            <Button type="button" variant="secondary" size="sm" onClick={onEdit}>
+              Editar
+            </Button>
+            {category.active ? (
+              <Button type="button" variant="ghost" size="sm" onClick={onDeactivate}>
+                Desativar
+              </Button>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   )
@@ -271,8 +276,8 @@ function CategoryFormDialog({
   const save = useMutation({
     mutationFn: () =>
       category
-        ? financeApi.updateCategory(category.id, { name: name.trim(), kind })
-        : financeApi.createCategory({ name: name.trim(), kind }),
+        ? categoriesApi.updateCategory(category.id, { name: name.trim(), kind })
+        : categoriesApi.createCategory({ name: name.trim(), kind }),
     onSuccess: onSaved,
     onError: (caught) => {
       setError(caught instanceof ApiError ? caught.message : 'Não foi possível salvar a categoria.')
@@ -371,7 +376,7 @@ function DeactivateCategoryDialog({
   const reassignRef = useRef<HTMLSelectElement>(null)
 
   const deactivate = useMutation({
-    mutationFn: () => financeApi.deactivateCategory(category.id, reassignTo || undefined),
+    mutationFn: () => categoriesApi.deactivateCategory(category.id, reassignTo || undefined),
     onSuccess: onDeactivated,
     onError: (caught) => {
       setError(caught instanceof ApiError ? caught.message : 'Não foi possível desativar.')

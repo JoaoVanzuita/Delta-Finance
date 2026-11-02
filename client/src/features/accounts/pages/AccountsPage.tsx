@@ -1,3 +1,4 @@
+import { accountsApi, type Account } from '@/lib/api/finance'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, Landmark, Plus, Settings2, Wallet, WalletCards } from 'lucide-react'
 import { Link } from 'react-router'
@@ -10,26 +11,10 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, formatDateTime, formatMoney, addDecimals } from '@/lib/format'
+import { ACCOUNT_STATUS_LABELS, ACCOUNT_TYPE_LABELS } from '@/lib/labels'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
 import { ApiError } from '@/lib/api/problem'
-
-import { financeApi, type Account } from '@/features/integration/api'
-
-const TYPE_LABELS: Record<string, string> = {
-  BANK: 'Conta bancária',
-  CREDIT: 'Cartão de crédito',
-  CASH: 'Dinheiro',
-  WALLET: 'Carteira digital',
-  UNKNOWN: 'Tipo não informado',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: 'Ativa',
-  INACTIVE: 'Inativa',
-  UNAVAILABLE: 'Indisponível',
-  CLOSED: 'Encerrada',
-}
 
 function isEligible(account: Account): boolean {
   return (
@@ -51,7 +36,7 @@ function institutionName(account: Account): string {
  * Contas inativas e em outra moeda continuam acessíveis em uma seção secundária.
  */
 export function AccountsPage() {
-  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: financeApi.accounts })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
   const allAccounts = accountsQuery.data?.items ?? []
   const accounts = allAccounts.filter((account) => account.type !== 'CREDIT')
   const eligible = accounts.filter(isEligible)
@@ -243,13 +228,13 @@ function AccountCard({ account, muted = false }: { account: Account; muted?: boo
             {account.alias ?? 'Sem apelido'}
           </h4>
           <p className="mt-0.5 truncate text-caption text-ink-muted">
-            {TYPE_LABELS[account.type] ?? account.type}
+            {ACCOUNT_TYPE_LABELS[account.type] ?? account.type}
             {account.origin === 'IMPORTED' ? ' · Importada' : ' · Manual'}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1">
           <Badge variant={inactive ? 'warning' : 'income'}>
-            {STATUS_LABELS[account.status ?? ''] ?? '—'}
+            {ACCOUNT_STATUS_LABELS[account.status ?? ''] ?? '—'}
           </Badge>
           {account.hasReservedBalance ? <Badge variant="info">Reserva</Badge> : null}
           {foreign ? <Badge variant="warning">Moeda {account.currency}</Badge> : null}

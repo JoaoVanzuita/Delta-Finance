@@ -1,3 +1,11 @@
+import {
+  accountsApi,
+  cardsApi,
+  transactionsApi,
+  type InvoiceItem,
+  type InvoiceItemCorrection,
+  type ProviderBill,
+} from '@/lib/api/finance'
 import { useState } from 'react'
 
 import { Link, useParams } from 'react-router'
@@ -9,17 +17,11 @@ import { invalidateInvoiceViews } from '@/lib/invalidation'
 import { PageHeader } from '@/components/ui/page-header'
 
 import { formatDate, formatMoney } from '@/lib/format'
-import {
-  financeApi,
-  type InvoiceItem,
-  type InvoiceItemCorrection,
-  type ProviderBill,
-} from '@/features/integration/api'
-
 import { InvoiceItemDialog } from '../components/InvoiceItemDialog'
 import { InvoicePaymentDialog } from '../components/InvoicePaymentDialog'
 import { InvoiceStatus } from '../components/InvoiceStatus'
 import { ProviderReconciliationDialog } from '../components/ProviderReconciliationDialog'
+import { queryKeys } from '@/lib/query-keys'
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
   PIX: 'Pix',
@@ -74,20 +76,20 @@ export function InvoiceDetailPage() {
   const [historyItemId, setHistoryItemId] = useState<string | null>(null)
 
   const invoiceQuery = useQuery({
-    queryKey: ['invoice', id],
-    queryFn: () => financeApi.invoice(id),
+    queryKey: queryKeys.invoice(id),
+    queryFn: () => cardsApi.invoice(id),
     enabled: Boolean(id),
   })
-  const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
   const cardAccountId = invoiceQuery.data?.cardAccountId
   const transactionsQuery = useQuery({
-    queryKey: ['transactions', 'card', cardAccountId],
-    queryFn: () => financeApi.transactions({ limit: 200, accountId: cardAccountId ?? '' }),
+    queryKey: queryKeys.invoiceTransactions(cardAccountId),
+    queryFn: () => transactionsApi.transactions({ limit: 200, accountId: cardAccountId ?? '' }),
     enabled: Boolean(cardAccountId),
   })
 
   const remove = useMutation({
-    mutationFn: (itemId: string) => financeApi.deleteInvoiceItem(itemId),
+    mutationFn: (itemId: string) => cardsApi.deleteInvoiceItem(itemId),
     onSuccess: async () => {
       await invalidateInvoiceViews(queryClient, id)
     },
@@ -367,6 +369,7 @@ export function InvoiceDetailPage() {
           invoiceId={invoice.id}
           cardAccountId={invoice.cardAccountId}
           item={itemDialog === 'new' ? undefined : itemDialog}
+          currency={currency}
           onClose={() => setItemDialog(null)}
         />
       ) : null}
@@ -375,6 +378,7 @@ export function InvoiceDetailPage() {
         <InvoicePaymentDialog
           invoiceId={invoice.id}
           outstanding={invoice.outstanding}
+          currency={currency}
           onClose={() => setPaymentDialog(false)}
         />
       ) : null}
@@ -384,8 +388,8 @@ export function InvoiceDetailPage() {
 
 function CorrectionsList({ itemId }: { readonly itemId: string }) {
   const query = useQuery({
-    queryKey: ['invoiceItemCorrections', itemId],
-    queryFn: () => financeApi.invoiceItemCorrections(itemId),
+    queryKey: queryKeys.invoiceItemCorrections(itemId),
+    queryFn: () => cardsApi.invoiceItemCorrections(itemId),
   })
   if (query.isLoading) {
     return <p className="text-xs text-ink-muted">Carregando histórico…</p>
@@ -562,6 +566,7 @@ function ProviderReconciliation({
         <ProviderReconciliationDialog
           invoiceId={invoiceId}
           adjustment={adjustment}
+          currency={currency}
           onClose={() => setDialog(false)}
         />
       ) : null}

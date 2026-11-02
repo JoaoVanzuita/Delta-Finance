@@ -1,3 +1,4 @@
+import { accountsApi, transactionsApi, type ReservedBalanceTreatment } from '@/lib/api/finance'
 import { useMemo } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,38 +14,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs'
 import { DisplayNameEditor } from '@/components/DisplayNameEditor'
 import { formatDate, formatDateTime, formatMoney, addDecimals } from '@/lib/format'
+import { ACCOUNT_STATUS_LABELS, ACCOUNT_SUBTYPE_LABELS, ACCOUNT_TYPE_LABELS } from '@/lib/labels'
 import { invalidateAccountViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
 import { ApiError } from '@/lib/api/problem'
 
-import { financeApi, type ReservedBalanceTreatment } from '@/features/integration/api'
 import { connectionStatusLabels } from '@/features/integration/syncLabels'
 
 import { ReservedBalancesSection } from '../components/ReservedBalancesSection'
-
-const TYPE_LABELS: Record<string, string> = {
-  BANK: 'Conta bancária',
-  CREDIT: 'Cartão de crédito',
-  CASH: 'Dinheiro',
-  WALLET: 'Carteira digital',
-  UNKNOWN: 'Tipo não informado',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: 'Ativa',
-  INACTIVE: 'Inativa',
-  UNAVAILABLE: 'Indisponível',
-  CLOSED: 'Encerrada',
-}
-
-const SUBTYPE_LABELS: Record<string, string> = {
-  CHECKING_ACCOUNT: 'Conta corrente',
-  SAVINGS_ACCOUNT: 'Poupança',
-  PAYMENT_ACCOUNT: 'Conta de pagamento',
-  CREDIT_CARD: 'Cartão de crédito',
-  OTHER: 'Outro',
-}
 
 type AccountTab = 'overview' | 'transactions' | 'settings'
 
@@ -60,12 +38,12 @@ export function AccountDetailPage() {
 
   const accountQuery = useQuery({
     queryKey: queryKeys.account(id ?? ''),
-    queryFn: () => financeApi.account(id ?? ''),
+    queryFn: () => accountsApi.account(id ?? ''),
     enabled: Boolean(id),
   })
   const transactionsQuery = useQuery({
     queryKey: queryKeys.transactionFilters({ accountId: id, limit: 20 }),
-    queryFn: () => financeApi.transactions({ accountId: id ?? '', limit: 20 }),
+    queryFn: () => transactionsApi.transactions({ accountId: id ?? '', limit: 20 }),
     enabled: Boolean(id) && tab === 'transactions',
   })
 
@@ -74,7 +52,7 @@ export function AccountDetailPage() {
 
   const rename = useMemo(
     () => async (displayName: string) => {
-      const updated = await financeApi.renameAccount(accountId, displayName)
+      const updated = await accountsApi.renameAccount(accountId, displayName)
       queryClient.setQueryData(queryKeys.account(accountId), updated)
       await invalidateAccountViews(queryClient)
       return updated
@@ -84,7 +62,7 @@ export function AccountDetailPage() {
 
   const resetName = useMemo(
     () => async () => {
-      const updated = await financeApi.resetAccountName(accountId)
+      const updated = await accountsApi.resetAccountName(accountId)
       queryClient.setQueryData(queryKeys.account(accountId), updated)
       await invalidateAccountViews(queryClient)
       return updated
@@ -94,7 +72,7 @@ export function AccountDetailPage() {
 
   const investmentFlag = useMutation({
     mutationFn: (investmentAccount: boolean) =>
-      financeApi.updateAccountInvestment(accountId, investmentAccount),
+      accountsApi.updateAccountInvestment(accountId, investmentAccount),
     onSuccess: async (updated) => {
       queryClient.setQueryData(queryKeys.account(accountId), updated)
       await invalidateAccountViews(queryClient)
@@ -104,13 +82,13 @@ export function AccountDetailPage() {
 
   const reservedBalancesQuery = useQuery({
     queryKey: queryKeys.accountReservedBalances(accountId),
-    queryFn: () => financeApi.reservedBalances(accountId),
+    queryFn: () => accountsApi.reservedBalances(accountId),
     enabled: Boolean(accountId) && Boolean(account?.hasReservedBalance),
   })
 
   const renameReservedBalance = useMutation({
     mutationFn: ({ id, displayName }: { id: string; displayName: string }) =>
-      financeApi.renameReservedBalance(id, displayName),
+      accountsApi.renameReservedBalance(id, displayName),
     onSuccess: async () => {
       await reservedBalancesQuery.refetch()
       await queryClient.invalidateQueries({ queryKey: queryKeys.wealth })
@@ -118,7 +96,7 @@ export function AccountDetailPage() {
   })
 
   const resetReservedBalanceName = useMutation({
-    mutationFn: (id: string) => financeApi.resetReservedBalanceName(id),
+    mutationFn: (id: string) => accountsApi.resetReservedBalanceName(id),
     onSuccess: async () => {
       await reservedBalancesQuery.refetch()
       await queryClient.invalidateQueries({ queryKey: queryKeys.wealth })
@@ -127,7 +105,7 @@ export function AccountDetailPage() {
 
   const reservedBalanceTreatment = useMutation({
     mutationFn: (treatment: ReservedBalanceTreatment) =>
-      financeApi.updateReservedBalanceTreatment(accountId, treatment),
+      accountsApi.updateReservedBalanceTreatment(accountId, treatment),
     onSuccess: async (updated) => {
       queryClient.setQueryData(queryKeys.account(accountId), updated)
       await queryClient.invalidateQueries({ queryKey: queryKeys.wealth })
@@ -180,7 +158,7 @@ export function AccountDetailPage() {
       </Link>
 
       <PageHeader
-        overline={TYPE_LABELS[account.type] ?? account.type}
+        overline={ACCOUNT_TYPE_LABELS[account.type] ?? account.type}
         title={account.alias ?? 'Sem apelido'}
         description={[
           account.institutionName ?? 'Instituição não informada',
@@ -189,7 +167,7 @@ export function AccountDetailPage() {
         meta={
           <>
             <Badge variant={account.status === 'ACTIVE' ? 'income' : 'warning'}>
-              {STATUS_LABELS[account.status ?? ''] ?? 'Não informado'}
+              {ACCOUNT_STATUS_LABELS[account.status ?? ''] ?? 'Não informado'}
             </Badge>
             {account.currency !== 'BRL' ? (
               <Badge variant="warning">Moeda {account.currency}</Badge>
@@ -254,9 +232,7 @@ export function AccountDetailPage() {
                 onReset={(reservedBalanceId) =>
                   resetReservedBalanceName.mutateAsync(reservedBalanceId)
                 }
-                onTreatmentChange={(treatment) =>
-                  reservedBalanceTreatment.mutateAsync(treatment)
-                }
+                onTreatmentChange={(treatment) => reservedBalanceTreatment.mutateAsync(treatment)}
               />
             ) : null}
 
@@ -264,7 +240,7 @@ export function AccountDetailPage() {
               <h2 className="text-section-title font-semibold text-ink">Dados da conta</h2>
               <dl className="mt-4 grid gap-x-6 gap-y-3 text-body-sm sm:grid-cols-[180px_1fr]">
                 <dt className="text-ink-muted">Tipo</dt>
-                <dd className="text-ink">{TYPE_LABELS[account.type] ?? account.type}</dd>
+                <dd className="text-ink">{ACCOUNT_TYPE_LABELS[account.type] ?? account.type}</dd>
                 <dt className="text-ink-muted">Moeda</dt>
                 <dd className="text-ink">{account.currency}</dd>
                 {account.origin === 'MANUAL' ? (
@@ -283,7 +259,7 @@ export function AccountDetailPage() {
                 </dd>
                 <dt className="text-ink-muted">Estado</dt>
                 <dd className="text-ink">
-                  {STATUS_LABELS[account.status ?? ''] ?? 'Não informado'}
+                  {ACCOUNT_STATUS_LABELS[account.status ?? ''] ?? 'Não informado'}
                 </dd>
                 {account.connectionStatus ? (
                   <>
@@ -297,7 +273,9 @@ export function AccountDetailPage() {
                 <dd className="text-ink">{formatDateTime(account.lastSyncAt)}</dd>
                 <dt className="text-ink-muted">Subtipo</dt>
                 <dd className="text-ink">
-                  {account.subtype ? (SUBTYPE_LABELS[account.subtype] ?? 'Outro') : 'Não informado'}
+                  {account.subtype
+                    ? (ACCOUNT_SUBTYPE_LABELS[account.subtype] ?? 'Outro')
+                    : 'Não informado'}
                 </dd>
               </dl>
             </Card>

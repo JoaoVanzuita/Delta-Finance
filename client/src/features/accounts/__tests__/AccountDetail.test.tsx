@@ -4,7 +4,7 @@ import { Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AccountDetailPage } from '@/features/accounts/pages/AccountDetailPage'
-import { type Account } from '@/features/integration/api'
+import { type Account } from '@/lib/api/finance'
 import { renderWithProviders } from '@/test/render'
 
 const ACCOUNT: Account = {

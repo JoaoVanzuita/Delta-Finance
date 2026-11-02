@@ -1,3 +1,4 @@
+import { cardsApi } from '@/lib/api/finance'
 import { useRef, useState } from 'react'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -11,12 +12,12 @@ import { ApiError } from '@/lib/api/problem'
 import { invalidateInvoiceViews } from '@/lib/invalidation'
 
 import { formatMoney } from '@/features/accounts/format'
-import { financeApi } from '@/features/integration/api'
 
 interface ProviderReconciliationDialogProps {
   readonly invoiceId: string
   /** Ajuste a aplicar: positivo aumenta o total, negativo reduz. */
   readonly adjustment: string
+  readonly currency?: string
   readonly onClose: () => void
 }
 
@@ -29,6 +30,7 @@ interface ProviderReconciliationDialogProps {
 export function ProviderReconciliationDialog({
   invoiceId,
   adjustment,
+  currency = 'BRL',
   onClose,
 }: ProviderReconciliationDialogProps) {
   const queryClient = useQueryClient()
@@ -38,7 +40,7 @@ export function ProviderReconciliationDialog({
   const numeric = Number(adjustment)
 
   const save = useMutation({
-    mutationFn: () => financeApi.reconcileInvoiceProvider(invoiceId, { reason: reason.trim() }),
+    mutationFn: () => cardsApi.reconcileInvoiceProvider(invoiceId, { reason: reason.trim() }),
     onSuccess: async () => {
       await invalidateInvoiceViews(queryClient, invoiceId)
       onClose()
@@ -64,8 +66,8 @@ export function ProviderReconciliationDialog({
       title="Conciliar com o total do provedor"
       description={
         numeric >= 0
-          ? `O total desta fatura será aumentado em ${formatMoney(adjustment, 'BRL')}. O ajuste é um item manual auditado.`
-          : `O total desta fatura será reduzido em ${formatMoney(adjustment.replace('-', ''), 'BRL')}. O ajuste é um item manual auditado.`
+          ? `O total desta fatura será aumentado em ${formatMoney(adjustment, currency)}. O ajuste é um item manual auditado.`
+          : `O total desta fatura será reduzido em ${formatMoney(adjustment.replace('-', ''), currency)}. O ajuste é um item manual auditado.`
       }
       size="sm"
       busy={save.isPending}

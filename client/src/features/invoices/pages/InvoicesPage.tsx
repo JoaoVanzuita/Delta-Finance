@@ -1,3 +1,10 @@
+import {
+  accountsApi,
+  cardsApi,
+  transactionsApi,
+  type Invoice,
+  type Transaction,
+} from '@/lib/api/finance'
 import type { ReactNode } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
@@ -12,21 +19,12 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs'
 import { addDecimals, formatDate, formatMoney } from '@/lib/format'
+import { INVOICE_STATUS_LABELS } from '@/lib/labels'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
 import { ApiError } from '@/lib/api/problem'
 
-import { financeApi, type Invoice, type Transaction } from '@/features/integration/api'
-
 import { CardCycleSettings } from '../components/CardCycleSettings'
-
-const STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Aberta',
-  CLOSED: 'Fechada',
-  PARTIALLY_PAID: 'Parcialmente paga',
-  PAID: 'Paga',
-  OVERDUE: 'Vencida',
-}
 
 type InvoiceTab = 'current' | 'history' | 'pending' | 'settings'
 
@@ -59,21 +57,26 @@ export function InvoicesPage() {
 
   const accountQuery = useQuery({
     queryKey: queryKeys.account(accountId),
-    queryFn: () => financeApi.account(accountId),
+    queryFn: () => accountsApi.account(accountId),
     enabled: Boolean(accountId),
   })
   const invoicesQuery = useQuery({
     queryKey: queryKeys.invoicesByCard(accountId),
-    queryFn: () => financeApi.invoices(accountId),
+    queryFn: () => cardsApi.invoices(accountId),
     enabled: Boolean(accountId),
   })
   const transactionsQuery = useQuery({
     queryKey: queryKeys.transactionFilters({ accountId, scope: 'card-invoices' }),
-    queryFn: () => financeApi.transactions({ limit: 100, accountId }),
+    queryFn: () => transactionsApi.transactions({ limit: 100, accountId }),
     enabled: Boolean(accountId),
+  })
+  const overviewQuery = useQuery({
+    queryKey: queryKeys.cardOverview,
+    queryFn: cardsApi.cardOverview,
   })
 
   const account = accountQuery.data
+  const cardSummary = overviewQuery.data?.items.find((item) => item.accountId === accountId)
   const currency = account?.currency ?? 'BRL'
   const invoices = invoicesQuery.data?.items ?? []
   const currentInvoice = invoices.find((invoice) => invoice.status === 'OPEN') ?? null
@@ -90,9 +93,11 @@ export function InvoicesPage() {
           transaction.postedOn <= currentInvoice.cycleEnd,
       )
     : []
-  const pendingTotal = addDecimals(
+  const pendingPreviewTotal = addDecimals(
     pendingTransactions.map((transaction) => absoluteAmount(transaction.amount)),
   )
+  const pendingTotal = cardSummary?.pendingPurchaseTotal ?? pendingPreviewTotal
+  const pendingCount = cardSummary?.pendingPurchaseCount ?? pendingTransactions.length
   const unallocated = allTransactions.filter(
     (transaction) =>
       !transaction.invoiceId &&
@@ -102,6 +107,10 @@ export function InvoicesPage() {
     (transaction) => !isCreditTransaction(transaction),
   )
   const unallocatedCredits = unallocated.filter(isCreditTransaction)
+  const unallocatedPurchaseCount =
+    cardSummary?.unallocatedPurchaseCount ?? unallocatedPurchases.length
+  const unallocatedCreditCount = cardSummary?.unallocatedCreditCount ?? unallocatedCredits.length
+  const transactionsHref = `/transactions?accountId=${encodeURIComponent(accountId)}`
 
   function selectTab(next: string) {
     const params = new URLSearchParams(searchParams)
@@ -142,6 +151,14 @@ export function InvoicesPage() {
           {(accountQuery.error ?? invoicesQuery.error) instanceof ApiError
             ? ((accountQuery.error ?? invoicesQuery.error) as ApiError).message
             : 'Tente novamente em instantes.'}
+        </Alert>
+      ) : null}
+
+      {transactionsQuery.isError ? (
+        <Alert variant="danger" title="Não foi possível carregar as transações do cartão">
+          {transactionsQuery.error instanceof ApiError
+            ? transactionsQuery.error.message
+            : 'Os totais de pendentes e não alocadas podem estar incompletos.'}
         </Alert>
       ) : null}
 
@@ -247,7 +264,7 @@ export function InvoicesPage() {
                       {formatDate(currentInvoice.cycleEnd)}
                     </p>
                     <p className="text-caption text-ink-muted">
-                      {pendingTransactions.length} compra(s) pendente(s)
+                      {pendingCount} compra(s) pendente(s)
                     </p>
                   </div>
                   <p className="numeric text-body-sm font-semibold text-expense">
@@ -271,11 +288,23 @@ export function InvoicesPage() {
                       </li>
                     ))}
                   </ul>
-                ) : (
+                ) : transactionsQuery.isSuccess ? (
                   <p className="mt-3 text-body-sm text-ink-muted">
                     Nenhuma compra pendente neste ciclo.
                   </p>
-                )}
+                ) : null}
+                {pendingCount > pendingTransactions.length ? (
+                  <p className="mt-3 text-caption text-ink-muted">
+                    Mostrando {pendingTransactions.length} de {pendingCount}.{' '}
+                    <Link
+                      to={transactionsHref}
+                      className="font-medium text-action underline underline-offset-4"
+                    >
+                      Ver todas em Transações
+                    </Link>
+                    .
+                  </p>
+                ) : null}
               </Card>
             ) : (
               <p className="rounded-card border border-line bg-surface p-4 text-body-sm text-ink-muted">
@@ -302,8 +331,11 @@ export function InvoicesPage() {
                 }
                 icon={<ShoppingCart aria-hidden="true" className="size-4" />}
                 transactions={unallocatedPurchases}
+                count={unallocatedPurchaseCount}
+                moreHref={transactionsHref}
                 currency={currency}
                 tone="expense"
+                isError={transactionsQuery.isError}
               />
 
               <UnallocatedGroup
@@ -311,8 +343,11 @@ export function InvoicesPage() {
                 description="Estornos e créditos abatem faturas futuras."
                 icon={<CircleDollarSign aria-hidden="true" className="size-4" />}
                 transactions={unallocatedCredits}
+                count={unallocatedCreditCount}
+                moreHref={transactionsHref}
                 currency={currency}
                 tone="income"
+                isError={transactionsQuery.isError}
               />
             </section>
           </div>
@@ -359,7 +394,7 @@ function CurrentInvoiceSection({
           </p>
         </div>
         <Badge variant={invoice.status === 'OVERDUE' ? 'expense' : 'info'}>
-          {STATUS_LABELS[invoice.status] ?? invoice.status}
+          {INVOICE_STATUS_LABELS[invoice.status] ?? invoice.status}
         </Badge>
       </div>
 
@@ -424,7 +459,7 @@ function InvoiceHistoryCard({ invoice, currency }: { invoice: Invoice; currency:
                 : 'neutral'
           }
         >
-          {STATUS_LABELS[invoice.status] ?? invoice.status}
+          {INVOICE_STATUS_LABELS[invoice.status] ?? invoice.status}
         </Badge>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-2 text-body-sm">
@@ -470,15 +505,21 @@ function UnallocatedGroup({
   description,
   icon,
   transactions,
+  count,
+  moreHref,
   currency,
   tone,
+  isError = false,
 }: {
   readonly title: string
   readonly description: string
   readonly icon: ReactNode
   readonly transactions: readonly Transaction[]
+  readonly count: number
+  readonly moreHref: string
   readonly currency: string
   readonly tone: 'expense' | 'income'
+  readonly isError?: boolean
 }) {
   return (
     <Card variant={transactions.length > 0 ? 'muted' : 'default'} className="p-4">
@@ -486,7 +527,7 @@ function UnallocatedGroup({
         <span className={tone === 'expense' ? 'text-expense' : 'text-income'}>{icon}</span>
         <div>
           <h3 className="text-body-sm font-semibold text-ink">
-            {title} <Badge variant="neutral">{transactions.length}</Badge>
+            {title} <Badge variant="neutral">{count}</Badge>
           </h3>
           <p className="mt-1 text-caption text-ink-muted">{description}</p>
         </div>
@@ -516,8 +557,21 @@ function UnallocatedGroup({
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-caption text-ink-muted">Nenhum item nesta situação.</p>
+        <p className="mt-3 text-caption text-ink-muted">
+          {isError
+            ? 'Não foi possível carregar os itens desta situação.'
+            : 'Nenhum item nesta situação.'}
+        </p>
       )}
+      {count > transactions.length ? (
+        <p className="mt-2 text-caption text-ink-muted">
+          Mostrando {transactions.length} de {count}.{' '}
+          <Link to={moreHref} className="font-medium text-action underline underline-offset-4">
+            Ver todas em Transações
+          </Link>
+          .
+        </p>
+      ) : null}
     </Card>
   )
 }

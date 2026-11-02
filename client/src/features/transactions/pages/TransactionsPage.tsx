@@ -1,3 +1,4 @@
+import { accountsApi, categoriesApi, transactionsApi, type Transaction } from '@/lib/api/finance'
 import { useMemo, useState } from 'react'
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
@@ -26,32 +27,14 @@ import { CorrectionDialog } from '@/features/transactions/components/CorrectionD
 import { TransactionDetailDrawer } from '@/features/transactions/components/TransactionDetailDrawer'
 import { TransactionFiltersDrawer } from '@/features/transactions/components/TransactionFiltersDrawer'
 import { formatDate, formatMoney, formatRelativeDate } from '@/lib/format'
+import {
+  TRANSACTION_ORIGIN_LABELS,
+  TRANSACTION_STATUS_LABELS,
+  TRANSACTION_TYPE_LABELS,
+} from '@/lib/labels'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
 import { ApiError } from '@/lib/api/problem'
-
-import { financeApi, type Transaction } from '@/features/integration/api'
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Pendente',
-  POSTED: 'Efetivada',
-  SOURCE_REMOVED: 'Removida na origem',
-  RECONCILED: 'Reconciliada',
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  DEBIT: 'Despesa',
-  CREDIT: 'Receita',
-  TRANSFER: 'Transferência',
-  REFUND: 'Reembolso',
-  CHARGEBACK: 'Chargeback',
-  ADJUSTMENT: 'Ajuste',
-}
-
-const ORIGIN_LABELS: Record<string, string> = {
-  IMPORTED: 'Importada',
-  MANUAL: 'Manual',
-}
 
 /** Lista operacional de transações, com filtros na URL e detalhe em drawer. */
 export function TransactionsPage() {
@@ -62,10 +45,10 @@ export function TransactionsPage() {
   const [detail, setDetail] = useState<Transaction | null>(null)
   const [correcting, setCorrecting] = useState<Transaction | null>(null)
 
-  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: financeApi.accounts })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
   const categoriesQuery = useQuery({
     queryKey: queryKeys.categories,
-    queryFn: financeApi.categories,
+    queryFn: categoriesApi.categories,
   })
   const amountError = amountRangeError(filters.minAmount, filters.maxAmount)
   const normalizedFilters = useMemo(
@@ -80,7 +63,7 @@ export function TransactionsPage() {
   const transactionsQuery = useInfiniteQuery({
     queryKey: queryKeys.transactionFilters(normalizedFilters),
     queryFn: ({ pageParam }) =>
-      financeApi.transactions({ ...normalizedFilters, cursor: pageParam, limit: 50 }),
+      transactionsApi.transactions({ ...normalizedFilters, cursor: pageParam, limit: 50 }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
     enabled: !amountError,
@@ -217,19 +200,19 @@ export function TransactionsPage() {
             ) : null}
             {filters.status ? (
               <FilterChip
-                label={`Estado: ${STATUS_LABELS[filters.status] ?? filters.status}`}
+                label={`Estado: ${TRANSACTION_STATUS_LABELS[filters.status] ?? filters.status}`}
                 onRemove={() => removeFilter('status')}
               />
             ) : null}
             {filters.type ? (
               <FilterChip
-                label={`Tipo: ${TYPE_LABELS[filters.type] ?? filters.type}`}
+                label={`Tipo: ${TRANSACTION_TYPE_LABELS[filters.type] ?? filters.type}`}
                 onRemove={() => removeFilter('type')}
               />
             ) : null}
             {filters.origin ? (
               <FilterChip
-                label={`Origem: ${ORIGIN_LABELS[filters.origin] ?? filters.origin}`}
+                label={`Origem: ${TRANSACTION_ORIGIN_LABELS[filters.origin] ?? filters.origin}`}
                 onRemove={() => removeFilter('origin')}
               />
             ) : null}
@@ -431,12 +414,12 @@ function TransactionRow({
             <span aria-hidden="true">·</span>
             <span>{accountName}</span>
             <span aria-hidden="true">·</span>
-            <span>{TYPE_LABELS[transaction.type] ?? transaction.type}</span>
+            <span>{TRANSACTION_TYPE_LABELS[transaction.type] ?? transaction.type}</span>
           </span>
         </span>
         <span className="hidden shrink-0 sm:block">
           <Badge variant={transaction.status === 'PENDING' ? 'warning' : 'neutral'}>
-            {STATUS_LABELS[transaction.status] ?? transaction.status}
+            {TRANSACTION_STATUS_LABELS[transaction.status] ?? transaction.status}
           </Badge>
         </span>
         <span

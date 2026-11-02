@@ -1,3 +1,10 @@
+import {
+  accountsApi,
+  reconciliationApi,
+  transactionsApi,
+  type InternalMatch,
+  type Transaction,
+} from '@/lib/api/finance'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Check, GitCompareArrows, X } from 'lucide-react'
 
@@ -14,8 +21,6 @@ import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
 import { ApiError } from '@/lib/api/problem'
 
-import { financeApi, type InternalMatch, type Transaction } from '@/features/integration/api'
-
 function absoluteAmount(value: string): string {
   return value.startsWith('-') ? value.slice(1) : value
 }
@@ -30,21 +35,21 @@ function absoluteAmount(value: string): string {
 export function ReconciliationPage() {
   const queryClient = useQueryClient()
   const matchesQuery = useQuery({
-    queryKey: [...queryKeys.internalMatches, 'PENDING'],
-    queryFn: () => financeApi.internalMatches('PENDING'),
+    queryKey: queryKeys.internalMatches,
+    queryFn: () => reconciliationApi.internalMatches('PENDING'),
   })
   const transactionsQuery = useQuery({
-    queryKey: [...queryKeys.transactions, 'reconciliation'],
-    queryFn: () => financeApi.transactions({ limit: 100 }),
+    queryKey: queryKeys.transactionReconciliation,
+    queryFn: () => transactionsApi.transactions({ limit: 100 }),
   })
-  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: financeApi.accounts })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
 
   const confirm = useMutation({
-    mutationFn: (id: string) => financeApi.confirmMatch(id),
+    mutationFn: (id: string) => reconciliationApi.confirmMatch(id),
     onSuccess: () => invalidateReconciliationViews(queryClient),
   })
   const reject = useMutation({
-    mutationFn: (id: string) => financeApi.rejectMatch(id),
+    mutationFn: (id: string) => reconciliationApi.rejectMatch(id),
     onSuccess: () => invalidateReconciliationViews(queryClient),
   })
 

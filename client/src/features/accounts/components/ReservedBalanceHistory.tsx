@@ -1,21 +1,13 @@
+import { accountsApi } from '@/lib/api/finance'
 import { useQuery } from '@tanstack/react-query'
 
 import { Badge } from '@/components/ui/badge'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table'
-import { formatMoney } from '@/lib/format'
+import { formatMoney, formatMonthKeyShort } from '@/lib/format'
 import { queryKeys } from '@/lib/query-keys'
-import { financeApi } from '@/features/integration/api'
 
 function monthLabel(value: string): string {
-  const [year, month] = value.split('-')
-  if (!year || !month) return value
-  return new Intl.DateTimeFormat('pt-BR', {
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-    .format(new Date(Date.UTC(Number(year), Number(month) - 1, 1)))
-    .replace('.', '')
+  return formatMonthKeyShort(value)
 }
 
 /** Evolução mensal da reserva, derivada dos snapshots patrimoniais. */
@@ -26,7 +18,7 @@ export function ReservedBalanceHistory({
 }) {
   const historyQuery = useQuery({
     queryKey: queryKeys.reservedBalanceHistory(reservedBalanceId),
-    queryFn: () => financeApi.reservedBalanceHistory(reservedBalanceId),
+    queryFn: () => accountsApi.reservedBalanceHistory(reservedBalanceId),
   })
   const points = historyQuery.data?.items ?? []
 

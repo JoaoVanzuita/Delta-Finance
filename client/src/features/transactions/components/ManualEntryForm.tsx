@@ -1,3 +1,10 @@
+import {
+  accountsApi,
+  categoriesApi,
+  transactionsApi,
+  type ManualTransactionInput,
+} from '@/lib/api/finance'
+import { todayIsoDate } from '@/lib/format'
 import { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -11,11 +18,9 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/problem'
-import { formatMoney } from '@/lib/format'
+import { formatMoney, normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
 import { invalidateTransactionViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
-
-import { financeApi, type ManualTransactionInput } from '@/features/integration/api'
 
 const TYPE_OPTIONS = [
   { value: 'CREDIT', label: 'Receita' },
@@ -29,7 +34,7 @@ const TYPE_OPTIONS = [
 type ManualType = (typeof TYPE_OPTIONS)[number]['value']
 
 function today(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+  return todayIsoDate()
 }
 
 interface ManualEntryFormProps {
@@ -68,27 +73,27 @@ export function ManualEntryForm({
   const needsOriginal = type === 'REFUND' || type === 'CHARGEBACK'
   const isAdjustment = type === 'ADJUSTMENT'
 
-  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: financeApi.accounts })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
   const categoriesQuery = useQuery({
     queryKey: queryKeys.categories,
-    queryFn: financeApi.categories,
+    queryFn: categoriesApi.categories,
   })
   const transactionsQuery = useQuery({
-    queryKey: [...queryKeys.transactions, 'refund-originals', accountId],
+    queryKey: queryKeys.transactionRefundOriginals(accountId),
     queryFn: () =>
-      financeApi.transactions({ limit: 100, accountId, type: 'DEBIT', status: 'POSTED' }),
+      transactionsApi.transactions({ limit: 100, accountId, type: 'DEBIT', status: 'POSTED' }),
     enabled: needsOriginal && Boolean(accountId),
   })
 
   const accounts = accountsQuery.data?.items ?? []
   const categories = (categoriesQuery.data?.items ?? []).filter((category) => category.active)
   const originCandidates = transactionsQuery.data?.items ?? []
-  const parsedAmount = Number(amount.replace(',', '.'))
+  const parsedAmount = parseMoneyInput(amount)
   const validAmount = amount.trim() && Number.isFinite(parsedAmount) ? parsedAmount : null
   const amountPreview = amount.trim().startsWith('-') ? amount.trim().slice(1) : amount.trim()
 
   const create = useMutation({
-    mutationFn: (input: ManualTransactionInput) => financeApi.createTransaction(input),
+    mutationFn: (input: ManualTransactionInput) => transactionsApi.createTransaction(input),
     onSuccess: async () => {
       setMessage('Lançamento registrado.')
       setError(null)
@@ -140,7 +145,7 @@ export function ManualEntryForm({
       accountId,
       type,
       postedOn,
-      amount: amount.replace(',', '.'),
+      amount: normalizeMoneyInput(amount),
       description: description.trim(),
       categoryId: categoryId || undefined,
       transferAccountId: isTransfer ? transferAccountId : undefined,

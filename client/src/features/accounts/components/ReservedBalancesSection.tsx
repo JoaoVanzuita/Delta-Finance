@@ -3,13 +3,13 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { DisplayNameEditor } from '@/components/DisplayNameEditor'
-import { formatDate, formatMoney } from '@/lib/format'
+import { formatDate, formatMoney, formatRatePercent } from '@/lib/format'
 import type {
   Account,
   ReservedBalance,
   ReservedBalanceAmount,
   ReservedBalanceTreatment,
-} from '@/features/integration/api'
+} from '@/lib/api/finance'
 
 import { ReservedBalanceHistory } from './ReservedBalanceHistory'
 
@@ -20,8 +20,7 @@ const TREATMENT_LABELS: Record<ReservedBalanceTreatment, string> = {
 }
 
 const TREATMENT_HINTS: Record<ReservedBalanceTreatment, string> = {
-  UNKNOWN:
-    'Usa o padrão da conexão; se não houver, o valor não entra no patrimônio.',
+  UNKNOWN: 'Usa o padrão da conexão; se não houver, o valor não entra no patrimônio.',
   INCLUDED_IN_BALANCE:
     'O saldo da conta já contém a reserva; ela aparece apenas como detalhamento.',
   SEPARATE_ASSET:
@@ -35,10 +34,8 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 function formatFraction(value: string | null | undefined): string | null {
-  if (!value) return null
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) return null
-  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(numeric * 100)}%`
+  if (!value || !Number.isFinite(Number(value))) return null
+  return formatRatePercent(value)
 }
 
 function formatRemuneration(amount: ReservedBalanceAmount): string {
@@ -94,8 +91,8 @@ export function ReservedBalancesSection({
               Saldos reservados
             </h2>
             <p className="mt-1 text-caption text-ink-muted">
-              Valores reservados pelo banco ou pela carteira, como cofrinhos, caixinhas e
-              bloqueios. Não são contas nem investimentos.
+              Valores reservados pelo banco ou pela carteira, como cofrinhos, caixinhas e bloqueios.
+              Não são contas nem investimentos.
             </p>
           </div>
           <div className="text-right">
@@ -107,10 +104,7 @@ export function ReservedBalancesSection({
         </div>
 
         <div className="rounded-card border border-line bg-surface-muted p-3">
-          <label
-            htmlFor="reserved-balance-treatment"
-            className="text-body-sm font-medium text-ink"
-          >
+          <label htmlFor="reserved-balance-treatment" className="text-body-sm font-medium text-ink">
             Tratamento no patrimônio
           </label>
           <Select

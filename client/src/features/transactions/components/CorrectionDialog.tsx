@@ -1,3 +1,4 @@
+import { categoriesApi, transactionsApi, type Transaction } from '@/lib/api/finance'
 import { useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,10 +11,9 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/problem'
+import { normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
 import { invalidateTransactionViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
-
-import { financeApi, type Transaction } from '@/features/integration/api'
 
 interface CorrectionDialogProps {
   readonly transaction: Transaction
@@ -25,7 +25,7 @@ export function CorrectionDialog({ transaction, onClose }: CorrectionDialogProps
   const queryClient = useQueryClient()
   const categoriesQuery = useQuery({
     queryKey: queryKeys.categories,
-    queryFn: financeApi.categories,
+    queryFn: categoriesApi.categories,
   })
   const [description, setDescription] = useState(transaction.description ?? '')
   const [postedOn, setPostedOn] = useState(transaction.postedOn)
@@ -39,9 +39,9 @@ export function CorrectionDialog({ transaction, onClose }: CorrectionDialogProps
   const descriptionRef = useRef<HTMLInputElement>(null)
   const refund = transaction.type === 'REFUND' || transaction.type === 'CHARGEBACK'
   const originalsQuery = useQuery({
-    queryKey: [...queryKeys.transactions, 'refund-originals', transaction.accountId],
+    queryKey: queryKeys.transactionRefundOriginals(transaction.accountId),
     queryFn: () =>
-      financeApi.transactions({
+      transactionsApi.transactions({
         accountId: transaction.accountId,
         type: 'DEBIT',
         limit: 100,
@@ -51,10 +51,10 @@ export function CorrectionDialog({ transaction, onClose }: CorrectionDialogProps
 
   const correct = useMutation({
     mutationFn: () =>
-      financeApi.correctTransaction(transaction.id, {
+      transactionsApi.correctTransaction(transaction.id, {
         description: description.trim(),
         postedOn,
-        amount: amount.replace(',', '.'),
+        amount: normalizeMoneyInput(amount),
         categoryId: categoryId || undefined,
         notes,
         relatedTransactionId: relatedTransactionId || undefined,
@@ -95,7 +95,7 @@ export function CorrectionDialog({ transaction, onClose }: CorrectionDialogProps
             setError('Informe a descrição.')
             return
           }
-          const parsed = Number(amount.replace(',', '.'))
+          const parsed = parseMoneyInput(amount)
           if (Number.isNaN(parsed) || parsed === 0) {
             setError('Informe um valor diferente de zero.')
             return

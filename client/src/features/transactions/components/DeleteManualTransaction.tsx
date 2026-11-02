@@ -1,11 +1,10 @@
+import { transactionsApi, type Transaction } from '@/lib/api/finance'
 import { useState } from 'react'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { ApiError } from '@/lib/api/problem'
 import { invalidateTransactionViews } from '@/lib/invalidation'
-
-import { financeApi, type Transaction } from '@/features/integration/api'
 
 interface DeleteManualTransactionProps {
   readonly transaction: Transaction
@@ -25,7 +24,7 @@ export function DeleteManualTransaction({ transaction }: DeleteManualTransaction
   const [error, setError] = useState<string | null>(null)
 
   const deletion = useMutation({
-    mutationFn: () => financeApi.deleteTransaction(transaction.id),
+    mutationFn: () => transactionsApi.deleteTransaction(transaction.id),
     onSuccess: async () => {
       setConfirming(false)
       setError(null)

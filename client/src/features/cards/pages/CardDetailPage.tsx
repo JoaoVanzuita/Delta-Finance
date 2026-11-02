@@ -1,3 +1,4 @@
+import { accountsApi, cardsApi, transactionsApi, type Invoice } from '@/lib/api/finance'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CreditCard, ReceiptText, Settings2, Wallet } from 'lucide-react'
 import { Link, useParams, useSearchParams } from 'react-router'
@@ -12,27 +13,12 @@ import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs'
 import { DisplayNameEditor } from '@/components/DisplayNameEditor'
 import { formatDate, formatMoney } from '@/lib/format'
 import { invalidateCardViews } from '@/lib/invalidation'
+import { CARD_STATUS_LABELS, INVOICE_STATUS_LABELS } from '@/lib/labels'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
 import { ApiError } from '@/lib/api/problem'
 
-import { financeApi, type Invoice } from '@/features/integration/api'
 import { CardCycleSettings } from '@/features/invoices/components/CardCycleSettings'
-
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: 'Ativo',
-  INACTIVE: 'Inativo',
-  UNAVAILABLE: 'Indisponível',
-  CLOSED: 'Encerrado',
-}
-
-const INVOICE_STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Aberta',
-  CLOSED: 'Fechada',
-  PARTIALLY_PAID: 'Parcialmente paga',
-  PAID: 'Paga',
-  OVERDUE: 'Vencida',
-}
 
 type CardTab = 'summary' | 'invoices' | 'transactions' | 'settings'
 
@@ -58,21 +44,21 @@ export function CardDetailPage() {
 
   const accountQuery = useQuery({
     queryKey: queryKeys.account(accountId),
-    queryFn: () => financeApi.account(accountId),
+    queryFn: () => accountsApi.account(accountId),
     enabled: Boolean(accountId),
   })
   const overviewQuery = useQuery({
     queryKey: queryKeys.cardOverview,
-    queryFn: financeApi.cardOverview,
+    queryFn: cardsApi.cardOverview,
   })
   const invoicesQuery = useQuery({
     queryKey: queryKeys.invoicesByCard(accountId),
-    queryFn: () => financeApi.invoices(accountId),
+    queryFn: () => cardsApi.invoices(accountId),
     enabled: Boolean(accountId),
   })
   const transactionsQuery = useQuery({
     queryKey: queryKeys.transactionFilters({ accountId, scope: 'card' }),
-    queryFn: () => financeApi.transactions({ limit: 100, accountId }),
+    queryFn: () => transactionsApi.transactions({ limit: 100, accountId }),
     enabled: Boolean(accountId),
   })
 
@@ -93,7 +79,7 @@ export function CardDetailPage() {
 
   async function renameCard(displayName: string) {
     if (!account) return
-    const updated = await financeApi.renameAccount(account.id, displayName)
+    const updated = await accountsApi.renameAccount(account.id, displayName)
     queryClient.setQueryData(queryKeys.account(account.id), updated)
     await invalidateCardViews(queryClient)
     return updated
@@ -101,7 +87,7 @@ export function CardDetailPage() {
 
   async function resetCardName() {
     if (!account) return
-    const updated = await financeApi.resetAccountName(account.id)
+    const updated = await accountsApi.resetAccountName(account.id)
     queryClient.setQueryData(queryKeys.account(account.id), updated)
     await invalidateCardViews(queryClient)
     return updated
@@ -162,7 +148,7 @@ export function CardDetailPage() {
         meta={
           <>
             <Badge variant={account.status === 'ACTIVE' ? 'income' : 'warning'}>
-              {STATUS_LABELS[account.status ?? card.status] ?? '—'}
+              {CARD_STATUS_LABELS[account.status ?? card.status] ?? '—'}
             </Badge>
             <Badge variant="warning">{currency}</Badge>
             {account.nameCustomized && account.providerName ? (

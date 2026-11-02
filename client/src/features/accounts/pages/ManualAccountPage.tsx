@@ -1,3 +1,10 @@
+import {
+  accountsApi,
+  type Account,
+  type AccountUpdateInput,
+  type ManualAccountInput,
+} from '@/lib/api/finance'
+import { todayIsoDate } from '@/lib/format'
 import { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -12,15 +19,9 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ApiError } from '@/lib/api/problem'
+import { normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
 import { invalidateAccountViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
-
-import {
-  financeApi,
-  type Account,
-  type AccountUpdateInput,
-  type ManualAccountInput,
-} from '@/features/integration/api'
 
 const TYPES = [
   { value: 'CASH', label: 'Dinheiro' },
@@ -31,7 +32,7 @@ const TYPES = [
 type ManualType = (typeof TYPES)[number]['value']
 
 function todayReference(): string {
-  return `${new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())}T12:00:00Z`
+  return `${todayIsoDate()}T12:00:00Z`
 }
 
 /**
@@ -45,7 +46,7 @@ export function ManualAccountPage() {
   const editing = Boolean(id)
   const accountQuery = useQuery({
     queryKey: queryKeys.account(id ?? ''),
-    queryFn: () => financeApi.account(id ?? ''),
+    queryFn: () => accountsApi.account(id ?? ''),
     enabled: editing,
   })
 
@@ -109,7 +110,7 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
   const [message, setMessage] = useState<string | null>(null)
 
   const create = useMutation({
-    mutationFn: (input: ManualAccountInput) => financeApi.createAccount(input),
+    mutationFn: (input: ManualAccountInput) => accountsApi.createAccount(input),
     onSuccess: async (created) => {
       await invalidateAccountViews(queryClient)
       navigate(`/accounts/${created.id}`)
@@ -120,7 +121,7 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
   })
 
   const update = useMutation({
-    mutationFn: (input: AccountUpdateInput) => financeApi.updateAccount(account?.id ?? '', input),
+    mutationFn: (input: AccountUpdateInput) => accountsApi.updateAccount(account?.id ?? '', input),
     onSuccess: async (updated) => {
       setMessage('Conta atualizada.')
       setError(null)
@@ -140,8 +141,8 @@ function ManualAccountForm({ account }: { readonly account?: Account }) {
       setError('Informe o apelido da conta.')
       return
     }
-    const normalizedBalance = referenceBalance.replace(',', '.')
-    const parsed = Number(normalizedBalance)
+    const normalizedBalance = normalizeMoneyInput(referenceBalance)
+    const parsed = parseMoneyInput(referenceBalance)
     if (Number.isNaN(parsed)) {
       setError('Saldo de referência inválido.')
       return

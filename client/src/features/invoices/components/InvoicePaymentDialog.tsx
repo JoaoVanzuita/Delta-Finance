@@ -1,3 +1,5 @@
+import { accountsApi, cardsApi, type InvoicePaymentInput } from '@/lib/api/finance'
+import { todayIsoDate } from '@/lib/format'
 import { useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,10 +12,9 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { ApiError } from '@/lib/api/problem'
 
-import { formatMoney } from '@/lib/format'
+import { formatMoney, normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
 import { invalidateInvoiceViews } from '@/lib/invalidation'
-
-import { financeApi, type InvoicePaymentInput } from '@/features/integration/api'
+import { queryKeys } from '@/lib/query-keys'
 
 interface InvoicePaymentDialogProps {
   readonly invoiceId: string
@@ -30,13 +31,13 @@ export function InvoicePaymentDialog({
   onClose,
 }: InvoicePaymentDialogProps) {
   const queryClient = useQueryClient()
-  const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: financeApi.accounts })
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
   const [paymentAccountId, setPaymentAccountId] = useState('')
   const [amount, setAmount] = useState(outstanding)
   const [paidOn, setPaidOn] = useState(today())
   const [error, setError] = useState<string | null>(null)
   const accountRef = useRef<HTMLSelectElement>(null)
-  const parsedAmount = Number(amount.replace(',', '.'))
+  const parsedAmount = parseMoneyInput(amount)
   const exceedsOutstanding = Number.isFinite(parsedAmount) && parsedAmount > Number(outstanding)
   const paymentAccounts = (accountsQuery.data?.items ?? []).filter(
     (account) =>
@@ -44,7 +45,7 @@ export function InvoicePaymentDialog({
   )
 
   const save = useMutation({
-    mutationFn: (input: InvoicePaymentInput) => financeApi.addInvoicePayment(invoiceId, input),
+    mutationFn: (input: InvoicePaymentInput) => cardsApi.addInvoicePayment(invoiceId, input),
     onSuccess: async () => {
       await invalidateInvoiceViews(queryClient, invoiceId)
       onClose()
@@ -62,14 +63,14 @@ export function InvoicePaymentDialog({
       setError('Selecione a conta de pagamento.')
       return
     }
-    const parsed = Number(amount.replace(',', '.'))
+    const parsed = parseMoneyInput(amount)
     if (!amount.trim() || Number.isNaN(parsed) || parsed <= 0) {
       setError('Informe um valor positivo.')
       return
     }
     save.mutate({
       paymentAccountId,
-      amount: amount.replace(',', '.'),
+      amount: normalizeMoneyInput(amount),
       paidOn,
     })
   }
@@ -173,5 +174,5 @@ export function InvoicePaymentDialog({
 }
 
 function today(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+  return todayIsoDate()
 }

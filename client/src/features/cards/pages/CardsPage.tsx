@@ -1,3 +1,4 @@
+import { cardsApi, type CardOverviewItem, type Invoice } from '@/lib/api/finance'
 import { useQuery } from '@tanstack/react-query'
 import { CreditCard, Plus, Wallet } from 'lucide-react'
 import { Link } from 'react-router'
@@ -10,26 +11,10 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, formatMoney, formatPercent } from '@/lib/format'
+import { CARD_STATUS_LABELS, INVOICE_STATUS_LABELS } from '@/lib/labels'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
 import { ApiError } from '@/lib/api/problem'
-
-import { financeApi, type CardOverviewItem, type Invoice } from '@/features/integration/api'
-
-const ACCOUNT_STATUS_LABELS: Record<string, string> = {
-  ACTIVE: 'Ativa',
-  INACTIVE: 'Inativa',
-  UNAVAILABLE: 'Indisponível',
-  CLOSED: 'Encerrada',
-}
-
-const INVOICE_STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Aberta',
-  CLOSED: 'Fechada',
-  PARTIALLY_PAID: 'Parcialmente paga',
-  PAID: 'Paga',
-  OVERDUE: 'Vencida',
-}
 
 function invoiceIsCurrent(invoice: Invoice | null | undefined): invoice is Invoice {
   return invoice?.status === 'OPEN'
@@ -45,7 +30,7 @@ function invoiceIsCurrent(invoice: Invoice | null | undefined): invoice is Invoi
 export function CardsPage() {
   const overviewQuery = useQuery({
     queryKey: queryKeys.cardOverview,
-    queryFn: financeApi.cardOverview,
+    queryFn: cardsApi.cardOverview,
   })
 
   const overview = overviewQuery.data
@@ -206,7 +191,7 @@ function CardTile({ card }: { readonly card: CardOverviewItem }) {
           ) : null}
         </div>
         <Badge variant={card.status === 'ACTIVE' ? 'neutral' : 'warning'}>
-          {ACCOUNT_STATUS_LABELS[card.status] ?? card.status}
+          {CARD_STATUS_LABELS[card.status] ?? card.status}
         </Badge>
       </div>
 
