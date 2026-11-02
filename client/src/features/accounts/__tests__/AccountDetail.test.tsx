@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,6 +26,30 @@ const ACCOUNT: Account = {
 }
 
 let currentAccount: Account = { ...ACCOUNT }
+let currentReserved = {
+  id: 'rb-1',
+  accountId: 'acc-1',
+  name: 'Cofrinho Vai Brasil',
+  providerName: 'Cofrinho Vai Brasil',
+  nameCustomized: false,
+  amount: '9000.00',
+  currency: 'BRL',
+  referenceDate: '2026-11-01',
+  stale: false,
+  amounts: [
+    {
+      amount: '9000.00',
+      currency: 'BRL',
+      indexer: 'CDI',
+      rateType: 'EXPONENCIAL',
+      calculation: 'DIAS_UTEIS',
+      ratePeriodicity: 'ANUAL',
+      preFixedRate: null,
+      postFixedIndexerPercentage: '1.149992',
+      indexerAdditionalInfo: null,
+    },
+  ],
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -36,6 +60,36 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function stubApi() {
   const mock = vi.fn((url: string, init: RequestInit = {}) => {
+    if (url.includes('/accounts/acc-1/reserved-balances')) {
+      return jsonResponse({ items: currentReserved ? [currentReserved] : [] })
+    }
+    if (url.includes('/wealth/reserved-balances/rb-1/history')) {
+      return jsonResponse({ items: [] })
+    }
+    if (url.includes('/reserved-balances/rb-1/display-name') && init.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as { displayName: string }
+      currentReserved = {
+        ...currentReserved,
+        name: body.displayName,
+        nameCustomized: true,
+      }
+      return jsonResponse(currentReserved)
+    }
+    if (url.includes('/reserved-balances/rb-1/display-name') && init.method === 'DELETE') {
+      currentReserved = {
+        ...currentReserved,
+        name: currentReserved.providerName,
+        nameCustomized: false,
+      }
+      return jsonResponse(currentReserved)
+    }
+    if (url.includes('/accounts/acc-1/reserved-balance-treatment') && init.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as {
+        treatment: NonNullable<Account['reservedBalanceTreatment']>
+      }
+      currentAccount = { ...currentAccount, reservedBalanceTreatment: body.treatment }
+      return jsonResponse(currentAccount)
+    }
     if (url.includes('/accounts/acc-1/investment') && init.method === 'PUT') {
       const body = JSON.parse(String(init.body)) as { investmentAccount: boolean }
       currentAccount = { ...currentAccount, investmentAccount: body.investmentAccount }
@@ -92,6 +146,30 @@ function renderPage() {
 describe('detalhe da conta com nome personalizado', () => {
   beforeEach(() => {
     currentAccount = { ...ACCOUNT }
+    currentReserved = {
+      id: 'rb-1',
+      accountId: 'acc-1',
+      name: 'Cofrinho Vai Brasil',
+      providerName: 'Cofrinho Vai Brasil',
+      nameCustomized: false,
+      amount: '9000.00',
+      currency: 'BRL',
+      referenceDate: '2026-11-01',
+      stale: false,
+      amounts: [
+        {
+          amount: '9000.00',
+          currency: 'BRL',
+          indexer: 'CDI',
+          rateType: 'EXPONENCIAL',
+          calculation: 'DIAS_UTEIS',
+          ratePeriodicity: 'ANUAL',
+          preFixedRate: null,
+          postFixedIndexerPercentage: '1.149992',
+          indexerAdditionalInfo: null,
+        },
+      ],
+    }
     document.cookie = 'XSRF-TOKEN=token-de-teste; path=/'
   })
 
@@ -159,6 +237,55 @@ describe('detalhe da conta com nome personalizado', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ investmentAccount: true }),
+        }),
+      )
+    })
+  })
+
+  it('mostra, renomeia e trata o saldo reservado', async () => {
+    currentAccount = {
+      ...ACCOUNT,
+      hasReservedBalance: true,
+      reservedBalanceTotal: '9000.00',
+      reservedBalanceTreatment: 'SEPARATE_ASSET',
+      reservedBalanceTreatmentSource: 'ACCOUNT',
+    }
+    const fetchMock = stubApi()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: 'Conta da Casa' })
+    const section = await screen.findByRole('region', { name: 'Saldos reservados' })
+    expect(within(section).getByText('Cofrinho Vai Brasil')).toBeInTheDocument()
+    expect(within(section).getAllByText(/R\$\s*9\.000,00/).length).toBeGreaterThan(0)
+    expect(within(section).getByText(/Remuneração: CDI · 114,9992%/)).toBeInTheDocument()
+    expect(screen.getByText(/R\$\s*9\.100,00/)).toBeInTheDocument()
+
+    await user.click(within(section).getByRole('button', { name: 'Renomear' }))
+    const input = screen.getByLabelText('Nome de exibição')
+    await user.clear(input)
+    await user.type(input, 'Reserva de emergência')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+
+    expect(await screen.findByText('Reserva de emergência')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/reserved-balances/rb-1/display-name'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ displayName: 'Reserva de emergência' }),
+        }),
+      )
+    })
+
+    const treatment = within(section).getByLabelText('Tratamento no patrimônio')
+    await user.selectOptions(treatment, 'UNKNOWN')
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/accounts/acc-1/reserved-balance-treatment'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ treatment: 'UNKNOWN' }),
         }),
       )
     })

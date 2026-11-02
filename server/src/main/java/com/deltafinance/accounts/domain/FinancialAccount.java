@@ -69,6 +69,16 @@ public class FinancialAccount extends BaseEntity {
   @Column(name = "investment_account", nullable = false)
   private boolean investmentAccount;
 
+  @Column(name = "has_reserved_balance", nullable = false)
+  private boolean hasReservedBalance;
+
+  @Column(name = "reserved_balance_checked_at")
+  private Instant reservedBalanceCheckedAt;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "reserved_balance_treatment", nullable = false, length = 32)
+  private ReservedBalanceTreatment reservedBalanceTreatment = ReservedBalanceTreatment.UNKNOWN;
+
   protected FinancialAccount() {
     // Hibernate
   }
@@ -182,6 +192,32 @@ public class FinancialAccount extends BaseEntity {
 
   public void updateInvestmentAccount(boolean investmentAccount) {
     this.investmentAccount = investmentAccount;
+  }
+
+  public boolean hasReservedBalance() {
+    return hasReservedBalance;
+  }
+
+  public Instant getReservedBalanceCheckedAt() {
+    return reservedBalanceCheckedAt;
+  }
+
+  public ReservedBalanceTreatment getReservedBalanceTreatment() {
+    return reservedBalanceTreatment;
+  }
+
+  /** Espelha a sinalização do provedor; não implica que o detalhe tenha sido entregue. */
+  public void applyReservedBalanceMetadata(boolean hasReservedBalance, Instant checkedAt) {
+    this.hasReservedBalance = hasReservedBalance;
+    this.reservedBalanceCheckedAt = checkedAt;
+  }
+
+  public void applyReservedBalanceCheckedAt(Instant checkedAt) {
+    this.reservedBalanceCheckedAt = checkedAt;
+  }
+
+  public void updateReservedBalanceTreatment(ReservedBalanceTreatment treatment) {
+    this.reservedBalanceTreatment = Objects.requireNonNull(treatment, "treatment");
   }
 
   public void applyImported(

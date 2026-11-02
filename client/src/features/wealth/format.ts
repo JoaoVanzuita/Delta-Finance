@@ -18,6 +18,7 @@ export const COMPLETENESS_LABELS: Record<string, string> = {
 
 export const SOURCE_LABELS: Record<string, string> = {
   ACCOUNT: 'Conta',
+  RESERVED_BALANCE: 'Saldo reservado',
   CARD: 'Cartão',
   INVESTMENT: 'Investimento',
   MANUAL_ASSET: 'Ativo manual',

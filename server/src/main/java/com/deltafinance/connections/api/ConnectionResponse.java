@@ -15,7 +15,8 @@ public record ConnectionResponse(
     Instant consentExpiresAt,
     Instant lastSyncAt,
     String lastErrorCode,
-    long accountCount) {
+    long accountCount,
+    String reservedBalanceTreatment) {
 
   public static ConnectionResponse from(ConnectionView view) {
     return new ConnectionResponse(
@@ -28,6 +29,7 @@ public record ConnectionResponse(
         view.consentExpiresAt(),
         view.lastSyncAt(),
         view.lastErrorCode(),
-        view.accountCount());
+        view.accountCount(),
+        view.reservedBalanceTreatment());
   }
 }

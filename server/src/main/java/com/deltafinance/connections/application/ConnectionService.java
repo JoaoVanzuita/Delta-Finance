@@ -2,6 +2,7 @@ package com.deltafinance.connections.application;
 
 import com.deltafinance.accounts.application.AccountImportService;
 import com.deltafinance.accounts.application.AccountQueryService;
+import com.deltafinance.accounts.domain.ReservedBalanceTreatment;
 import com.deltafinance.connections.domain.ConnectionStatus;
 import com.deltafinance.connections.domain.PluggyConnection;
 import com.deltafinance.connections.domain.PluggyConnectionRepository;
@@ -33,6 +34,7 @@ import com.deltafinance.transactions.application.ImportStats;
 import com.deltafinance.transactions.application.TransactionImportService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -268,6 +270,33 @@ public class ConnectionService {
     return toView(connection);
   }
 
+  public ConnectionView updateReservedBalanceTreatment(
+      UUID userId, UUID connectionId, String treatmentValue) {
+    PluggyConnection connection = requireConnection(userId, connectionId);
+    ReservedBalanceTreatment treatment = parseReservedBalanceTreatment(treatmentValue);
+    connection.updateReservedBalanceTreatment(treatment);
+    connectionRepository.save(connection);
+    auditService.record(
+        userId,
+        AuditEventType.CONNECTION_RESERVED_BALANCE_TREATMENT_UPDATED,
+        CONNECTION_TABLE,
+        connection.getId(),
+        java.util.Map.of("treatment", treatment.name()));
+    return toView(connection);
+  }
+
+  private static ReservedBalanceTreatment parseReservedBalanceTreatment(String value) {
+    if (value == null || value.isBlank()) {
+      throw new ValidationException("treatment", "Informe o tratamento do saldo reservado.");
+    }
+    try {
+      return ReservedBalanceTreatment.valueOf(value.strip().toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException exception) {
+      throw new ValidationException(
+          "treatment", "Tratamento inválido. Use UNKNOWN, INCLUDED_IN_BALANCE ou SEPARATE_ASSET.");
+    }
+  }
+
   private PluggyConnection requireConnection(UUID userId, UUID connectionId) {
     return connectionRepository
         .findByIdAndUserId(connectionId, userId)
@@ -389,7 +418,8 @@ public class ConnectionService {
         connection.getConsentExpiresAt(),
         connection.getLastSyncAt(),
         connection.getLastErrorCode(),
-        accountQueryService.countByConnection(connection.getId()));
+        accountQueryService.countByConnection(connection.getId()),
+        connection.getReservedBalanceTreatment().name());
   }
 
   private static String maskItemId(String itemId) {

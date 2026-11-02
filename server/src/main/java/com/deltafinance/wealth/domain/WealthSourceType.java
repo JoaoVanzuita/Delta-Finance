@@ -3,6 +3,7 @@ package com.deltafinance.wealth.domain;
 /** Origem de um item na composição patrimonial. */
 public enum WealthSourceType {
   ACCOUNT,
+  RESERVED_BALANCE,
   CARD,
   INVESTMENT,
   MANUAL_ASSET,

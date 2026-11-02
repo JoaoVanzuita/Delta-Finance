@@ -8,6 +8,9 @@
 export const queryKeys = {
   accounts: ['accounts'] as const,
   account: (id: string) => ['account', id] as const,
+  accountReservedBalances: (id: string) => ['account', id, 'reserved-balances'] as const,
+  reservedBalanceHistory: (id: string) =>
+    ['wealth', 'reserved-balance', id, 'history'] as const,
   accountPrefix: ['account'] as const,
 
   transactions: ['transactions'] as const,

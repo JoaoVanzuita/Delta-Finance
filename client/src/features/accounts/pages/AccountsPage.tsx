@@ -251,6 +251,7 @@ function AccountCard({ account, muted = false }: { account: Account; muted?: boo
           <Badge variant={inactive ? 'warning' : 'income'}>
             {STATUS_LABELS[account.status ?? ''] ?? '—'}
           </Badge>
+          {account.hasReservedBalance ? <Badge variant="info">Reserva</Badge> : null}
           {foreign ? <Badge variant="warning">Moeda {account.currency}</Badge> : null}
         </div>
       </div>
@@ -260,6 +261,11 @@ function AccountCard({ account, muted = false }: { account: Account; muted?: boo
         <p className="numeric mt-1 text-metric-md font-semibold text-ink">
           {formatMoney(account.currentBalance, account.currency)}
         </p>
+        {account.hasReservedBalance ? (
+          <p className="mt-1 text-caption text-ink-muted">
+            Reservado: {formatMoney(account.reservedBalanceTotal, account.currency)}
+          </p>
+        ) : null}
         {account.origin === 'MANUAL' && account.balanceReferenceAt ? (
           <p className="mt-1 text-caption text-ink-muted">
             Referência em {formatDate(account.balanceReferenceAt)}

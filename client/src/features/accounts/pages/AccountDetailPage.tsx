@@ -12,14 +12,16 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs'
 import { DisplayNameEditor } from '@/components/DisplayNameEditor'
-import { formatDate, formatDateTime, formatMoney } from '@/lib/format'
+import { formatDate, formatDateTime, formatMoney, addDecimals } from '@/lib/format'
 import { invalidateAccountViews } from '@/lib/invalidation'
 import { queryKeys } from '@/lib/query-keys'
 import { cn } from '@/lib/cn'
 import { ApiError } from '@/lib/api/problem'
 
-import { financeApi } from '@/features/integration/api'
+import { financeApi, type ReservedBalanceTreatment } from '@/features/integration/api'
 import { connectionStatusLabels } from '@/features/integration/syncLabels'
+
+import { ReservedBalancesSection } from '../components/ReservedBalancesSection'
 
 const TYPE_LABELS: Record<string, string> = {
   BANK: 'Conta bancária',
@@ -97,6 +99,38 @@ export function AccountDetailPage() {
       queryClient.setQueryData(queryKeys.account(accountId), updated)
       await invalidateAccountViews(queryClient)
       await queryClient.invalidateQueries({ queryKey: queryKeys.investments })
+    },
+  })
+
+  const reservedBalancesQuery = useQuery({
+    queryKey: queryKeys.accountReservedBalances(accountId),
+    queryFn: () => financeApi.reservedBalances(accountId),
+    enabled: Boolean(accountId) && Boolean(account?.hasReservedBalance),
+  })
+
+  const renameReservedBalance = useMutation({
+    mutationFn: ({ id, displayName }: { id: string; displayName: string }) =>
+      financeApi.renameReservedBalance(id, displayName),
+    onSuccess: async () => {
+      await reservedBalancesQuery.refetch()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.wealth })
+    },
+  })
+
+  const resetReservedBalanceName = useMutation({
+    mutationFn: (id: string) => financeApi.resetReservedBalanceName(id),
+    onSuccess: async () => {
+      await reservedBalancesQuery.refetch()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.wealth })
+    },
+  })
+
+  const reservedBalanceTreatment = useMutation({
+    mutationFn: (treatment: ReservedBalanceTreatment) =>
+      financeApi.updateReservedBalanceTreatment(accountId, treatment),
+    onSuccess: async (updated) => {
+      queryClient.setQueryData(queryKeys.account(accountId), updated)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.wealth })
     },
   })
 
@@ -190,7 +224,41 @@ export function AccountDetailPage() {
                     : 'Data de referência não informada.'
                   : 'Valor informado pela instituição na última sincronização.'}
               </p>
+              {account.hasReservedBalance &&
+              account.reservedBalanceTreatment === 'SEPARATE_ASSET' ? (
+                <p className="mt-1 text-caption text-ink-muted">
+                  Total com reservas:{' '}
+                  {formatMoney(
+                    addDecimals([
+                      account.currentBalance ?? '0.00',
+                      account.reservedBalanceTotal ?? '0.00',
+                    ]),
+                    account.currency,
+                  )}
+                </p>
+              ) : null}
             </Card>
+
+            {account.hasReservedBalance ? (
+              <ReservedBalancesSection
+                account={account}
+                items={reservedBalancesQuery.data?.items ?? []}
+                loading={reservedBalancesQuery.isLoading}
+                error={reservedBalancesQuery.isError}
+                onRename={(reservedBalanceId, displayName) =>
+                  renameReservedBalance.mutateAsync({
+                    id: reservedBalanceId,
+                    displayName,
+                  })
+                }
+                onReset={(reservedBalanceId) =>
+                  resetReservedBalanceName.mutateAsync(reservedBalanceId)
+                }
+                onTreatmentChange={(treatment) =>
+                  reservedBalanceTreatment.mutateAsync(treatment)
+                }
+              />
+            ) : null}
 
             <Card className="p-5">
               <h2 className="text-section-title font-semibold text-ink">Dados da conta</h2>

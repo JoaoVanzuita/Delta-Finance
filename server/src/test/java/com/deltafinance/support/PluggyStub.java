@@ -33,7 +33,8 @@ public final class PluggyStub {
       String name,
       String balance,
       Map<String, Object> creditData,
-      String currency) {
+      String currency,
+      Map<String, Object> bankData) {
 
     public AccountFixture(
         String externalId,
@@ -42,7 +43,18 @@ public final class PluggyStub {
         String name,
         String balance,
         Map<String, Object> creditData) {
-      this(externalId, type, subtype, name, balance, creditData, "BRL");
+      this(externalId, type, subtype, name, balance, creditData, "BRL", null);
+    }
+
+    public AccountFixture(
+        String externalId,
+        String type,
+        String subtype,
+        String name,
+        String balance,
+        Map<String, Object> creditData,
+        String currency) {
+      this(externalId, type, subtype, name, balance, creditData, currency, null);
     }
   }
 
@@ -69,6 +81,8 @@ public final class PluggyStub {
   private final Map<String, String> clients = new ConcurrentHashMap<>();
   private final Map<String, ItemFixture> items = new ConcurrentHashMap<>();
   private final Map<String, List<AccountFixture>> accountsByItem = new ConcurrentHashMap<>();
+  private final Map<String, List<Map<String, Object>>> reservedBalancesByAccount =
+      new ConcurrentHashMap<>();
   private final Map<String, List<TransactionFixture>> transactionsByAccount =
       new ConcurrentHashMap<>();
   private final Map<String, List<BillFixture>> billsByAccount = new ConcurrentHashMap<>();
@@ -102,7 +116,18 @@ public final class PluggyStub {
   private final JsonMapper jsonMapper = JsonMapper.shared();
 
   private record ItemFixture(
-      String id, String institution, String status, Instant consentExpiresAt, String errorCode) {}
+      String id,
+      String institution,
+      String status,
+      Instant consentExpiresAt,
+      String errorCode,
+      boolean openFinance) {
+
+    ItemFixture(
+        String id, String institution, String status, Instant consentExpiresAt, String errorCode) {
+      this(id, institution, status, consentExpiresAt, errorCode, false);
+    }
+  }
 
   public PluggyStub() {
     try {
@@ -130,6 +155,7 @@ public final class PluggyStub {
     clients.clear();
     items.clear();
     accountsByItem.clear();
+    reservedBalancesByAccount.clear();
     transactionsByAccount.clear();
     billsByAccount.clear();
     billPaymentsByBill.clear();
@@ -196,7 +222,21 @@ public final class PluggyStub {
                 current.institution(),
                 status,
                 current.consentExpiresAt(),
-                current.errorCode()));
+                current.errorCode(),
+                current.openFinance()));
+  }
+
+  public void setItemOpenFinance(String itemId, boolean openFinance) {
+    updateItem(
+        itemId,
+        current ->
+            new ItemFixture(
+                current.id(),
+                current.institution(),
+                current.status(),
+                current.consentExpiresAt(),
+                current.errorCode(),
+                openFinance));
   }
 
   public void setItemConsentExpiresAt(String itemId, Instant consentExpiresAt) {
@@ -208,7 +248,8 @@ public final class PluggyStub {
                 current.institution(),
                 current.status(),
                 consentExpiresAt,
-                current.errorCode()));
+                current.errorCode(),
+                current.openFinance()));
   }
 
   public void setItemErrorCode(String itemId, String errorCode) {
@@ -220,11 +261,20 @@ public final class PluggyStub {
                 current.institution(),
                 current.status(),
                 current.consentExpiresAt(),
-                errorCode));
+                errorCode,
+                current.openFinance()));
   }
 
   public void addAccount(String itemId, AccountFixture account) {
     accountsByItem.computeIfAbsent(itemId, ignored -> new CopyOnWriteArrayList<>()).add(account);
+  }
+
+  public void setAccounts(String itemId, List<AccountFixture> accounts) {
+    accountsByItem.put(itemId, new CopyOnWriteArrayList<>(accounts));
+  }
+
+  public void setReservedBalances(String accountId, List<Map<String, Object>> balances) {
+    reservedBalancesByAccount.put(accountId, new CopyOnWriteArrayList<>(balances));
   }
 
   public void addTransaction(String accountId, TransactionFixture transaction) {
@@ -421,6 +471,11 @@ public final class PluggyStub {
       if (path.startsWith("/items/")) {
         return item(path.substring("/items/".length()));
       }
+      if (path.startsWith("/accounts/") && path.endsWith("/reserved-balances")) {
+        String accountId =
+            path.substring("/accounts/".length(), path.length() - "/reserved-balances".length());
+        return reservedBalances(accountId);
+      }
       if (path.startsWith("/accounts")) {
         return accounts(request.getRequestUrl().queryParameter("itemId"));
       }
@@ -489,7 +544,8 @@ public final class PluggyStub {
       body.put("consentExpiresAt", item.consentExpiresAt().toString());
       body.put("lastUpdatedAt", Instant.now().toString());
       body.put("nextAutoSyncAt", Instant.now().plusSeconds(3600).toString());
-      body.put("connector", Map.of("name", item.institution()));
+      body.put(
+          "connector", Map.of("name", item.institution(), "isOpenFinance", item.openFinance()));
       body.put(
           "products",
           productsByItem.getOrDefault(
@@ -530,11 +586,21 @@ public final class PluggyStub {
         }
         body.put("balance", account.balance());
         body.put("currencyCode", account.currency());
+        if (account.bankData() != null) {
+          body.put("bankData", account.bankData());
+        }
         if (account.creditData() != null) {
           body.put("creditData", account.creditData());
         }
         results.add(body);
       }
+      return response(
+          200, Map.of("results", results, "page", 1, "totalPages", 1, "total", results.size()));
+    }
+
+    private MockResponse reservedBalances(String accountId) {
+      List<Map<String, Object>> results =
+          reservedBalancesByAccount.getOrDefault(accountId, List.of());
       return response(
           200, Map.of("results", results, "page", 1, "totalPages", 1, "total", results.size()));
     }

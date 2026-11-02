@@ -7,9 +7,12 @@ import com.deltafinance.accounts.domain.CardProfileRepository;
 import com.deltafinance.accounts.domain.CardProfileSource;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
+import com.deltafinance.accounts.domain.ReservedBalance;
+import com.deltafinance.accounts.domain.ReservedBalanceRepository;
 import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
+import com.deltafinance.integrations.infrastructure.PluggyException;
 import com.deltafinance.integrations.infrastructure.PluggyModels;
 import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
 import com.deltafinance.shared.crypto.CryptoContext;
@@ -46,10 +49,12 @@ public class AccountImportService {
   private static final Logger LOG = LoggerFactory.getLogger(AccountImportService.class);
   private static final String ACCOUNT_TABLE = "financial_account";
   private static final String CARD_TABLE = "card_profile";
+  private static final String RESERVED_BALANCE_TABLE = "reserved_balance";
   private static final int MAX_CYCLE_BILLS = 12;
 
   private final FinancialAccountRepository accountRepository;
   private final CardProfileRepository cardProfileRepository;
+  private final ReservedBalanceRepository reservedBalanceRepository;
   private final ApplicationEventPublisher eventPublisher;
   private final PluggyAuthClient authClient;
   private final PluggyDataClient dataClient;
@@ -61,6 +66,7 @@ public class AccountImportService {
   public AccountImportService(
       FinancialAccountRepository accountRepository,
       CardProfileRepository cardProfileRepository,
+      ReservedBalanceRepository reservedBalanceRepository,
       ApplicationEventPublisher eventPublisher,
       PluggyAuthClient authClient,
       PluggyDataClient dataClient,
@@ -70,6 +76,7 @@ public class AccountImportService {
       Clock clock) {
     this.accountRepository = accountRepository;
     this.cardProfileRepository = cardProfileRepository;
+    this.reservedBalanceRepository = reservedBalanceRepository;
     this.eventPublisher = eventPublisher;
     this.authClient = authClient;
     this.dataClient = dataClient;
@@ -98,7 +105,15 @@ public class AccountImportService {
     for (PluggyModels.PluggyAccount imported : page.items()) {
       cancellationRegistry.checkpoint();
       seenHashes.add(hmacService.externalIdHash("pluggy", imported.externalId()));
-      upsert(integration.getUserId(), connectionId, imported, item.institutionName(), now, apiKey);
+      upsert(
+          integration.getUserId(),
+          connectionId,
+          imported,
+          item.institutionName(),
+          now,
+          apiKey,
+          page.complete(),
+          item.openFinance());
     }
     // Leitura completa: contas ausentes saem dos saldos, mas preservam histórico e transações.
     if (page.complete()) {
@@ -131,7 +146,9 @@ public class AccountImportService {
       PluggyModels.PluggyAccount imported,
       String institutionName,
       Instant now,
-      String apiKey) {
+      String apiKey,
+      boolean complete,
+      boolean openFinance) {
     byte[] externalHash = hmacService.externalIdHash("pluggy", imported.externalId());
     FinancialAccount account =
         accountRepository
@@ -171,7 +188,15 @@ public class AccountImportService {
 
     account.applyImported(
         externalEnc, externalHash, institutionEnc, aliasEnc, balanceEnc, now, AccountStatus.ACTIVE);
+    if (imported.hasReservedBalance() != null) {
+      account.applyReservedBalanceMetadata(imported.hasReservedBalance(), now);
+    } else {
+      account.applyReservedBalanceCheckedAt(now);
+    }
     accountRepository.save(account);
+
+    upsertReservedBalances(
+        userId, connectionId, account, imported, now, complete, openFinance, apiKey);
 
     if (account.getType() == AccountType.CREDIT) {
       List<PluggyModels.PluggyBill> bills = loadBills(apiKey, imported.externalId());
@@ -180,6 +205,114 @@ public class AccountImportService {
         eventPublisher.publishEvent(new CardBillsFetchedEvent(userId, account.getId(), bills));
       }
     }
+  }
+
+  private void upsertReservedBalances(
+      UUID userId,
+      UUID connectionId,
+      FinancialAccount account,
+      PluggyModels.PluggyAccount imported,
+      Instant now,
+      boolean complete,
+      boolean openFinance,
+      String apiKey) {
+    List<PluggyModels.PluggyReservedBalance> importedList =
+        imported.reservedBalances() == null ? List.of() : imported.reservedBalances();
+    if (Boolean.TRUE.equals(imported.hasReservedBalance())
+        && importedList.isEmpty()
+        && openFinance) {
+      importedList = loadReservedBalances(apiKey, imported.externalId());
+    }
+    List<byte[]> seenHashes = new ArrayList<>();
+    for (int index = 0; index < importedList.size(); index++) {
+      PluggyModels.PluggyReservedBalance importedBalance = importedList.get(index);
+      String identification =
+          importedBalance.identification() == null || importedBalance.identification().isBlank()
+              ? fallbackIdentification(importedBalance.name(), index)
+              : importedBalance.identification();
+      byte[] identificationHash = hmacService.hmac("reserved-balance", identification);
+      seenHashes.add(identificationHash);
+      ReservedBalance reserved =
+          reservedBalanceRepository
+              .findByUserIdAndAccountIdAndProviderIdentificationHash(
+                  userId, account.getId(), identificationHash)
+              .orElseGet(
+                  () ->
+                      new ReservedBalance(
+                          userId, account.getId(), connectionId, identificationHash));
+
+      byte[] identificationEnc =
+          cryptoService.encrypt(
+              identification,
+              new CryptoContext(
+                  userId, RESERVED_BALANCE_TABLE, "provider_identification", reserved.getId()));
+      byte[] nameEnc =
+          importedBalance.name() == null || importedBalance.name().isBlank()
+              ? null
+              : cryptoService.encrypt(
+                  importedBalance.name(),
+                  new CryptoContext(
+                      userId, RESERVED_BALANCE_TABLE, "provider_name", reserved.getId()));
+      String currency =
+          importedBalance.currency() == null || importedBalance.currency().length() != 3
+              ? account.getCurrency()
+              : importedBalance.currency().toUpperCase(java.util.Locale.ROOT);
+      BigDecimal amount =
+          importedBalance.amount() == null ? BigDecimal.ZERO : importedBalance.amount();
+      byte[] amountEnc =
+          cryptoService.encrypt(
+              amount.setScale(2, java.math.RoundingMode.HALF_EVEN).toPlainString(),
+              new CryptoContext(userId, RESERVED_BALANCE_TABLE, "amount", reserved.getId()));
+      byte[] detailsEnc =
+          importedBalance.detailsJson() == null
+              ? null
+              : cryptoService.encrypt(
+                  importedBalance.detailsJson(),
+                  new CryptoContext(userId, RESERVED_BALANCE_TABLE, "details", reserved.getId()));
+
+      reserved.apply(
+          identificationEnc, nameEnc, currency, amountEnc, detailsEnc, clock.today(), now);
+      reservedBalanceRepository.save(reserved);
+    }
+
+    // Lista vazia com hasReservedBalance=true é lacuna do provedor: preserva o que já existe.
+    // Campo nulo também é desconhecido: não remove reservas existentes sem leitura explícita.
+    Boolean flag = imported.hasReservedBalance();
+    boolean markMissing =
+        complete && (flag != null ? (!importedList.isEmpty() || !flag) : !importedList.isEmpty());
+    if (markMissing) {
+      for (ReservedBalance existing :
+          reservedBalanceRepository.findByUserIdAndAccountIdAndRemovedAtIsNullOrderByCreatedAtAsc(
+              userId, account.getId())) {
+        boolean seen =
+            seenHashes.stream()
+                .anyMatch(
+                    hash -> hmacService.matches(hash, existing.getProviderIdentificationHash()));
+        if (!seen) {
+          existing.markRemoved(now);
+          reservedBalanceRepository.save(existing);
+        }
+      }
+    }
+  }
+
+  private List<PluggyModels.PluggyReservedBalance> loadReservedBalances(
+      String apiKey, String accountId) {
+    try {
+      return dataClient.listReservedBalances(apiKey, accountId);
+    } catch (PluggyException exception) {
+      // O endpoint dedicado é opcional e pode não estar disponível para o conector.
+      // O inline de /accounts continua sendo a fonte principal.
+      LOG.warn(
+          "Saldos reservados: endpoint dedicado indisponível tipo={}",
+          exception.getClass().getSimpleName());
+      return List.of();
+    }
+  }
+
+  private static String fallbackIdentification(String name, int index) {
+    String base = name == null || name.isBlank() ? "reserva" : name.strip();
+    return base + "|" + index;
   }
 
   private void upsertCardProfile(

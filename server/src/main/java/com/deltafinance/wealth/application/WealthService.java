@@ -2,6 +2,8 @@ package com.deltafinance.wealth.application;
 
 import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
+import com.deltafinance.accounts.application.ReservedBalanceQueryService;
+import com.deltafinance.accounts.application.ReservedBalanceView;
 import com.deltafinance.investments.application.InvestmentHoldingView;
 import com.deltafinance.investments.application.InvestmentQueryService;
 import com.deltafinance.invoices.application.CardDebtService;
@@ -55,6 +57,7 @@ public class WealthService {
 
   private final ManualAssetLiabilityRepository manualRepository;
   private final AccountQueryService accountQueryService;
+  private final ReservedBalanceQueryService reservedBalanceQueryService;
   private final InvoiceQueryService invoiceQueryService;
   private final CardDebtService cardDebtService;
   private final InvestmentQueryService investmentQueryService;
@@ -65,6 +68,7 @@ public class WealthService {
   public WealthService(
       ManualAssetLiabilityRepository manualRepository,
       AccountQueryService accountQueryService,
+      ReservedBalanceQueryService reservedBalanceQueryService,
       InvoiceQueryService invoiceQueryService,
       CardDebtService cardDebtService,
       InvestmentQueryService investmentQueryService,
@@ -73,6 +77,7 @@ public class WealthService {
       Clock clock) {
     this.manualRepository = manualRepository;
     this.accountQueryService = accountQueryService;
+    this.reservedBalanceQueryService = reservedBalanceQueryService;
     this.invoiceQueryService = invoiceQueryService;
     this.cardDebtService = cardDebtService;
     this.investmentQueryService = investmentQueryService;
@@ -107,6 +112,7 @@ public class WealthService {
         addCard(accumulator, account, cardOutstanding, today);
       } else {
         addAccount(accumulator, account, today);
+        addReservedBalances(accumulator, userId, account, today);
       }
     }
 
@@ -245,6 +251,59 @@ public class WealthService {
             referenceDate,
             stale),
         false);
+  }
+
+  private void addReservedBalances(
+      Accumulator accumulator, UUID userId, AccountView account, LocalDate today) {
+    if (!account.hasReservedBalance()
+        || !"SEPARATE_ASSET".equals(account.reservedBalanceTreatment())
+        || !"ACTIVE".equals(account.status())
+        || !Money.BRL.equals(account.currency())) {
+      return;
+    }
+    List<ReservedBalanceView> items = reservedBalanceQueryService.list(userId, account.id());
+    if (items.isEmpty()) {
+      accumulator.gap(
+          item(
+              WealthSourceType.RESERVED_BALANCE,
+              account.id(),
+              description(account, "RESERVED_BALANCE"),
+              "0.00",
+              false,
+              "O provedor sinalizou saldo reservado, mas não enviou o detalhe.",
+              account.origin(),
+              null,
+              false));
+      return;
+    }
+    for (ReservedBalanceView reserved : items) {
+      if (!Money.BRL.equals(reserved.currency())) {
+        accumulator.exclude(
+            item(
+                WealthSourceType.RESERVED_BALANCE,
+                reserved.id(),
+                reserved.name(),
+                reserved.amount(),
+                false,
+                "Moeda diferente de BRL não compõe o patrimônio consolidado.",
+                account.origin(),
+                reserved.referenceDate(),
+                reserved.stale()));
+        continue;
+      }
+      accumulator.include(
+          item(
+              WealthSourceType.RESERVED_BALANCE,
+              reserved.id(),
+              reserved.name(),
+              reserved.amount(),
+              true,
+              null,
+              account.origin(),
+              reserved.referenceDate(),
+              reserved.stale()),
+          false);
+    }
   }
 
   private void addCard(

@@ -5,7 +5,7 @@ import type { WealthItem } from '@/features/integration/api'
 
 import { ORIGIN_LABELS, SOURCE_LABELS, formatDate } from '../format'
 
-const ASSET_TYPES = new Set(['ACCOUNT', 'INVESTMENT', 'MANUAL_ASSET'])
+const ASSET_TYPES = new Set(['ACCOUNT', 'RESERVED_BALANCE', 'INVESTMENT', 'MANUAL_ASSET'])
 const LIABILITY_TYPES = new Set(['CARD', 'MANUAL_LIABILITY'])
 
 interface Group {

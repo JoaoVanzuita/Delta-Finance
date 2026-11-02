@@ -71,6 +71,15 @@ public class ConnectionController {
         connectionService.resetDisplayName(authenticatedUser.requireId(), id));
   }
 
+  @PutMapping("/{id}/reserved-balance-treatment")
+  public ConnectionResponse updateReservedBalanceTreatment(
+      @PathVariable UUID id,
+      @Valid @RequestBody ConnectionReservedBalanceTreatmentRequest request) {
+    return ConnectionResponse.from(
+        connectionService.updateReservedBalanceTreatment(
+            authenticatedUser.requireId(), id, request.treatment()));
+  }
+
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void remove(

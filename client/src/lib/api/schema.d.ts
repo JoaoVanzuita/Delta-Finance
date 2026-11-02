@@ -206,6 +206,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/connections/{id}/reserved-balance-treatment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Define o tratamento padrão de saldos reservados da conexão
+         * @description As contas herdam este valor quando não têm override próprio.
+         */
+        put: operations["putConnectionsIdReservedBalanceTreatment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/connections/{id}/sync": {
         parameters: {
             query?: never;
@@ -306,6 +328,67 @@ export interface paths {
         put: operations["putAccountsIdInvestment"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}/reserved-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /** Lista os saldos reservados de uma conta */
+        get: operations["getAccountsIdReservedBalances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}/reserved-balance-treatment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Define como o saldo reservado entra no patrimônio */
+        put: operations["putAccountsIdReservedBalanceTreatment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reserved-balances/{id}/display-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Define o nome local de um saldo reservado
+         * @description O nome do provedor é preservado e pode ser restaurado.
+         */
+        put: operations["putReservedBalancesIdDisplayName"];
+        post?: never;
+        /** Restaura o nome do provedor de um saldo reservado */
+        delete: operations["deleteReservedBalancesIdDisplayName"];
         options?: never;
         head?: never;
         patch?: never;
@@ -962,6 +1045,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wealth/reserved-balances/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Evolução mensal de um saldo reservado
+         * @description Derivada dos snapshots patrimoniais que incluíram a reserva; não calcula rendimento.
+         */
+        get: operations["getWealthReservedBalancesIdHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/investments/history": {
         parameters: {
             query?: never;
@@ -1169,6 +1274,11 @@ export interface components {
             lastSyncAt?: string;
             lastErrorCode?: string;
             accountCount?: number;
+            /**
+             * @description Tratamento padrão dos saldos reservados para as contas desta conexão. A conta pode sobrescrever.
+             * @enum {string}
+             */
+            reservedBalanceTreatment?: "UNKNOWN" | "INCLUDED_IN_BALANCE" | "SEPARATE_ASSET";
         };
         ConnectionCreateRequest: {
             /** @description UUID do item exibido em Itens Conectados na página Demo da aplicação no Dashboard Pluggy, criado pela mesma aplicação Meu Pluggy do Client ID autenticado. Não use o UUID da página de detalhes da conta (`accountId`). Item de outra aplicação, removido ou com formato inválido retorna 422. */
@@ -1181,6 +1291,13 @@ export interface components {
         ConnectionDisplayNameRequest: {
             /** @description Nome local exibido para o item. Não é enviado ao Pluggy. */
             displayName: string;
+        };
+        ConnectionReservedBalanceTreatmentRequest: {
+            /**
+             * @description Tratamento padrão das contas da conexão.
+             * @enum {string}
+             */
+            treatment: "UNKNOWN" | "INCLUDED_IN_BALANCE" | "SEPARATE_ASSET";
         };
         ConnectionPage: {
             items: components["schemas"]["Connection"][];
@@ -1204,6 +1321,20 @@ export interface components {
             nameCustomized?: boolean;
             /** @description true quando a conta é a fronteira de caixa do perímetro de investimento. Créditos nessa conta são aportes; débitos de corretagem são aplicações, não resgates. */
             investmentAccount?: boolean;
+            /** @description true quando o provedor sinalizou saldo reservado ativo nesta conta. */
+            hasReservedBalance?: boolean;
+            /** @description Soma dos saldos reservados ativos na moeda da conta. Não é somada automaticamente ao saldo disponível. */
+            reservedBalanceTotal?: string;
+            /**
+             * @description Como o saldo reservado entra no patrimônio. UNKNOWN não soma; INCLUDED_IN_BALANCE apenas detalha; SEPARATE_ASSET soma como ativo separado.
+             * @enum {string}
+             */
+            reservedBalanceTreatment?: "UNKNOWN" | "INCLUDED_IN_BALANCE" | "SEPARATE_ASSET";
+            /**
+             * @description Origem do tratamento efetivo (override da conta, padrão da conexão ou não definido).
+             * @enum {string}
+             */
+            reservedBalanceTreatmentSource?: "ACCOUNT" | "CONNECTION" | "UNKNOWN";
             currency: string;
             /** @description Saldo atual. Em contas manuais, é o saldo de referência ajustado pelos lançamentos efetivados e pagamentos de fatura com data igual ou posterior à data de referência; em contas importadas, é o saldo informado pelo provedor. */
             currentBalance: string;
@@ -1255,6 +1386,60 @@ export interface components {
         AccountInvestmentRequest: {
             /** @description Marca a conta como fronteira de caixa do perímetro de investimento. */
             investmentAccount: boolean;
+        };
+        ReservedBalanceTreatmentRequest: {
+            /**
+             * @description Como o saldo reservado entra no patrimônio.
+             * @enum {string}
+             */
+            treatment: "UNKNOWN" | "INCLUDED_IN_BALANCE" | "SEPARATE_ASSET";
+        };
+        ReservedBalanceDisplayNameRequest: {
+            /** @description Nome local exibido; não altera o nome do provedor. */
+            displayName: string;
+        };
+        ReservedBalance: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            accountId: string;
+            /** @description Nome exibido (local quando existir; senão o do provedor). */
+            name: string;
+            /** @description Nome original devolvido pelo provedor. */
+            providerName?: string | null;
+            nameCustomized: boolean;
+            amount: string;
+            currency: string;
+            /** Format: date */
+            referenceDate?: string | null;
+            stale: boolean;
+            /** @description Faixas do saldo reservado com remuneração, quando o provedor informa. */
+            amounts?: components["schemas"]["ReservedBalanceAmount"][];
+        };
+        ReservedBalanceAmount: {
+            amount: string;
+            currency: string;
+            indexer?: string | null;
+            rateType?: string | null;
+            calculation?: string | null;
+            ratePeriodicity?: string | null;
+            /** @description Taxa pré-fixada como fração (0,3 = 30%). */
+            preFixedRate?: string | null;
+            /** @description Percentual do indexador como fração (1,149992 = 114,9992%). */
+            postFixedIndexerPercentage?: string | null;
+            indexerAdditionalInfo?: string | null;
+        };
+        ReservedBalanceList: {
+            items: components["schemas"]["ReservedBalance"][];
+        };
+        ReservedBalanceHistory: {
+            items: {
+                /** Format: date */
+                referenceDate: string;
+                value: string;
+                currency: string;
+                included: boolean;
+            }[];
         };
         AccountList: {
             items: components["schemas"]["Account"][];
@@ -2739,6 +2924,35 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    putConnectionsIdReservedBalanceTreatment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionReservedBalanceTreatmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Conexão com o tratamento atualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     postConnectionsIdSync: {
         parameters: {
             query?: never;
@@ -2983,6 +3197,120 @@ export interface operations {
                 };
             };
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getAccountsIdReservedBalances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saldos reservados ativos, com nome local e nome do provedor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservedBalanceList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putAccountsIdReservedBalanceTreatment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReservedBalanceTreatmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Conta com o tratamento atualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Conta manual ou cartão não aceita tratamento de saldo reservado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    putReservedBalancesIdDisplayName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReservedBalanceDisplayNameRequest"];
+            };
+        };
+        responses: {
+            /** @description Saldo reservado com o nome atualizado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservedBalance"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteReservedBalancesIdDisplayName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saldo reservado com o nome original restaurado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservedBalance"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getCardsOverview: {
@@ -4320,6 +4648,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WealthSnapshot"];
+                };
+            };
+            /** @description Erro do cliente. */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWealthReservedBalancesIdHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pontos mensais da reserva. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservedBalanceHistory"];
                 };
             };
             /** @description Erro do cliente. */

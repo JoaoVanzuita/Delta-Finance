@@ -22,7 +22,8 @@ public final class PluggyModels {
       String errorCode,
       List<String> products,
       Instant resourcesCollectedAt,
-      Boolean hasResourcesPendingAuthorization) {}
+      Boolean hasResourcesPendingAuthorization,
+      boolean openFinance) {}
 
   public record PluggyItemResource(String resourceId, String type, String status) {}
 
@@ -36,7 +37,13 @@ public final class PluggyModels {
       String number,
       BigDecimal balance,
       String currency,
-      JsonNode creditData) {}
+      JsonNode creditData,
+      Boolean hasReservedBalance,
+      List<PluggyReservedBalance> reservedBalances) {}
+
+  /** Reserva dentro de uma conta bancária; o total já é a soma das faixas. */
+  public record PluggyReservedBalance(
+      String name, String identification, BigDecimal amount, String currency, String detailsJson) {}
 
   public record PluggyTransaction(
       String externalId,

@@ -63,7 +63,8 @@ public class PluggyDataClient {
         node.path("error").path("code").asString(null),
         textList(node.path("products")),
         PluggyModels.instant(node, "resourcesCollectedAt"),
-        booleanOrNull(node.path("hasResourcesPendingAuthorization")));
+        booleanOrNull(node.path("hasResourcesPendingAuthorization")),
+        node.path("connector").path("isOpenFinance").asBoolean(false));
   }
 
   /** Recursos declarados pela instituição para um item Open Finance. */
@@ -244,6 +245,7 @@ public class PluggyDataClient {
           continue;
         }
         String type = node.path("type").asString("UNKNOWN");
+        JsonNode bankData = node.path("bankData");
         accounts.add(
             new PluggyModels.PluggyAccount(
                 externalId,
@@ -255,7 +257,9 @@ public class PluggyDataClient {
                 node.path("number").asString(null),
                 PluggyModels.decimal(node, "balance"),
                 node.path("currencyCode").asString("BRL"),
-                node.path("creditData")));
+                node.path("creditData"),
+                booleanOrNull(bankData.path("hasReservedBalance")),
+                reservedBalances(bankData.path("reservedBalances"))));
       }
       totalPages = root.path("totalPages").asInt(1);
       if (totalPages < 1) {
@@ -265,6 +269,78 @@ public class PluggyDataClient {
       page++;
     }
     return new PluggyModels.PluggyAccountPage(accounts, !truncated);
+  }
+
+  /**
+   * Fallback para o endpoint dedicado de saldos reservados (Open Finance).
+   *
+   * <p>O inline de {@code /accounts} é a fonte principal. Este método só é chamado quando {@code
+   * hasReservedBalance=true}, a lista inline veio vazia e o item é Open Finance; conectores
+   * MeuPluggy não expõem o endpoint dedicado.
+   */
+  public List<PluggyModels.PluggyReservedBalance> listReservedBalances(
+      String apiKey, String accountId) {
+    List<PluggyModels.PluggyReservedBalance> result = new ArrayList<>();
+    int page = 1;
+    int totalPages = 1;
+    while (page <= totalPages && page <= MAX_PAGES) {
+      MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+      params.add("pageSize", String.valueOf(PAGE_SIZE));
+      params.add("page", String.valueOf(page));
+      JsonNode root = getJson("/accounts/{id}/reserved-balances", accountId, params, apiKey);
+      JsonNode results = root.isArray() ? root : root.path("results");
+      if (!results.isArray()) {
+        results = root.path("data");
+      }
+      if (!results.isArray()) {
+        results = root.path("reservedBalances");
+      }
+      if (!results.isArray()) {
+        throw new PluggyException("Resposta de saldos reservados inválida.");
+      }
+      result.addAll(reservedBalances(results));
+      totalPages = root.path("totalPages").asInt(1);
+      if (totalPages < 1) {
+        break;
+      }
+      page++;
+    }
+    return result;
+  }
+
+  /**
+   * Lê as reservas de uma conta. O total é a soma das faixas de remuneração; o JSON bruto fica
+   * guardado para exibição futura de remuneração.
+   */
+  private static List<PluggyModels.PluggyReservedBalance> reservedBalances(JsonNode node) {
+    if (!node.isArray()) {
+      return List.of();
+    }
+    List<PluggyModels.PluggyReservedBalance> result = new ArrayList<>();
+    for (JsonNode reserved : node) {
+      JsonNode amounts = reserved.path("availableAmounts");
+      BigDecimal total = BigDecimal.ZERO;
+      String currency = null;
+      if (amounts.isArray()) {
+        for (JsonNode amount : amounts) {
+          BigDecimal value = PluggyModels.decimal(amount, "amount");
+          if (value != null) {
+            total = total.add(value);
+          }
+          if (currency == null) {
+            currency = amount.path("currencyCode").asString(null);
+          }
+        }
+      }
+      result.add(
+          new PluggyModels.PluggyReservedBalance(
+              reserved.path("name").asString(null),
+              reserved.path("identification").asString(null),
+              total,
+              currency,
+              amounts.isArray() ? amounts.toString() : null));
+    }
+    return result;
   }
 
   /**

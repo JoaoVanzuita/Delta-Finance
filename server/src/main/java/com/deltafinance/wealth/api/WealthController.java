@@ -57,6 +57,12 @@ public class WealthController {
     return WealthSnapshotResponse.from(snapshotService.detail(authenticatedUser.requireId(), id));
   }
 
+  @GetMapping("/reserved-balances/{id}/history")
+  public ReservedBalanceHistoryResponse reservedBalanceHistory(@PathVariable UUID id) {
+    return ReservedBalanceHistoryResponse.from(
+        snapshotService.reservedBalanceHistory(authenticatedUser.requireId(), id));
+  }
+
   @PostMapping("/history")
   @ResponseStatus(HttpStatus.CREATED)
   public WealthSnapshotResponse captureHistory(

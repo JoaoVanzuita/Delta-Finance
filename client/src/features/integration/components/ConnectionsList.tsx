@@ -10,10 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { ApiError } from '@/lib/api/problem'
 import { invalidateIntegrationViews } from '@/lib/invalidation'
 
-import { financeApi, type Connection } from '../api'
+import { financeApi, type Connection, type ReservedBalanceTreatment } from '../api'
 import {
   connectionStatusLabels,
   errorMessage,
@@ -112,7 +113,26 @@ export function ConnectionsList({
     },
   })
 
-  const busy = sync.isPending || update.isPending || remove.isPending
+  const treatment = useMutation({
+    mutationFn: (input: { id: string; treatment: ReservedBalanceTreatment }) =>
+      financeApi.updateConnectionReservedBalanceTreatment(input.id, input.treatment),
+    onSuccess: () => {
+      setError(null)
+      setMessage('Tratamento padrão de saldos reservados atualizado.')
+      refresh()
+    },
+    onError: (caught) => {
+      setMessage(null)
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : 'Não foi possível atualizar o tratamento dos saldos reservados.',
+      )
+    },
+  })
+
+  const busy =
+    sync.isPending || update.isPending || remove.isPending || treatment.isPending
 
   async function renameConnection(id: string, displayName: string) {
     const updated = await financeApi.renameConnection(id, displayName)
@@ -206,6 +226,24 @@ export function ConnectionsList({
                       </div>
                     ) : null}
                   </dl>
+
+                  <label className="mt-4 flex flex-col gap-1 text-caption font-medium text-ink-muted">
+                    Saldos reservados
+                    <Select
+                      value={connection.reservedBalanceTreatment ?? 'UNKNOWN'}
+                      disabled={busy}
+                      onChange={(event) =>
+                        treatment.mutate({
+                          id: connection.id,
+                          treatment: event.target.value as ReservedBalanceTreatment,
+                        })
+                      }
+                    >
+                      <option value="UNKNOWN">Herdar / não definido</option>
+                      <option value="INCLUDED_IN_BALANCE">Já incluído no saldo</option>
+                      <option value="SEPARATE_ASSET">Ativo separado</option>
+                    </Select>
+                  </label>
 
                   {connection.lastErrorCode ? (
                     <Alert variant={actionRequired ? 'warning' : 'info'} className="mt-4">

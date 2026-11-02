@@ -109,6 +109,34 @@ public class WealthSnapshotService {
     return view(snapshot, items);
   }
 
+  /** Evolução mensal de uma reserva, derivada dos snapshots que a incluíram. */
+  public List<ReservedBalanceHistoryPointView> reservedBalanceHistory(
+      UUID userId, UUID reservedBalanceId) {
+    List<WealthSnapshotItem> items =
+        itemRepository.findByUserIdAndSourceTypeAndSourceIdOrderBySnapshotIdAsc(
+            userId, WealthSourceType.RESERVED_BALANCE, reservedBalanceId);
+    if (items.isEmpty()) {
+      return List.of();
+    }
+    Map<UUID, LocalDate> dates = new HashMap<>();
+    for (WealthSnapshot snapshot :
+        snapshotRepository.findByUserIdAndIdIn(
+            userId, items.stream().map(WealthSnapshotItem::getSnapshotId).distinct().toList())) {
+      dates.put(snapshot.getId(), snapshot.getReferenceDate());
+    }
+    return items.stream()
+        .filter(item -> dates.containsKey(item.getSnapshotId()))
+        .map(
+            item ->
+                new ReservedBalanceHistoryPointView(
+                    dates.get(item.getSnapshotId()),
+                    decrypt(userId, item, "value", item.getValueEnc()),
+                    item.getCurrency(),
+                    item.isIncluded()))
+        .sorted(Comparator.comparing(ReservedBalanceHistoryPointView::referenceDate).reversed())
+        .toList();
+  }
+
   @Transactional
   public CaptureResult captureScheduled(UUID userId, LocalDate referenceDate) {
     return capture(userId, referenceDate, SnapshotTrigger.SCHEDULED);
@@ -400,6 +428,9 @@ public class WealthSnapshotService {
           : holding.currency();
     }
     if (type == WealthSourceType.MANUAL_ASSET || type == WealthSourceType.MANUAL_LIABILITY) {
+      return "BRL";
+    }
+    if (type == WealthSourceType.RESERVED_BALANCE) {
       return "BRL";
     }
     AccountView account = accounts.get(sourceId);

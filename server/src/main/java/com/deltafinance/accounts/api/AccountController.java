@@ -3,6 +3,7 @@ package com.deltafinance.accounts.api;
 import com.deltafinance.accounts.application.AccountDisplayNameService;
 import com.deltafinance.accounts.application.AccountInvestmentService;
 import com.deltafinance.accounts.application.AccountQueryService;
+import com.deltafinance.accounts.application.ReservedBalanceTreatmentService;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -21,16 +22,19 @@ public class AccountController {
   private final AccountQueryService accountQueryService;
   private final AccountDisplayNameService accountDisplayNameService;
   private final AccountInvestmentService accountInvestmentService;
+  private final ReservedBalanceTreatmentService reservedBalanceTreatmentService;
   private final AuthenticatedUser authenticatedUser;
 
   public AccountController(
       AccountQueryService accountQueryService,
       AccountDisplayNameService accountDisplayNameService,
       AccountInvestmentService accountInvestmentService,
+      ReservedBalanceTreatmentService reservedBalanceTreatmentService,
       AuthenticatedUser authenticatedUser) {
     this.accountQueryService = accountQueryService;
     this.accountDisplayNameService = accountDisplayNameService;
     this.accountInvestmentService = accountInvestmentService;
+    this.reservedBalanceTreatmentService = reservedBalanceTreatmentService;
     this.authenticatedUser = authenticatedUser;
   }
 
@@ -65,5 +69,13 @@ public class AccountController {
     return AccountResponse.from(
         accountInvestmentService.update(
             authenticatedUser.requireId(), id, request.investmentAccount()));
+  }
+
+  @PutMapping("/{id}/reserved-balance-treatment")
+  public AccountResponse updateReservedBalanceTreatment(
+      @PathVariable UUID id, @Valid @RequestBody ReservedBalanceTreatmentRequest request) {
+    return AccountResponse.from(
+        reservedBalanceTreatmentService.update(
+            authenticatedUser.requireId(), id, request.treatment()));
   }
 }

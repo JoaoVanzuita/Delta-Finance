@@ -1,6 +1,7 @@
 package com.deltafinance.wealth.domain;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,4 +17,6 @@ public interface WealthSnapshotRepository extends JpaRepository<WealthSnapshot, 
       UUID userId, LocalDate from, LocalDate to);
 
   List<WealthSnapshot> findByUserIdOrderByReferenceDateDesc(UUID userId);
+
+  List<WealthSnapshot> findByUserIdAndIdIn(UUID userId, Collection<UUID> ids);
 }

@@ -53,6 +53,7 @@ class ExportIT extends PostgresTestBase {
       Set.of(
           "profile",
           "accounts",
+          "reserved_balances",
           "card_profiles",
           "manual_asset_liabilities",
           "wealth_snapshots",

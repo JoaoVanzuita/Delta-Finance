@@ -130,13 +130,17 @@ public class ExportService {
                 "balanceReferenceAt",
                 "status",
                 "lastSyncAt",
+                "hasReservedBalance",
+                "reservedBalanceCheckedAt",
+                "reservedBalanceTreatment",
                 "notes",
                 "createdAt",
                 "updatedAt"),
             "select id, user_id, type, subtype, origin, institution_name_enc, alias_enc,"
                 + " display_name_enc, currency, balance_enc, balance_reference_at, status,"
-                + " last_sync_at, notes_enc, created_at, updated_at from financial_account"
-                + " where user_id = ? order by created_at, id",
+                + " last_sync_at, has_reserved_balance, reserved_balance_checked_at,"
+                + " reserved_balance_treatment, notes_enc, created_at, updated_at"
+                + " from financial_account where user_id = ? order by created_at, id",
             rs -> {
               UUID id = uuid(rs, "id");
               String origin = rs.getString("origin");
@@ -182,6 +186,9 @@ public class ExportService {
               row.put("balanceReferenceAt", instant(rs, "balance_reference_at"));
               row.put("status", rs.getString("status"));
               row.put("lastSyncAt", instant(rs, "last_sync_at"));
+              row.put("hasReservedBalance", rs.getBoolean("has_reserved_balance"));
+              row.put("reservedBalanceCheckedAt", instant(rs, "reserved_balance_checked_at"));
+              row.put("reservedBalanceTreatment", rs.getString("reserved_balance_treatment"));
               row.put(
                   "notes",
                   decrypt(
@@ -190,6 +197,70 @@ public class ExportService {
                       "notes",
                       id,
                       rs.getBytes("notes_enc")));
+              row.put("createdAt", instant(rs, "created_at"));
+              row.put("updatedAt", instant(rs, "updated_at"));
+              return row;
+            }),
+        new Dataset(
+            "reserved_balances",
+            List.of(
+                "id",
+                "accountId",
+                "providerIdentification",
+                "providerName",
+                "displayName",
+                "currency",
+                "amount",
+                "details",
+                "referenceDate",
+                "lastSeenAt",
+                "removedAt",
+                "createdAt",
+                "updatedAt"),
+            "select id, user_id, account_id, provider_identification_enc, provider_name_enc,"
+                + " display_name_enc, currency, amount_enc, details_enc, reference_date,"
+                + " last_seen_at, removed_at, created_at, updated_at from reserved_balance"
+                + " where user_id = ? order by created_at, id",
+            rs -> {
+              UUID id = uuid(rs, "id");
+              UUID userId = rs.getObject("user_id", UUID.class);
+              Map<String, Object> row = new LinkedHashMap<>();
+              row.put("id", id);
+              row.put("accountId", uuid(rs, "account_id"));
+              row.put(
+                  "providerIdentification",
+                  decrypt(
+                      userId,
+                      "reserved_balance",
+                      "provider_identification",
+                      id,
+                      rs.getBytes("provider_identification_enc")));
+              row.put(
+                  "providerName",
+                  decrypt(
+                      userId,
+                      "reserved_balance",
+                      "provider_name",
+                      id,
+                      rs.getBytes("provider_name_enc")));
+              row.put(
+                  "displayName",
+                  decrypt(
+                      userId,
+                      "reserved_balance",
+                      "display_name",
+                      id,
+                      rs.getBytes("display_name_enc")));
+              row.put("currency", rs.getString("currency"));
+              row.put(
+                  "amount",
+                  decrypt(userId, "reserved_balance", "amount", id, rs.getBytes("amount_enc")));
+              row.put(
+                  "details",
+                  decrypt(userId, "reserved_balance", "details", id, rs.getBytes("details_enc")));
+              row.put("referenceDate", date(rs, "reference_date"));
+              row.put("lastSeenAt", instant(rs, "last_seen_at"));
+              row.put("removedAt", instant(rs, "removed_at"));
               row.put("createdAt", instant(rs, "created_at"));
               row.put("updatedAt", instant(rs, "updated_at"));
               return row;
@@ -1398,11 +1469,13 @@ public class ExportService {
                 "nextAutoSyncAt",
                 "lastSyncAt",
                 "lastErrorCode",
+                "reservedBalanceTreatment",
                 "createdAt",
                 "updatedAt"),
             "select id, user_id, integration_id, institution_name_enc, display_name_enc, status,"
                 + " consent_expires_at, next_auto_sync_at, last_sync_at, last_error_code,"
-                + " created_at, updated_at from pluggy_connection where user_id = ?",
+                + " reserved_balance_treatment, created_at, updated_at from pluggy_connection"
+                + " where user_id = ?",
             rs -> {
               UUID id = uuid(rs, "id");
               Map<String, Object> row = new LinkedHashMap<>();
@@ -1429,6 +1502,7 @@ public class ExportService {
               row.put("nextAutoSyncAt", instant(rs, "next_auto_sync_at"));
               row.put("lastSyncAt", instant(rs, "last_sync_at"));
               row.put("lastErrorCode", rs.getString("last_error_code"));
+              row.put("reservedBalanceTreatment", rs.getString("reserved_balance_treatment"));
               row.put("createdAt", instant(rs, "created_at"));
               row.put("updatedAt", instant(rs, "updated_at"));
               return row;

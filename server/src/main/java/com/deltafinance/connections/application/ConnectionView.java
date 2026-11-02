@@ -14,4 +14,5 @@ public record ConnectionView(
     Instant consentExpiresAt,
     Instant lastSyncAt,
     String lastErrorCode,
-    long accountCount) {}
+    long accountCount,
+    String reservedBalanceTreatment) {}

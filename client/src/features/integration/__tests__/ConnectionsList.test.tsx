@@ -15,6 +15,7 @@ const CONNECTION: Connection = {
   status: 'SYNCED',
   lastSyncAt: '2026-10-23T12:00:00Z',
   accountCount: 1,
+  reservedBalanceTreatment: 'UNKNOWN',
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -27,6 +28,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 function stubApi() {
   const mock = vi.fn((url: string, init: RequestInit = {}) => {
     if (url.includes('/auth/csrf')) return new Response(null, { status: 204 })
+    if (url.includes('/connections/conn-1/reserved-balance-treatment') && init.method === 'PUT') {
+      const body = JSON.parse(String(init.body)) as {
+        treatment: NonNullable<Connection['reservedBalanceTreatment']>
+      }
+      return jsonResponse({ ...CONNECTION, reservedBalanceTreatment: body.treatment })
+    }
     if (url.includes('/connections/conn-1/display-name') && init.method === 'PUT') {
       const body = JSON.parse(String(init.body)) as { displayName: string }
       return jsonResponse({ ...CONNECTION, displayName: body.displayName })
@@ -88,6 +95,24 @@ describe('remoção de conexão', () => {
         ([url, init]) => String(url).includes('/connections/conn-1') && init?.method === 'DELETE',
       )
       expect(String(call?.[0])).toContain('deleteHistory=true')
+    })
+  })
+
+  it('define o tratamento padrão de saldos reservados da conexão', async () => {
+    const fetchMock = stubApi()
+    const user = userEvent.setup()
+    renderWithProviders(<ConnectionsList connections={[CONNECTION]} configured />)
+
+    await user.selectOptions(screen.getByLabelText('Saldos reservados'), 'SEPARATE_ASSET')
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/connections/conn-1/reserved-balance-treatment'),
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ treatment: 'SEPARATE_ASSET' }),
+        }),
+      )
     })
   })
 

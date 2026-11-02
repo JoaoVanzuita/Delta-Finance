@@ -5,10 +5,15 @@ import com.deltafinance.accounts.domain.CardProfile;
 import com.deltafinance.accounts.domain.CardProfileRepository;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
+import com.deltafinance.accounts.domain.ReservedBalance;
+import com.deltafinance.accounts.domain.ReservedBalanceRepository;
+import com.deltafinance.accounts.domain.ReservedBalanceTreatment;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoException;
 import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.errors.NotFoundException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,22 +26,28 @@ public class AccountQueryService {
 
   private final FinancialAccountRepository accountRepository;
   private final CardProfileRepository cardProfileRepository;
+  private final ReservedBalanceRepository reservedBalanceRepository;
   private final ConnectionStatusPort connectionStatusPort;
   private final ConnectionNamePort connectionNamePort;
+  private final ConnectionReservedBalanceTreatmentPort connectionReservedBalanceTreatmentPort;
   private final AccountBalanceService balanceService;
   private final CryptoService cryptoService;
 
   public AccountQueryService(
       FinancialAccountRepository accountRepository,
       CardProfileRepository cardProfileRepository,
+      ReservedBalanceRepository reservedBalanceRepository,
       ConnectionStatusPort connectionStatusPort,
       ConnectionNamePort connectionNamePort,
+      ConnectionReservedBalanceTreatmentPort connectionReservedBalanceTreatmentPort,
       AccountBalanceService balanceService,
       CryptoService cryptoService) {
     this.accountRepository = accountRepository;
     this.cardProfileRepository = cardProfileRepository;
+    this.reservedBalanceRepository = reservedBalanceRepository;
     this.connectionStatusPort = connectionStatusPort;
     this.connectionNamePort = connectionNamePort;
+    this.connectionReservedBalanceTreatmentPort = connectionReservedBalanceTreatmentPort;
     this.balanceService = balanceService;
     this.cryptoService = cryptoService;
   }
@@ -90,6 +101,7 @@ public class AccountQueryService {
             && !customName.isBlank();
     String displayName = nameCustomized ? customName : providerAlias;
     String providerName = account.getOrigin() == AccountOrigin.IMPORTED ? providerAlias : null;
+    ReservedBalanceTreatment treatment = effectiveReservedBalanceTreatment(account);
 
     return new AccountView(
         account.getId(),
@@ -102,6 +114,10 @@ public class AccountQueryService {
         providerName,
         nameCustomized,
         account.isInvestmentAccount(),
+        account.hasReservedBalance(),
+        reservedBalanceTotal(account),
+        treatment.name(),
+        reservedBalanceTreatmentSource(account, treatment),
         account.getCurrency(),
         balanceService.effectiveBalance(account, referenceBalance),
         referenceBalance,
@@ -111,6 +127,49 @@ public class AccountQueryService {
         decrypt(account, account.getNotesEnc(), "notes"),
         cardView,
         connectionStatus(account));
+  }
+
+  private ReservedBalanceTreatment effectiveReservedBalanceTreatment(FinancialAccount account) {
+    if (account.getReservedBalanceTreatment() != ReservedBalanceTreatment.UNKNOWN) {
+      return account.getReservedBalanceTreatment();
+    }
+    if (!account.hasReservedBalance()) {
+      return ReservedBalanceTreatment.UNKNOWN;
+    }
+    ReservedBalanceTreatment connectionTreatment =
+        connectionReservedBalanceTreatmentPort.treatmentOf(
+            account.getUserId(), account.getConnectionId());
+    return connectionTreatment == null ? ReservedBalanceTreatment.UNKNOWN : connectionTreatment;
+  }
+
+  private String reservedBalanceTreatmentSource(
+      FinancialAccount account, ReservedBalanceTreatment effective) {
+    if (account.getReservedBalanceTreatment() != ReservedBalanceTreatment.UNKNOWN) {
+      return "ACCOUNT";
+    }
+    return effective == ReservedBalanceTreatment.UNKNOWN ? "UNKNOWN" : "CONNECTION";
+  }
+
+  private String reservedBalanceTotal(FinancialAccount account) {
+    BigDecimal total = BigDecimal.ZERO;
+    for (ReservedBalance reserved :
+        reservedBalanceRepository.findByUserIdAndAccountIdAndRemovedAtIsNullOrderByCreatedAtAsc(
+            account.getUserId(), account.getId())) {
+      if (!account.getCurrency().equalsIgnoreCase(reserved.getCurrency())) {
+        continue;
+      }
+      String value =
+          decrypt(
+              account.getUserId(),
+              "reserved_balance",
+              "amount",
+              reserved.getId(),
+              reserved.getAmountEnc());
+      if (value != null) {
+        total = total.add(new BigDecimal(value));
+      }
+    }
+    return total.setScale(2, RoundingMode.HALF_EVEN).toPlainString();
   }
 
   private String connectionStatus(FinancialAccount account) {

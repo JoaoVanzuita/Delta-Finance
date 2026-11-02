@@ -11,4 +11,7 @@ public interface WealthSnapshotItemRepository extends JpaRepository<WealthSnapsh
       UUID snapshotId, UUID userId);
 
   List<WealthSnapshotItem> findByUserIdAndSnapshotIdIn(UUID userId, Collection<UUID> snapshotIds);
+
+  List<WealthSnapshotItem> findByUserIdAndSourceTypeAndSourceIdOrderBySnapshotIdAsc(
+      UUID userId, WealthSourceType sourceType, UUID sourceId);
 }

@@ -1,5 +1,6 @@
 package com.deltafinance.connections.domain;
 
+import com.deltafinance.accounts.domain.ReservedBalanceTreatment;
 import com.deltafinance.shared.persistence.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -37,6 +38,10 @@ public class PluggyConnection extends BaseEntity {
 
   @Column(name = "display_name_enc", columnDefinition = "bytea")
   private byte[] displayNameEnc;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "reserved_balance_treatment", nullable = false, length = 32)
+  private ReservedBalanceTreatment reservedBalanceTreatment = ReservedBalanceTreatment.UNKNOWN;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 32)
@@ -93,6 +98,14 @@ public class PluggyConnection extends BaseEntity {
 
   public boolean hasCustomDisplayName() {
     return displayNameEnc != null;
+  }
+
+  public ReservedBalanceTreatment getReservedBalanceTreatment() {
+    return reservedBalanceTreatment;
+  }
+
+  public void updateReservedBalanceTreatment(ReservedBalanceTreatment treatment) {
+    this.reservedBalanceTreatment = Objects.requireNonNull(treatment, "treatment");
   }
 
   /** Define o nome de exibição local sem alterar o nome original do item. */
