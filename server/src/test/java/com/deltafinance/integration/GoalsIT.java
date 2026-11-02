@@ -76,9 +76,11 @@ class GoalsIT extends PostgresTestBase {
       contributions.add(allocation.path("contributionAmount").asString());
     }
     assertThat(contributions).containsExactly("33.33", "33.33", "33.34");
-    assertThat(goal.path("progressHistory")).hasSize(1);
-    assertThat(goal.path("progressHistory").get(0).path("referenceDate").asString())
+    JsonNode progress = progress(goal.path("id").asString());
+    assertThat(progress.path("items")).hasSize(1);
+    assertThat(progress.path("items").get(0).path("referenceDate").asString())
         .isEqualTo(today().toString());
+    assertThat(progress.path("hasMore").asBoolean()).isFalse();
   }
 
   @Test
@@ -235,9 +237,9 @@ class GoalsIT extends PostgresTestBase {
                 null,
                 List.of(fixed("MANUAL", null, "1000.00"))));
     assertThat(achieved.path("status").asString()).isEqualTo("ACHIEVED");
-    assertThat(achieved.path("progressHistory")).hasSize(1);
-    assertThat(achieved.path("progressHistory").get(0).path("currentValue").asString())
-        .isEqualTo("1000.00");
+    JsonNode progress = progress(achieved.path("id").asString());
+    assertThat(progress.path("items")).hasSize(1);
+    assertThat(progress.path("items").get(0).path("currentValue").asString()).isEqualTo("1000.00");
   }
 
   @Test
@@ -366,6 +368,7 @@ class GoalsIT extends PostgresTestBase {
                 .path("items"))
         .isEmpty();
     bob.get("/api/v1/goals/" + id).andExpect(status().isNotFound());
+    bob.get("/api/v1/goals/" + id + "/progress").andExpect(status().isNotFound());
     bob.patch(
             "/api/v1/goals/" + id,
             goalBody("Invasão", "TRAVEL", "1.00", "ALLOCATIONS", null, List.of()))
@@ -751,6 +754,16 @@ class GoalsIT extends PostgresTestBase {
 
   private static LocalDate today() {
     return LocalDate.now(ZONE);
+  }
+
+  private JsonNode progress(String goalId) throws Exception {
+    return json(
+        alice
+            .get("/api/v1/goals/" + goalId + "/progress")
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
   private JsonNode json(String body) {

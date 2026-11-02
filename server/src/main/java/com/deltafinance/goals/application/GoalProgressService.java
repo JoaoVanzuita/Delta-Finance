@@ -12,11 +12,10 @@ import com.deltafinance.goals.domain.GoalProgressRule;
 import com.deltafinance.goals.domain.GoalStatus;
 import com.deltafinance.investments.application.InvestmentHoldingView;
 import com.deltafinance.investments.application.InvestmentQueryService;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.wealth.application.ManualItemView;
 import com.deltafinance.wealth.application.WealthService;
@@ -48,7 +47,7 @@ import org.springframework.stereotype.Service;
 public class GoalProgressService {
 
   private static final BigDecimal HUNDRED = new BigDecimal("100");
-  private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_EVEN);
+  private static final BigDecimal ZERO = Money.scaled(BigDecimal.ZERO);
   private static final String TABLE = "financial_goal";
 
   private final FinancialGoalRepository goalRepository;
@@ -56,7 +55,7 @@ public class GoalProgressService {
   private final AccountQueryService accountQueryService;
   private final InvestmentQueryService investmentQueryService;
   private final WealthService wealthService;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final Clock clock;
 
   public GoalProgressService(
@@ -65,14 +64,14 @@ public class GoalProgressService {
       AccountQueryService accountQueryService,
       InvestmentQueryService investmentQueryService,
       WealthService wealthService,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       Clock clock) {
     this.goalRepository = goalRepository;
     this.allocationRepository = allocationRepository;
     this.accountQueryService = accountQueryService;
     this.investmentQueryService = investmentQueryService;
     this.wealthService = wealthService;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.clock = clock;
   }
 
@@ -387,16 +386,14 @@ public class GoalProgressService {
   private BigDecimal decryptAmount(
       UUID userId, UUID recordId, String table, String column, byte[] ciphertext) {
     try {
-      return new BigDecimal(
-          cryptoService.decryptString(
-              ciphertext, new CryptoContext(userId, table, column, recordId)));
-    } catch (CryptoException | NumberFormatException exception) {
+      return encryptedValueReader.readMoneyOrZero(userId, table, column, recordId, ciphertext);
+    } catch (RuntimeException unreadable) {
       return ZERO;
     }
   }
 
   private static BigDecimal parse(String value) {
-    return new BigDecimal(value).setScale(2, RoundingMode.HALF_EVEN);
+    return Money.scaled(new BigDecimal(value));
   }
 
   private static BigDecimal percentage(BigDecimal current, BigDecimal denominator) {
@@ -421,7 +418,7 @@ public class GoalProgressService {
   }
 
   private static BigDecimal scale(BigDecimal value) {
-    return value.setScale(2, RoundingMode.HALF_EVEN);
+    return Money.scaled(value);
   }
 
   static String format(BigDecimal value) {

@@ -23,5 +23,4 @@ public record GoalView(
     String remainingAmount,
     String unallocatedAmount,
     String excessAmount,
-    List<GoalAllocationView> allocations,
-    List<GoalProgressEntryView> progressHistory) {}
+    List<GoalAllocationView> allocations) {}

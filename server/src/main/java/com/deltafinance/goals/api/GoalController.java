@@ -1,7 +1,11 @@
 package com.deltafinance.goals.api;
 
+import com.deltafinance.goals.application.GoalProgressEntryView;
 import com.deltafinance.goals.application.GoalService;
+import com.deltafinance.goals.application.GoalView;
 import com.deltafinance.security.AuthenticatedUser;
+import com.deltafinance.shared.pagination.CursorPage;
+import com.deltafinance.shared.pagination.PageRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -12,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,31 +40,38 @@ public class GoalController {
 
   @GetMapping
   public GoalListResponse list() {
-    return new GoalListResponse(
-        goalService.list(authenticatedUser.requireId()).stream().map(GoalResponse::from).toList());
+    return new GoalListResponse(goalService.list(authenticatedUser.requireId()).stream().toList());
   }
 
   @GetMapping("/{id}")
-  public GoalResponse get(@PathVariable UUID id) {
-    return GoalResponse.from(goalService.get(authenticatedUser.requireId(), id));
+  public GoalView get(@PathVariable UUID id) {
+    return goalService.get(authenticatedUser.requireId(), id);
+  }
+
+  @GetMapping("/{id}/progress")
+  public CursorPage<GoalProgressEntryView> progress(
+      @PathVariable UUID id,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "50") int limit) {
+    return goalService.progressHistory(
+        authenticatedUser.requireId(), id, PageRequest.of(limit, cursor));
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public GoalResponse create(@Valid @RequestBody GoalRequest request) {
-    return GoalResponse.from(goalService.create(authenticatedUser.requireId(), request));
+  public GoalView create(@Valid @RequestBody GoalRequest request) {
+    return goalService.create(authenticatedUser.requireId(), request);
   }
 
   @PatchMapping("/{id}")
-  public GoalResponse update(@PathVariable UUID id, @Valid @RequestBody GoalRequest request) {
-    return GoalResponse.from(goalService.update(authenticatedUser.requireId(), id, request));
+  public GoalView update(@PathVariable UUID id, @Valid @RequestBody GoalRequest request) {
+    return goalService.update(authenticatedUser.requireId(), id, request);
   }
 
   @PostMapping("/{id}/status")
-  public GoalResponse updateStatus(
+  public GoalView updateStatus(
       @PathVariable UUID id, @Valid @RequestBody GoalStatusRequest request) {
-    return GoalResponse.from(
-        goalService.updateStatus(authenticatedUser.requireId(), id, request.status()));
+    return goalService.updateStatus(authenticatedUser.requireId(), id, request.status());
   }
 
   @DeleteMapping("/{id}")

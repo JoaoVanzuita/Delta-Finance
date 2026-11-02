@@ -16,22 +16,28 @@ import com.deltafinance.goals.domain.GoalType;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.money.Money;
+import com.deltafinance.shared.pagination.CursorPage;
+import com.deltafinance.shared.pagination.PageRequest;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,7 +62,9 @@ public class GoalService {
   private final GoalProgressSnapshotRepository snapshotRepository;
   private final GoalProgressService progressService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
+  private final JdbcTemplate jdbcTemplate;
   private final Clock clock;
 
   public GoalService(
@@ -65,14 +73,18 @@ public class GoalService {
       GoalProgressSnapshotRepository snapshotRepository,
       GoalProgressService progressService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService,
+      JdbcTemplate jdbcTemplate,
       Clock clock) {
     this.goalRepository = goalRepository;
     this.allocationRepository = allocationRepository;
     this.snapshotRepository = snapshotRepository;
     this.progressService = progressService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
+    this.jdbcTemplate = jdbcTemplate;
     this.clock = clock;
   }
 
@@ -170,6 +182,34 @@ public class GoalService {
     return toView(userId, goal);
   }
 
+  /** Histórico diário em páginas por cursor; a resposta principal não carrega o histórico todo. */
+  @Transactional
+  public CursorPage<GoalProgressEntryView> progressHistory(
+      UUID userId, UUID goalId, PageRequest pageRequest) {
+    requireGoal(userId, goalId);
+    int pageSize = Math.min(100, Math.max(1, pageRequest.limit()));
+    GoalCursor cursor = decode(pageRequest.cursor());
+    List<GoalProgressSnapshot> rows =
+        cursor == null
+            ? snapshotRepository.findByUserIdAndGoalIdOrderByReferenceDateDescIdDesc(
+                userId, goalId, org.springframework.data.domain.PageRequest.of(0, pageSize + 1))
+            : snapshotRepository.findPageBefore(
+                userId,
+                goalId,
+                cursor.referenceDate(),
+                cursor.id(),
+                org.springframework.data.domain.PageRequest.of(0, pageSize + 1));
+    boolean hasMore = rows.size() > pageSize;
+    List<GoalProgressSnapshot> page = hasMore ? rows.subList(0, pageSize) : rows;
+    List<GoalProgressEntryView> views =
+        page.stream().map(snapshot -> toProgressEntry(userId, snapshot)).toList();
+    String nextCursor =
+        hasMore && !page.isEmpty()
+            ? encode(page.getLast().getReferenceDate(), page.getLast().getId())
+            : null;
+    return hasMore ? CursorPage.of(views, nextCursor) : CursorPage.last(views);
+  }
+
   @Transactional
   public void delete(UUID userId, UUID goalId) {
     FinancialGoal goal = requireGoal(userId, goalId);
@@ -209,7 +249,7 @@ public class GoalService {
                 SNAPSHOT_TABLE,
                 "current_value",
                 latest.getCurrentValueEnc());
-        percentage = latest.getPercentage().setScale(2, RoundingMode.HALF_EVEN);
+        percentage = Money.scaled(latest.getPercentage());
         remaining =
             decryptAmount(
                 userId, latest.getId(), SNAPSHOT_TABLE, "remaining", latest.getRemainingEnc());
@@ -282,35 +322,44 @@ public class GoalService {
         format(remaining),
         format(unallocated),
         format(excess),
-        allocationViews,
-        history(userId, goal.getId()));
+        allocationViews);
   }
 
-  private List<GoalProgressEntryView> history(UUID userId, UUID goalId) {
-    return snapshotRepository
-        .findByUserIdAndGoalIdOrderByReferenceDateDescIdDesc(userId, goalId)
-        .stream()
-        .map(
-            snapshot ->
-                new GoalProgressEntryView(
-                    snapshot.getReferenceDate(),
-                    format(
-                        decryptAmount(
-                            userId,
-                            snapshot.getId(),
-                            SNAPSHOT_TABLE,
-                            "current_value",
-                            snapshot.getCurrentValueEnc())),
-                    format(snapshot.getPercentage()),
-                    format(
-                        decryptAmount(
-                            userId,
-                            snapshot.getId(),
-                            SNAPSHOT_TABLE,
-                            "remaining",
-                            snapshot.getRemainingEnc())),
-                    snapshot.getRuleVersion()))
-        .toList();
+  private GoalProgressEntryView toProgressEntry(UUID userId, GoalProgressSnapshot snapshot) {
+    return new GoalProgressEntryView(
+        snapshot.getReferenceDate(),
+        format(
+            decryptAmount(
+                userId,
+                snapshot.getId(),
+                SNAPSHOT_TABLE,
+                "current_value",
+                snapshot.getCurrentValueEnc())),
+        format(snapshot.getPercentage()),
+        format(
+            decryptAmount(
+                userId, snapshot.getId(), SNAPSHOT_TABLE, "remaining", snapshot.getRemainingEnc())),
+        snapshot.getRuleVersion());
+  }
+
+  private static String encode(LocalDate referenceDate, UUID id) {
+    String raw = referenceDate + "|" + id;
+    return Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static GoalCursor decode(String cursor) {
+    if (cursor == null || cursor.isBlank()) {
+      return null;
+    }
+    try {
+      String raw = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
+      String[] parts = raw.split("\\|", 2);
+      return new GoalCursor(LocalDate.parse(parts[0]), UUID.fromString(parts[1]));
+    } catch (RuntimeException invalid) {
+      throw new ValidationException("cursor", "Cursor inválido.");
+    }
   }
 
   private void persistProgress(
@@ -318,10 +367,38 @@ public class GoalService {
       FinancialGoal goal,
       GoalProgressService.Evaluation evaluation,
       LocalDate referenceDate) {
+    // O insert nativo abaixo precisa enxergar a meta recém-criada na mesma transação.
+    goalRepository.flush();
+    UUID candidateId = UUID.randomUUID();
+    Timestamp now = Timestamp.from(clock.now());
+    // Inserção tolerante a concorrência: dois GETs no mesmo dia não podem derrubar a leitura com
+    // violação da unicidade (goal_id, reference_date).
+    jdbcTemplate.update(
+        """
+        insert into goal_progress_snapshot
+          (id, user_id, goal_id, reference_date, current_value_enc, percentage, remaining_enc,
+           rule_version, created_at, updated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict (goal_id, reference_date) do nothing
+        """,
+        candidateId,
+        userId,
+        goal.getId(),
+        referenceDate,
+        encrypt(
+            userId,
+            candidateId,
+            SNAPSHOT_TABLE,
+            "current_value",
+            format(evaluation.currentValue())),
+        evaluation.percentage(),
+        encrypt(userId, candidateId, SNAPSHOT_TABLE, "remaining", format(evaluation.remaining())),
+        RULE_VERSION,
+        now,
+        now);
+
     GoalProgressSnapshot snapshot =
-        snapshotRepository
-            .findByUserIdAndGoalIdAndReferenceDate(userId, goal.getId(), referenceDate)
-            .orElseGet(() -> new GoalProgressSnapshot(userId, goal.getId(), referenceDate));
+        snapshotRepository.findForUpdate(userId, goal.getId(), referenceDate).orElseThrow();
     snapshot.apply(
         encrypt(
             userId,
@@ -523,15 +600,7 @@ public class GoalService {
 
   private String decryptText(
       UUID userId, UUID recordId, String table, String column, byte[] ciphertext) {
-    if (ciphertext == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          ciphertext, new CryptoContext(userId, table, column, recordId));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    return encryptedValueReader.tryRead(userId, table, column, recordId, ciphertext).orElse(null);
   }
 
   private BigDecimal decryptAmount(
@@ -622,7 +691,7 @@ public class GoalService {
   }
 
   private static String format(BigDecimal value) {
-    return value.setScale(2, RoundingMode.HALF_EVEN).toPlainString();
+    return Money.plain(value);
   }
 
   private record PlannedAllocation(
@@ -641,4 +710,6 @@ public class GoalService {
       LocalDate targetDate,
       GoalProgressRule progressRule,
       List<PlannedAllocation> allocations) {}
+
+  private record GoalCursor(LocalDate referenceDate, UUID id) {}
 }
