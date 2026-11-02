@@ -12,8 +12,8 @@ import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.money.Money;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 /** Configuração de ciclo e limite do cartão; não reescreve faturas fechadas/pagas. */
@@ -28,16 +28,19 @@ public class CardProfileService {
   private final FinancialAccountRepository accountRepository;
   private final AccountQueryService accountQueryService;
   private final CryptoService cryptoService;
+  private final ApplicationEventPublisher eventPublisher;
 
   public CardProfileService(
       CardProfileRepository cardProfileRepository,
       FinancialAccountRepository accountRepository,
       AccountQueryService accountQueryService,
-      CryptoService cryptoService) {
+      CryptoService cryptoService,
+      ApplicationEventPublisher eventPublisher) {
     this.cardProfileRepository = cardProfileRepository;
     this.accountRepository = accountRepository;
     this.accountQueryService = accountQueryService;
     this.cryptoService = cryptoService;
+    this.eventPublisher = eventPublisher;
   }
 
   public CardProfileView update(UUID userId, UUID accountId, CardProfileRequest request) {
@@ -70,6 +73,7 @@ public class CardProfileService {
               "0.00", new CryptoContext(userId, TABLE, BALANCE_COLUMN, profile.getId())));
     }
     cardProfileRepository.save(profile);
+    eventPublisher.publishEvent(new CardProfileUpdatedEvent(userId, accountId));
     return accountQueryService.get(userId, accountId).cardProfile();
   }
 
@@ -82,7 +86,7 @@ public class CardProfileService {
 
   private static BigDecimal parseLimit(String value) {
     try {
-      BigDecimal limit = new BigDecimal(value.trim()).setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+      BigDecimal limit = Money.scaled(new BigDecimal(value.trim()));
       if (limit.signum() < 0) {
         throw new ValidationException("creditLimit", "O limite não pode ser negativo.");
       }

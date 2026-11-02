@@ -10,9 +10,7 @@ executadas pelo Flyway.
 
 - Nome: `V<versão>__<descrição>.sql`, versão numérica crescente e imutável.
 - Uma migração aplicada **nunca** é editada; correções exigem nova versão.
-- A próxima migração é `V003`; não reutilize números de migrações já aplicadas.
-  A `V002__card_bill_forecast.sql` adiciona o mês da fatura informado pelo
-  provedor para alocar compras e pagamentos ao ciclo correto.
+- A próxima migração é `V019`; não reutilize números de migrações já aplicadas.
 - Toda migração deve ser compatível com a versão anterior da aplicação durante
   o deploy (expand/contract), porque server antigo e novo podem coexistir por
   alguns segundos.
@@ -50,6 +48,18 @@ qualquer recriação.
 
 Exemplo: para tornar uma coluna obrigatória, adicione-a anulável, faça backfill,
 publique a aplicação que sempre a preenche e só depois aplique `NOT NULL`.
+
+## Migrações destrutivas já liberadas
+
+- `V009__remove_manual_investment_positions.sql` removeu `investment_position` e os
+  proventos manuais vinculados. É **irreversível sem backup**. Uma instalação que
+  ainda tenha dados de uma versão anterior deve restaurar o backup anterior à
+  atualização (`docs/runbooks/restore.md`), exportar os dados pela área de
+  privacidade e só então aplicar a migração.
+- `V008__investment_position_wealth_flag.sql` altera uma tabela removida pela
+  `V009`; o par permanece apenas como histórico e não deve ser usado como modelo.
+- Antes de qualquer release com migração destrutiva, valide o backup descrito em
+  `docs/runbooks/backup.md` e faça um dump adicional fora da rotação automática.
 
 ## Teste local
 

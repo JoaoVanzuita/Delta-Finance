@@ -7,14 +7,18 @@ import com.deltafinance.support.PostgresTestBase;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationInfo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * Garante que o schema é aplicável em banco vazio, idempotente, restaurável a partir de snapshot da
@@ -139,6 +143,65 @@ class MigrationIT extends PostgresTestBase {
       migrateTo(version);
       assertThat(currentVersion()).isEqualTo(version);
     }
+  }
+
+  @Test
+  void v018DeduplicaCategoriaComMesmaChavePredefinidaEImpoeUnicidade() {
+    cleanDatabase();
+    migrateTo("017");
+
+    UUID userId = UUID.randomUUID();
+    Timestamp now = Timestamp.from(Instant.now());
+    jdbcTemplate.update(
+        """
+        insert into app_user
+          (id, username_normalized, username_display, password_hash, status,
+           created_at, updated_at, version)
+        values (?, 'categoria.teste', 'categoria.teste', 'hash', 'ACTIVE', ?, ?, 0)
+        """,
+        userId,
+        now,
+        now);
+
+    UUID keep = UUID.randomUUID();
+    UUID duplicate = UUID.randomUUID();
+    insertCategory(keep, userId, "moradia", now);
+    insertCategory(duplicate, userId, "moradia", Timestamp.from(now.toInstant().plusSeconds(1)));
+
+    migrateTo("018");
+
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from category where user_id = ? and predefined_key = 'moradia'",
+                Integer.class,
+                userId))
+        .isEqualTo(1);
+    assertThat(
+            jdbcTemplate.queryForList(
+                "select id from category where user_id = ? and predefined_key = 'moradia'",
+                UUID.class,
+                userId))
+        .containsExactly(keep);
+
+    assertThatThrownBy(() -> insertCategory(UUID.randomUUID(), userId, "moradia", now))
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  private void insertCategory(UUID id, UUID userId, String predefinedKey, Timestamp createdAt) {
+    jdbcTemplate.update(
+        """
+        insert into category
+          (id, user_id, name_enc, normalized_name_hash, kind, predefined_key, active,
+           created_at, updated_at, version)
+        values (?, ?, ?, ?, 'EXPENSE', ?, true, ?, ?, 0)
+        """,
+        id,
+        userId,
+        new byte[] {1},
+        UUID.randomUUID().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+        predefinedKey,
+        createdAt,
+        createdAt);
   }
 
   @Test

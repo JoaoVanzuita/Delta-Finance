@@ -8,12 +8,10 @@ import com.deltafinance.accounts.domain.FinancialAccountRepository;
 import com.deltafinance.accounts.domain.ReservedBalance;
 import com.deltafinance.accounts.domain.ReservedBalanceRepository;
 import com.deltafinance.accounts.domain.ReservedBalanceTreatment;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
+import com.deltafinance.shared.money.Money;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +29,7 @@ public class AccountQueryService {
   private final ConnectionNamePort connectionNamePort;
   private final ConnectionReservedBalanceTreatmentPort connectionReservedBalanceTreatmentPort;
   private final AccountBalanceService balanceService;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
 
   public AccountQueryService(
       FinancialAccountRepository accountRepository,
@@ -41,7 +39,7 @@ public class AccountQueryService {
       ConnectionNamePort connectionNamePort,
       ConnectionReservedBalanceTreatmentPort connectionReservedBalanceTreatmentPort,
       AccountBalanceService balanceService,
-      CryptoService cryptoService) {
+      EncryptedValueReader encryptedValueReader) {
     this.accountRepository = accountRepository;
     this.cardProfileRepository = cardProfileRepository;
     this.reservedBalanceRepository = reservedBalanceRepository;
@@ -49,7 +47,7 @@ public class AccountQueryService {
     this.connectionNamePort = connectionNamePort;
     this.connectionReservedBalanceTreatmentPort = connectionReservedBalanceTreatmentPort;
     this.balanceService = balanceService;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   public List<AccountView> list(UUID userId) {
@@ -169,7 +167,7 @@ public class AccountQueryService {
         total = total.add(new BigDecimal(value));
       }
     }
-    return total.setScale(2, RoundingMode.HALF_EVEN).toPlainString();
+    return new Money(total, account.getCurrency()).toPlainString();
   }
 
   private String connectionStatus(FinancialAccount account) {
@@ -233,14 +231,8 @@ public class AccountQueryService {
 
   private String decrypt(
       UUID userId, String table, String column, UUID recordId, byte[] ciphertext) {
-    if (ciphertext == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          ciphertext, new CryptoContext(userId, table, column, recordId));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    // Campos de exibição degradam para nulo se um ciphertext antigo estiver ilegível; a consulta
+    // continua útil e o valor ausente aparece como "Não informado" na UI.
+    return encryptedValueReader.tryRead(userId, table, column, recordId, ciphertext).orElse(null);
   }
 }

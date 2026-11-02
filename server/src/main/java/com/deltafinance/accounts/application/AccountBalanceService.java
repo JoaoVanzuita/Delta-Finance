@@ -2,8 +2,7 @@ package com.deltafinance.accounts.application;
 
 import com.deltafinance.accounts.domain.AccountOrigin;
 import com.deltafinance.accounts.domain.FinancialAccount;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
@@ -40,13 +39,13 @@ public class AccountBalanceService {
   private static final String PAYMENT_TABLE = "invoice_payment";
 
   private final JdbcTemplate jdbcTemplate;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final Clock clock;
 
   public AccountBalanceService(
-      JdbcTemplate jdbcTemplate, CryptoService cryptoService, Clock clock) {
+      JdbcTemplate jdbcTemplate, EncryptedValueReader encryptedValueReader, Clock clock) {
     this.jdbcTemplate = jdbcTemplate;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.clock = clock;
   }
 
@@ -112,9 +111,8 @@ public class AccountBalanceService {
   }
 
   private BigDecimal decrypt(UUID userId, String table, String column, TransactionAmount amount) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            amount.ciphertext(), new CryptoContext(userId, table, column, amount.id())));
+    // Saldo não pode mascarar ciphertext corrompido: a falha deve aparecer, não virar zero.
+    return encryptedValueReader.readMoney(userId, table, column, amount.id(), amount.ciphertext());
   }
 
   private record TransactionAmount(UUID id, byte[] ciphertext) {}

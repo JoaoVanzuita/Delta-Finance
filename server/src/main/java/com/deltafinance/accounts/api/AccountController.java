@@ -3,6 +3,7 @@ package com.deltafinance.accounts.api;
 import com.deltafinance.accounts.application.AccountDisplayNameService;
 import com.deltafinance.accounts.application.AccountInvestmentService;
 import com.deltafinance.accounts.application.AccountQueryService;
+import com.deltafinance.accounts.application.AccountView;
 import com.deltafinance.accounts.application.ReservedBalanceTreatmentService;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -41,41 +42,37 @@ public class AccountController {
   @GetMapping
   public AccountListResponse list() {
     return new AccountListResponse(
-        accountQueryService.list(authenticatedUser.requireId()).stream()
-            .map(AccountResponse::from)
-            .toList());
+        accountQueryService.list(authenticatedUser.requireId()).stream().toList());
   }
 
   @GetMapping("/{id}")
-  public AccountResponse get(@PathVariable UUID id) {
-    return AccountResponse.from(accountQueryService.get(authenticatedUser.requireId(), id));
+  public AccountView get(@PathVariable UUID id) {
+    return accountQueryService.get(authenticatedUser.requireId(), id);
   }
 
   @PutMapping("/{id}/display-name")
-  public AccountResponse rename(
+  public AccountView rename(
       @PathVariable UUID id, @Valid @RequestBody AccountDisplayNameRequest request) {
-    return AccountResponse.from(
-        accountDisplayNameService.rename(authenticatedUser.requireId(), id, request.displayName()));
+    return accountDisplayNameService.rename(
+        authenticatedUser.requireId(), id, request.displayName());
   }
 
   @DeleteMapping("/{id}/display-name")
-  public AccountResponse resetName(@PathVariable UUID id) {
-    return AccountResponse.from(accountDisplayNameService.reset(authenticatedUser.requireId(), id));
+  public AccountView resetName(@PathVariable UUID id) {
+    return accountDisplayNameService.reset(authenticatedUser.requireId(), id);
   }
 
   @PutMapping("/{id}/investment")
-  public AccountResponse updateInvestment(
+  public AccountView updateInvestment(
       @PathVariable UUID id, @Valid @RequestBody AccountInvestmentRequest request) {
-    return AccountResponse.from(
-        accountInvestmentService.update(
-            authenticatedUser.requireId(), id, request.investmentAccount()));
+    return accountInvestmentService.update(
+        authenticatedUser.requireId(), id, request.investmentAccount());
   }
 
   @PutMapping("/{id}/reserved-balance-treatment")
-  public AccountResponse updateReservedBalanceTreatment(
+  public AccountView updateReservedBalanceTreatment(
       @PathVariable UUID id, @Valid @RequestBody ReservedBalanceTreatmentRequest request) {
-    return AccountResponse.from(
-        reservedBalanceTreatmentService.update(
-            authenticatedUser.requireId(), id, request.treatment()));
+    return reservedBalanceTreatmentService.update(
+        authenticatedUser.requireId(), id, request.treatment());
   }
 }

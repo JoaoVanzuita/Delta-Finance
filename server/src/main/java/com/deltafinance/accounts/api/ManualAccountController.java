@@ -1,5 +1,6 @@
 package com.deltafinance.accounts.api;
 
+import com.deltafinance.accounts.application.AccountView;
 import com.deltafinance.accounts.application.ManualAccountService;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -29,15 +30,13 @@ public class ManualAccountController {
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public AccountResponse create(@Valid @RequestBody ManualAccountRequest request) {
-    return AccountResponse.from(
-        manualAccountService.create(authenticatedUser.requireId(), request));
+  public AccountView create(@Valid @RequestBody ManualAccountRequest request) {
+    return manualAccountService.create(authenticatedUser.requireId(), request);
   }
 
   @PatchMapping("/{id}")
-  public AccountResponse update(
+  public AccountView update(
       @PathVariable UUID id, @Valid @RequestBody AccountUpdateRequest request) {
-    return AccountResponse.from(
-        manualAccountService.update(authenticatedUser.requireId(), id, request));
+    return manualAccountService.update(authenticatedUser.requireId(), id, request);
   }
 }

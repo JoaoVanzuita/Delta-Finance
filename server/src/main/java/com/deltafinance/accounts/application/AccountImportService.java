@@ -18,6 +18,7 @@ import com.deltafinance.integrations.infrastructure.PluggyUnauthorizedException;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
 import com.deltafinance.shared.crypto.IndexHmacService;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.sync.SyncCancellationRegistry;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
@@ -115,8 +116,9 @@ public class AccountImportService {
           page.complete(),
           item.openFinance());
     }
-    // Leitura completa: contas ausentes saem dos saldos, mas preservam histórico e transações.
-    if (page.complete()) {
+    // Lista vazia é inconclusiva: não marque ausências a partir dela. Só uma leitura completa
+    // com ao menos uma conta prova que as demais deixaram de existir.
+    if (page.complete() && !page.items().isEmpty()) {
       markMissingUnavailable(connectionId, seenHashes);
     }
     return page.items().size();
@@ -261,7 +263,7 @@ public class AccountImportService {
           importedBalance.amount() == null ? BigDecimal.ZERO : importedBalance.amount();
       byte[] amountEnc =
           cryptoService.encrypt(
-              amount.setScale(2, java.math.RoundingMode.HALF_EVEN).toPlainString(),
+              Money.plain(amount),
               new CryptoContext(userId, RESERVED_BALANCE_TABLE, "amount", reserved.getId()));
       byte[] detailsEnc =
           importedBalance.detailsJson() == null

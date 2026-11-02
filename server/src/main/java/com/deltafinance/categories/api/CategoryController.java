@@ -32,24 +32,21 @@ public class CategoryController {
   @GetMapping
   public CategoryListResponse list() {
     return new CategoryListResponse(
-        categoryService.list(authenticatedUser.requireId()).stream()
-            .map(CategoryResponse::from)
-            .toList());
+        categoryService.list(authenticatedUser.requireId()).stream().toList());
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public CategoryResponse create(@Valid @RequestBody CategoryRequest request) {
+  public CategoryView create(@Valid @RequestBody CategoryRequest request) {
     CategoryView view =
         categoryService.create(authenticatedUser.requireId(), request.name(), request.kind());
-    return CategoryResponse.from(view);
+    return view;
   }
 
   @PatchMapping("/{id}")
-  public CategoryResponse update(
-      @PathVariable UUID id, @Valid @RequestBody CategoryRequest request) {
-    return CategoryResponse.from(
-        categoryService.update(authenticatedUser.requireId(), id, request.name(), request.kind()));
+  public CategoryView update(@PathVariable UUID id, @Valid @RequestBody CategoryRequest request) {
+    return categoryService.update(
+        authenticatedUser.requireId(), id, request.name(), request.kind());
   }
 
   @DeleteMapping("/{id}")

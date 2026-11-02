@@ -4,13 +4,11 @@ import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
 import com.deltafinance.accounts.domain.ReservedBalance;
 import com.deltafinance.accounts.domain.ReservedBalanceRepository;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.NotFoundException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,19 +26,19 @@ public class ReservedBalanceQueryService {
 
   private final ReservedBalanceRepository reservedBalanceRepository;
   private final FinancialAccountRepository accountRepository;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final JsonMapper jsonMapper;
   private final Clock clock;
 
   public ReservedBalanceQueryService(
       ReservedBalanceRepository reservedBalanceRepository,
       FinancialAccountRepository accountRepository,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       JsonMapper jsonMapper,
       Clock clock) {
     this.reservedBalanceRepository = reservedBalanceRepository;
     this.accountRepository = accountRepository;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.jsonMapper = jsonMapper;
     this.clock = clock;
   }
@@ -90,9 +88,7 @@ public class ReservedBalanceQueryService {
         name,
         providerName,
         nameCustomized,
-        amount == null
-            ? "0.00"
-            : new BigDecimal(amount).setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
+        amount == null ? "0.00" : new Money(new BigDecimal(amount), currency).toPlainString(),
         currency,
         referenceDate,
         stale,
@@ -148,14 +144,8 @@ public class ReservedBalanceQueryService {
   }
 
   private String decrypt(ReservedBalance reserved, byte[] ciphertext, String column) {
-    if (ciphertext == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          ciphertext, new CryptoContext(reserved.getUserId(), TABLE, column, reserved.getId()));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    return encryptedValueReader
+        .tryRead(reserved.getUserId(), TABLE, column, reserved.getId(), ciphertext)
+        .orElse(null);
   }
 }

@@ -1,6 +1,7 @@
 package com.deltafinance.accounts.api;
 
 import com.deltafinance.accounts.application.CardProfileService;
+import com.deltafinance.accounts.application.CardProfileView;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -24,9 +25,8 @@ public class CardProfileController {
   }
 
   @PutMapping("/{accountId}/profile")
-  public CardProfileResponse update(
+  public CardProfileView update(
       @PathVariable UUID accountId, @Valid @RequestBody CardProfileRequest request) {
-    return CardProfileResponse.from(
-        cardProfileService.update(authenticatedUser.requireId(), accountId, request));
+    return cardProfileService.update(authenticatedUser.requireId(), accountId, request);
   }
 }

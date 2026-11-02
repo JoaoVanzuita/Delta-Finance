@@ -3,12 +3,14 @@ package com.deltafinance.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.deltafinance.connections.application.SyncJobService;
 import com.deltafinance.integrations.infrastructure.PluggyRateLimiter;
 import com.deltafinance.support.AuthTestClient;
 import com.deltafinance.support.PluggyStub;
 import com.deltafinance.support.PluggyStub.AccountFixture;
 import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +45,7 @@ class AccountReconciliationIT extends PostgresTestBase {
   @Autowired private MockMvc mockMvc;
   @Autowired private JsonMapper jsonMapper;
   @Autowired private PluggyRateLimiter rateLimiter;
+  @Autowired private SyncJobService syncJobService;
 
   private AuthTestClient alice;
   private String connectionId;
@@ -126,6 +129,26 @@ class AccountReconciliationIT extends PostgresTestBase {
                 .getContentAsString());
     // A conta antiga continua no histórico, mas não no saldo; a conta comum não duplica.
     assertThat(summary.path("currentBalance").asString()).isEqualTo("300.00");
+  }
+
+  @Test
+  void listaVaziaDeContasNaoMarcaContasExistentesComoIndisponiveis() throws Exception {
+    JsonNode before = accounts().path("items");
+    assertThat(before).hasSize(2);
+    String oldId = accountIdByAlias(before, "Conta antiga");
+    String sharedId = accountIdByAlias(before, "Conta comum");
+
+    // Uma resposta vazia é inconclusiva: não prova que as contas deixaram de existir.
+    PLUGGY.setAccounts("item-contas-old", List.of());
+    alice
+        .post("/api/v1/connections/" + connectionId + "/sync", null)
+        .andExpect(status().isAccepted());
+    syncJobService.processNext("worker", "empty-accounts");
+
+    JsonNode after = accounts().path("items");
+    assertThat(after).hasSize(2);
+    assertThat(accountStatus(after, oldId)).isEqualTo("ACTIVE");
+    assertThat(accountStatus(after, sharedId)).isEqualTo("ACTIVE");
   }
 
   private String accountIdByAlias(JsonNode accounts, String alias) {

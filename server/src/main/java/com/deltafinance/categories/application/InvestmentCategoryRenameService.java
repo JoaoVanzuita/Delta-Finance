@@ -42,7 +42,7 @@ public class InvestmentCategoryRenameService {
       // Já migrada, inativa ou renomeada pelo usuário: não sobrescreve a escolha local.
       return new Report(false);
     }
-    categoryService.deactivate(userId, legacy, target);
+    categoryService.deactivatePredefined(userId, legacy, target);
     return new Report(true);
   }
 }

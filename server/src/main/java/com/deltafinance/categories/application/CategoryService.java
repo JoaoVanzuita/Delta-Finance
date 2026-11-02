@@ -6,8 +6,8 @@ import com.deltafinance.categories.domain.CategoryRepository;
 import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.crypto.IndexHmacService;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.NotFoundException;
@@ -56,6 +56,7 @@ public class CategoryService {
 
   private final CategoryRepository categoryRepository;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final IndexHmacService hmacService;
   private final AuditService auditService;
   private final JdbcTemplate jdbcTemplate;
@@ -63,11 +64,13 @@ public class CategoryService {
   public CategoryService(
       CategoryRepository categoryRepository,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       IndexHmacService hmacService,
       AuditService auditService,
       JdbcTemplate jdbcTemplate) {
     this.categoryRepository = categoryRepository;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.hmacService = hmacService;
     this.auditService = auditService;
     this.jdbcTemplate = jdbcTemplate;
@@ -116,6 +119,7 @@ public class CategoryService {
 
   public CategoryView update(UUID userId, UUID categoryId, String name, String kindValue) {
     Category category = requireCategory(userId, categoryId);
+    requireCustomCategory(category);
     String displayName = requireName(name);
     CategoryKind kind = parseKind(kindValue);
     byte[] hash = hmacService.hmac("category", normalize(displayName));
@@ -136,7 +140,19 @@ public class CategoryService {
 
   /** Desativa e reatribui (ou remove a categoria) das transações sem apagar lançamentos. */
   public void deactivate(UUID userId, UUID categoryId, UUID reassignTo) {
+    deactivate(userId, categoryId, reassignTo, false);
+  }
+
+  /** Caminho interno para consolidar uma categoria legada da taxonomia. */
+  void deactivatePredefined(UUID userId, UUID categoryId, UUID reassignTo) {
+    deactivate(userId, categoryId, reassignTo, true);
+  }
+
+  private void deactivate(UUID userId, UUID categoryId, UUID reassignTo, boolean allowPredefined) {
     Category category = requireCategory(userId, categoryId);
+    if (!allowPredefined) {
+      requireCustomCategory(category);
+    }
     if (reassignTo != null) {
       if (reassignTo.equals(categoryId)) {
         throw new ValidationException("reassignTo", "Escolha outra categoria para reatribuir.");
@@ -202,12 +218,24 @@ public class CategoryService {
         .orElseThrow(NotFoundException::new);
   }
 
+  /**
+   * Categorias da taxonomia são imutáveis: renomear ou desativar quebraria a resolução canônica e
+   * permitiria duplicatas com a mesma {@code predefined_key}.
+   */
+  private static void requireCustomCategory(Category category) {
+    if (category.getPredefinedKey() != null) {
+      throw new ConflictException(
+          "PREDEFINED_CATEGORY_IMMUTABLE",
+          "Categorias predefinidas não podem ser renomeadas, alteradas ou desativadas.");
+    }
+  }
+
   private void ensurePredefined(UUID userId) {
     for (Predefined predefined : PREDEFINED) {
-      byte[] hash = hmacService.hmac("category", normalize(predefined.name()));
-      if (categoryRepository.findByUserIdAndNormalizedNameHash(userId, hash).isPresent()) {
+      if (categoryRepository.findByUserIdAndPredefinedKey(userId, predefined.key()).isPresent()) {
         continue;
       }
+      byte[] hash = hmacService.hmac("category", normalize(predefined.name()));
       UUID id = UUID.randomUUID();
       try {
         categoryRepository.save(
@@ -234,13 +262,11 @@ public class CategoryService {
   }
 
   private String decrypt(Category category) {
-    try {
-      return cryptoService.decryptString(
-          category.getNameEnc(),
-          new CryptoContext(category.getUserId(), TABLE, NAME_COLUMN, category.getId()));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    // Nunca devolver null aqui: o nome entra em Comparator e na UI. Uma categoria ilegível
+    // permanece listada com um rótulo estável em vez de derrubar dashboard e relatórios.
+    return encryptedValueReader
+        .tryRead(category.getUserId(), TABLE, NAME_COLUMN, category.getId(), category.getNameEnc())
+        .orElse("Categoria sem nome");
   }
 
   private byte[] encrypt(UUID userId, UUID categoryId, String name) {

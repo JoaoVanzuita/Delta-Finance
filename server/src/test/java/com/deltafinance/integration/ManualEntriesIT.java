@@ -311,6 +311,30 @@ class ManualEntriesIT extends PostgresTestBase {
   }
 
   @Test
+  void categoriaPredefinidaNaoPodeSerRenomeadaNemDesativada() throws Exception {
+    String moradia = categoryIdByName("Moradia");
+
+    alice
+        .patch("/api/v1/categories/" + moradia, Map.of("name", "Casa", "kind", "EXPENSE"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PREDEFINED_CATEGORY_IMMUTABLE"));
+    alice
+        .delete("/api/v1/categories/" + moradia)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("PREDEFINED_CATEGORY_IMMUTABLE"));
+
+    JsonNode categories = listCategories();
+    int moradiaCount = 0;
+    for (JsonNode category : categories.path("items")) {
+      assertThat(category.path("name").asString()).isNotEqualTo("Casa");
+      if ("Moradia".equals(category.path("name").asString())) {
+        moradiaCount++;
+      }
+    }
+    assertThat(moradiaCount).isEqualTo(1);
+  }
+
+  @Test
   void edicaoEExclusaoManualAtualizamSemAfetarImportadas() throws Exception {
     String cash = createAccount("CASH", "Carteira", "100.00");
     JsonNode created = createTransaction("CREDIT", cash, "50.00", "Venda", null, null, null);
