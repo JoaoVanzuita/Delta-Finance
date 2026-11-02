@@ -21,6 +21,7 @@ import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.sync.SyncCancellationRegistry;
 import com.deltafinance.shared.sync.SyncCancelledException;
 import com.deltafinance.shared.time.Clock;
@@ -56,6 +57,7 @@ public class PluggySyncService {
   private final PluggyIntegrationRepository integrationRepository;
   private final PluggyConnectionRepository connectionRepository;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final SyncMetrics metrics;
   private final AuditService auditService;
   private final InternalMatchService internalMatchService;
@@ -74,6 +76,7 @@ public class PluggySyncService {
       PluggyIntegrationRepository integrationRepository,
       PluggyConnectionRepository connectionRepository,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       SyncMetrics metrics,
       AuditService auditService,
       InternalMatchService internalMatchService,
@@ -90,6 +93,7 @@ public class PluggySyncService {
     this.integrationRepository = integrationRepository;
     this.connectionRepository = connectionRepository;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.metrics = metrics;
     this.auditService = auditService;
     this.internalMatchService = internalMatchService;
@@ -385,10 +389,12 @@ public class PluggySyncService {
   }
 
   private String decryptItemId(PluggyConnection connection) {
-    return cryptoService.decryptString(
-        connection.getExternalItemIdEnc(),
-        new CryptoContext(
-            connection.getUserId(), CONNECTION_TABLE, "external_item_id", connection.getId()));
+    return encryptedValueReader.read(
+        connection.getUserId(),
+        CONNECTION_TABLE,
+        "external_item_id",
+        connection.getId(),
+        connection.getExternalItemIdEnc());
   }
 
   /** Exceção interna que transporta uma decisão já mapeada. */

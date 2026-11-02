@@ -23,6 +23,7 @@ import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.crypto.IndexHmacService;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.ErrorCode;
@@ -63,6 +64,7 @@ public class ConnectionService {
   private final InvestmentImportService investmentImportService;
   private final AccountQueryService accountQueryService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final IndexHmacService hmacService;
   private final AuditService auditService;
   private final ItemReconciliationService itemReconciliationService;
@@ -84,6 +86,7 @@ public class ConnectionService {
       InvestmentImportService investmentImportService,
       AccountQueryService accountQueryService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       IndexHmacService hmacService,
       AuditService auditService,
       ItemReconciliationService itemReconciliationService,
@@ -103,6 +106,7 @@ public class ConnectionService {
     this.investmentImportService = investmentImportService;
     this.accountQueryService = accountQueryService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.hmacService = hmacService;
     this.auditService = auditService;
     this.itemReconciliationService = itemReconciliationService;
@@ -382,29 +386,32 @@ public class ConnectionService {
     String itemId = null;
     if (connection.getExternalItemIdEnc() != null) {
       itemId =
-          cryptoService.decryptString(
-              connection.getExternalItemIdEnc(),
-              new CryptoContext(
-                  connection.getUserId(), CONNECTION_TABLE, ITEM_ID_COLUMN, connection.getId()));
+          encryptedValueReader.read(
+              connection.getUserId(),
+              CONNECTION_TABLE,
+              ITEM_ID_COLUMN,
+              connection.getId(),
+              connection.getExternalItemIdEnc());
     }
     String institution = null;
     if (connection.getInstitutionNameEnc() != null) {
       institution =
-          cryptoService.decryptString(
-              connection.getInstitutionNameEnc(),
-              new CryptoContext(
-                  connection.getUserId(),
-                  CONNECTION_TABLE,
-                  "institution_name",
-                  connection.getId()));
+          encryptedValueReader.read(
+              connection.getUserId(),
+              CONNECTION_TABLE,
+              "institution_name",
+              connection.getId(),
+              connection.getInstitutionNameEnc());
     }
     String customName = null;
     if (connection.getDisplayNameEnc() != null) {
       customName =
-          cryptoService.decryptString(
-              connection.getDisplayNameEnc(),
-              new CryptoContext(
-                  connection.getUserId(), CONNECTION_TABLE, "display_name", connection.getId()));
+          encryptedValueReader.read(
+              connection.getUserId(),
+              CONNECTION_TABLE,
+              "display_name",
+              connection.getId(),
+              connection.getDisplayNameEnc());
     }
     boolean nameCustomized = customName != null && !customName.isBlank();
     String displayName = nameCustomized ? customName : institution;

@@ -224,6 +224,13 @@ public class PluggyConnection extends BaseEntity {
     }
   }
 
+  /** Reativa a conexão depois que credenciais válidas foram salvas. */
+  public void reactivateAfterCredentials() {
+    this.status = ConnectionStatus.ACTIVE;
+    this.lastErrorCode = null;
+    this.consecutiveFailures = 0;
+  }
+
   /** Remove a credencial de acesso (itemId) sem apagar o histórico local. */
   public void markUnavailable() {
     this.status = ConnectionStatus.ITEM_UNAVAILABLE;

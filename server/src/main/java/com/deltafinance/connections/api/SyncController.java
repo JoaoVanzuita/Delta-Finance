@@ -1,11 +1,12 @@
 package com.deltafinance.connections.api;
 
 import com.deltafinance.connections.application.ConnectionService;
+import com.deltafinance.connections.application.ConnectionView;
 import com.deltafinance.connections.application.SyncJobService;
 import com.deltafinance.connections.application.SyncQueryService;
 import com.deltafinance.connections.application.SyncRunView;
-import com.deltafinance.integrations.api.IntegrationResponse;
 import com.deltafinance.integrations.application.IntegrationService;
+import com.deltafinance.integrations.application.IntegrationView;
 import com.deltafinance.security.AuthenticatedUser;
 import com.deltafinance.shared.pagination.CursorPage;
 import java.util.List;
@@ -42,10 +43,8 @@ public class SyncController {
   @GetMapping("/status")
   public SyncStatusResponse status() {
     UUID userId = authenticatedUser.requireId();
-    List<IntegrationResponse> integrations =
-        integrationService.findView(userId).map(IntegrationResponse::from).stream().toList();
-    List<ConnectionResponse> connections =
-        connectionService.list(userId).stream().map(ConnectionResponse::from).toList();
+    List<IntegrationView> integrations = integrationService.findView(userId).stream().toList();
+    List<ConnectionView> connections = connectionService.list(userId).stream().toList();
     return new SyncStatusResponse(integrations, connections, syncJobService.pendingCount(userId));
   }
 
@@ -54,26 +53,6 @@ public class SyncController {
       @RequestParam(required = false) String cursor, @RequestParam(defaultValue = "20") int limit) {
     CursorPage<SyncRunView> page =
         syncQueryService.runs(authenticatedUser.requireId(), cursor, limit);
-    return new SyncRunPageResponse(
-        page.items().stream().map(SyncController::toResponse).toList(),
-        page.nextCursor(),
-        page.hasMore());
-  }
-
-  private static SyncRunResponse toResponse(SyncRunView view) {
-    return new SyncRunResponse(
-        view.id(),
-        view.integrationId(),
-        view.connectionId(),
-        view.status(),
-        view.startedAt(),
-        view.finishedAt(),
-        view.readCount(),
-        view.createdCount(),
-        view.updatedCount(),
-        view.skippedCount(),
-        view.failedCount(),
-        view.durationMs(),
-        view.errorCode());
+    return new SyncRunPageResponse(page.items(), page.nextCursor(), page.hasMore());
   }
 }

@@ -1,6 +1,8 @@
 package com.deltafinance.integrations.api;
 
 import com.deltafinance.integrations.application.IntegrationService;
+import com.deltafinance.integrations.application.IntegrationView;
+import com.deltafinance.integrations.application.ValidationView;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,20 +27,18 @@ public class IntegrationController {
   }
 
   @GetMapping
-  public IntegrationResponse get() {
-    return IntegrationResponse.from(integrationService.get(authenticatedUser.requireId()));
+  public IntegrationView get() {
+    return integrationService.get(authenticatedUser.requireId());
   }
 
   @PutMapping
-  public IntegrationResponse save(@Valid @RequestBody IntegrationCredentialsRequest request) {
-    return IntegrationResponse.from(
-        integrationService.saveCredentials(
-            authenticatedUser.requireId(), request.clientId(), request.clientSecret()));
+  public IntegrationView save(@Valid @RequestBody IntegrationCredentialsRequest request) {
+    return integrationService.saveCredentials(
+        authenticatedUser.requireId(), request.clientId(), request.clientSecret());
   }
 
   @PostMapping("/validate")
-  public ValidationResponse validate(@Valid @RequestBody IntegrationCredentialsRequest request) {
-    return ValidationResponse.from(
-        integrationService.validate(request.clientId(), request.clientSecret()));
+  public ValidationView validate(@Valid @RequestBody IntegrationCredentialsRequest request) {
+    return integrationService.validate(request.clientId(), request.clientSecret());
   }
 }

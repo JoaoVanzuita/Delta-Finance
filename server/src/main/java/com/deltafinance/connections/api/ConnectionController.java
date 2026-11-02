@@ -1,6 +1,7 @@
 package com.deltafinance.connections.api;
 
 import com.deltafinance.connections.application.ConnectionService;
+import com.deltafinance.connections.application.ConnectionView;
 import com.deltafinance.connections.application.SyncJobService;
 import com.deltafinance.security.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -38,46 +39,39 @@ public class ConnectionController {
   @GetMapping
   public ConnectionPageResponse list() {
     return ConnectionPageResponse.last(
-        connectionService.list(authenticatedUser.requireId()).stream()
-            .map(ConnectionResponse::from)
-            .toList());
+        connectionService.list(authenticatedUser.requireId()).stream().toList());
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public ConnectionResponse add(@Valid @RequestBody ConnectionCreateRequest request) {
-    return ConnectionResponse.from(
-        connectionService.add(authenticatedUser.requireId(), request.itemId()));
+  public ConnectionView add(@Valid @RequestBody ConnectionCreateRequest request) {
+    return connectionService.add(authenticatedUser.requireId(), request.itemId());
   }
 
   @PatchMapping("/{id}")
-  public ConnectionResponse update(
+  public ConnectionView update(
       @PathVariable UUID id, @Valid @RequestBody ConnectionUpdateRequest request) {
-    return ConnectionResponse.from(
-        connectionService.updateItemId(authenticatedUser.requireId(), id, request.itemId()));
+    return connectionService.updateItemId(authenticatedUser.requireId(), id, request.itemId());
   }
 
   @PutMapping("/{id}/display-name")
-  public ConnectionResponse rename(
+  public ConnectionView rename(
       @PathVariable UUID id, @Valid @RequestBody ConnectionDisplayNameRequest request) {
-    return ConnectionResponse.from(
-        connectionService.renameDisplayName(
-            authenticatedUser.requireId(), id, request.displayName()));
+    return connectionService.renameDisplayName(
+        authenticatedUser.requireId(), id, request.displayName());
   }
 
   @DeleteMapping("/{id}/display-name")
-  public ConnectionResponse resetName(@PathVariable UUID id) {
-    return ConnectionResponse.from(
-        connectionService.resetDisplayName(authenticatedUser.requireId(), id));
+  public ConnectionView resetName(@PathVariable UUID id) {
+    return connectionService.resetDisplayName(authenticatedUser.requireId(), id);
   }
 
   @PutMapping("/{id}/reserved-balance-treatment")
-  public ConnectionResponse updateReservedBalanceTreatment(
+  public ConnectionView updateReservedBalanceTreatment(
       @PathVariable UUID id,
       @Valid @RequestBody ConnectionReservedBalanceTreatmentRequest request) {
-    return ConnectionResponse.from(
-        connectionService.updateReservedBalanceTreatment(
-            authenticatedUser.requireId(), id, request.treatment()));
+    return connectionService.updateReservedBalanceTreatment(
+        authenticatedUser.requireId(), id, request.treatment());
   }
 
   @DeleteMapping("/{id}")

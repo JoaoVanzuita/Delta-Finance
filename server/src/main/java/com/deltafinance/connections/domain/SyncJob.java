@@ -161,7 +161,10 @@ public class SyncJob extends BaseEntity {
   }
 
   /** Devolve o job à fila sem consumir uma tentativa (lock ocupado). */
-  public void release(Instant nextRunAt) {
+  public void releaseAfterLockContention(Instant nextRunAt) {
+    if (attempts > 0) {
+      attempts--;
+    }
     this.status = SyncJobStatus.RETRY;
     this.lockedBy = null;
     this.lockedAt = null;

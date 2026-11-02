@@ -237,7 +237,7 @@ public class SyncJobService {
     UUID lockKey = job.getIntegrationId() == null ? job.getId() : job.getIntegrationId();
     ReentrantLock lock = integrationLocks.computeIfAbsent(lockKey, ignored -> new ReentrantLock());
     if (!lock.tryLock()) {
-      job.release(clock.now().plus(properties.getRetryBase()));
+      job.releaseAfterLockContention(clock.now().plus(properties.getRetryBase()));
       jobRepository.save(job);
       LOG.debug("Job {} devolvido à fila: integração já em processamento", job.getId());
       return Optional.of(job.getId());

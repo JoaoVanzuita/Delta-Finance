@@ -1,9 +1,8 @@
 package com.deltafinance.integrations.infrastructure;
 
 import com.deltafinance.integrations.domain.PluggyIntegration;
-import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoException;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.time.Clock;
 import java.time.Duration;
 import java.util.Map;
@@ -30,7 +29,7 @@ public class PluggyAuthClient {
 
   private final RestClient restClient;
   private final ApiKeyCache apiKeyCache;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final JsonMapper jsonMapper;
   private final Clock clock;
   private final PluggyRateLimiter rateLimiter;
@@ -38,13 +37,13 @@ public class PluggyAuthClient {
   public PluggyAuthClient(
       RestClient pluggyRestClient,
       ApiKeyCache apiKeyCache,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       JsonMapper jsonMapper,
       Clock clock,
       PluggyRateLimiter rateLimiter) {
     this.restClient = pluggyRestClient;
     this.apiKeyCache = apiKeyCache;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.jsonMapper = jsonMapper;
     this.clock = clock;
     this.rateLimiter = rateLimiter;
@@ -85,10 +84,11 @@ public class PluggyAuthClient {
 
   private String decrypt(PluggyIntegration integration, byte[] ciphertext, String column) {
     try {
-      return cryptoService.decryptString(
-          ciphertext,
-          new CryptoContext(integration.getUserId(), TABLE, column, integration.getId()));
+      return encryptedValueReader.read(
+          integration.getUserId(), TABLE, column, integration.getId(), ciphertext);
     } catch (CryptoException exception) {
+      // Credencial ilegível é falha de autenticação do provedor, não erro interno vazado ao
+      // cliente.
       throw new PluggyCredentialException();
     }
   }

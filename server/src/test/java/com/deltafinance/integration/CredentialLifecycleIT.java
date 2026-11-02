@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.deltafinance.connections.application.SyncJobService;
+import com.deltafinance.integrations.domain.PluggyIntegrationRepository;
+import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyRateLimiter;
 import com.deltafinance.support.AuthTestClient;
 import com.deltafinance.support.PluggyStub;
@@ -12,6 +14,7 @@ import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +48,8 @@ class CredentialLifecycleIT extends PostgresTestBase {
   @Autowired private MockMvc mockMvc;
   @Autowired private JsonMapper jsonMapper;
   @Autowired private SyncJobService syncJobService;
+  @Autowired private PluggyAuthClient authClient;
+  @Autowired private PluggyIntegrationRepository integrationRepository;
   @Autowired private PluggyRateLimiter rateLimiter;
 
   private AuthTestClient alice;
@@ -124,6 +129,33 @@ class CredentialLifecycleIT extends PostgresTestBase {
     assertThat(connections.path("items").get(0).path("lastErrorCode").asString())
         .isEqualTo("CONSENT_EXPIRED");
     assertThat(connections.path("items").get(0).path("consentExpiresAt").asString()).isNotBlank();
+  }
+
+  @Test
+  void salvarCredenciaisReativaConexoesBloqueadasEEnfileiraSync() throws Exception {
+    syncAndProcess();
+    var integration = integrationRepository.findMeuPluggy(userId()).orElseThrow();
+    authClient.invalidate(integration);
+    PLUGGY.registerClient(CLIENT, "segredo-trocado");
+    syncAndProcess();
+    assertThat(connections().path("items").get(0).path("status").asString())
+        .isEqualTo("CREDENTIAL_FAILURE");
+
+    PLUGGY.registerClient(CLIENT, "secret-alice");
+    alice
+        .put(
+            "/api/v1/integrations/pluggy",
+            Map.of("clientId", CLIENT, "clientSecret", "secret-alice"))
+        .andExpect(status().isOk());
+
+    assertThat(connections().path("items").get(0).path("status").asString()).isEqualTo("ACTIVE");
+    // O listener reativa e enfileira a sincronização sem esperar o ciclo diário.
+    assertThat(syncJobService.processNext("worker", "reactivated")).isPresent();
+  }
+
+  private UUID userId() {
+    return jdbcTemplate.queryForObject(
+        "select id from app_user where username_normalized = ?", UUID.class, ALICE);
   }
 
   private void syncAndProcess() throws Exception {

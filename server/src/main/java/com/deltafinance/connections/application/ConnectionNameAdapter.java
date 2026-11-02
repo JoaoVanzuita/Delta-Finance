@@ -3,8 +3,7 @@ package com.deltafinance.connections.application;
 import com.deltafinance.accounts.application.ConnectionNamePort;
 import com.deltafinance.connections.domain.PluggyConnection;
 import com.deltafinance.connections.domain.PluggyConnectionRepository;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -21,12 +20,12 @@ public class ConnectionNameAdapter implements ConnectionNamePort {
   private static final String CONNECTION_TABLE = "pluggy_connection";
 
   private final PluggyConnectionRepository connectionRepository;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
 
   public ConnectionNameAdapter(
-      PluggyConnectionRepository connectionRepository, CryptoService cryptoService) {
+      PluggyConnectionRepository connectionRepository, EncryptedValueReader encryptedValueReader) {
     this.connectionRepository = connectionRepository;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   @Override
@@ -47,16 +46,9 @@ public class ConnectionNameAdapter implements ConnectionNamePort {
   }
 
   private String decrypt(PluggyConnection connection, byte[] ciphertext, String column) {
-    if (ciphertext == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(
-          ciphertext,
-          new CryptoContext(connection.getUserId(), CONNECTION_TABLE, column, connection.getId()));
-    } catch (RuntimeException exception) {
-      // Nome é apenas apresentação: uma chave antiga/ilegível não deve quebrar a listagem.
-      return null;
-    }
+    // Nome é apenas apresentação: chave antiga/ilegível vira nulo e a listagem continua.
+    return encryptedValueReader
+        .tryRead(connection.getUserId(), CONNECTION_TABLE, column, connection.getId(), ciphertext)
+        .orElse(null);
   }
 }

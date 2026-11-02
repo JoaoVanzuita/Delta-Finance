@@ -9,6 +9,7 @@ import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.ValidationException;
 import java.util.UUID;
@@ -32,6 +33,7 @@ public class IntegrationService {
   private final ConnectionCounter connectionCounter;
   private final PluggyAuthClient authClient;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
   private final ApplicationEventPublisher eventPublisher;
   private final PluggyProperties properties;
@@ -41,6 +43,7 @@ public class IntegrationService {
       ConnectionCounter connectionCounter,
       PluggyAuthClient authClient,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService,
       ApplicationEventPublisher eventPublisher,
       PluggyProperties properties) {
@@ -48,6 +51,7 @@ public class IntegrationService {
     this.connectionCounter = connectionCounter;
     this.authClient = authClient;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
     this.eventPublisher = eventPublisher;
     this.properties = properties;
@@ -97,6 +101,8 @@ public class IntegrationService {
       integration.markIncomplete();
     }
     integrationRepository.save(integration);
+    eventPublisher.publishEvent(
+        new IntegrationCredentialsUpdatedEvent(userId, integration.getId()));
     auditService.record(
         userId, AuditEventType.INTEGRATION_UPDATED, "pluggy_integration", integration.getId());
     return view(integration);
@@ -112,7 +118,7 @@ public class IntegrationService {
 
   /**
    * Desconecta a integração. Por padrão preserva o histórico e marca as conexões como
-   * indisponíveis; a remoção definitiva de dados é tratada no fluxo de privacidade (T143).
+   * indisponíveis; a remoção definitiva de dados é tratada no fluxo de privacidade.
    */
   public void disconnect(UUID userId) {
     var integration = integrationRepository.findMeuPluggy(userId);
@@ -156,10 +162,12 @@ public class IntegrationService {
     String masked = null;
     if (integration.getClientIdEnc() != null) {
       String clientId =
-          cryptoService.decryptString(
-              integration.getClientIdEnc(),
-              new CryptoContext(
-                  integration.getUserId(), TABLE, CLIENT_ID_COLUMN, integration.getId()));
+          encryptedValueReader.read(
+              integration.getUserId(),
+              TABLE,
+              CLIENT_ID_COLUMN,
+              integration.getId(),
+              integration.getClientIdEnc());
       masked = mask(clientId);
     }
     long connections = connectionCounter.countByIntegration(integration.getId());
