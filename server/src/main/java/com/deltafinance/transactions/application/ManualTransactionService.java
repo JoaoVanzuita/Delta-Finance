@@ -23,7 +23,6 @@ import com.deltafinance.transactions.domain.TransactionSource;
 import com.deltafinance.transactions.domain.TransactionStatus;
 import com.deltafinance.transactions.domain.TransactionType;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Map;
@@ -269,7 +268,7 @@ public class ManualTransactionService {
       String notes,
       String adjustmentReason) {
     UUID id = UUID.randomUUID();
-    BigDecimal scaled = amount.setScale(Money.SCALE, RoundingMode.HALF_EVEN);
+    BigDecimal scaled = Money.scaled(amount);
     byte[] amountEnc =
         cryptoService.encrypt(
             scaled.toPlainString(), new CryptoContext(userId, TABLE, "amount_effective", id));

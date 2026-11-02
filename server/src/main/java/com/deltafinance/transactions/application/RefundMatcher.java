@@ -1,7 +1,6 @@
 package com.deltafinance.transactions.application;
 
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.transactions.domain.Transaction;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionType;
@@ -48,11 +47,12 @@ public class RefundMatcher {
           "transacao");
 
   private final TransactionRepository transactionRepository;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
 
-  public RefundMatcher(TransactionRepository transactionRepository, CryptoService cryptoService) {
+  public RefundMatcher(
+      TransactionRepository transactionRepository, EncryptedValueReader encryptedValueReader) {
     this.transactionRepository = transactionRepository;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   public Optional<Transaction> findOriginal(
@@ -131,17 +131,20 @@ public class RefundMatcher {
   }
 
   private BigDecimal effectiveAmount(Transaction transaction) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            transaction.getAmountEffectiveEnc(),
-            new CryptoContext(
-                transaction.getUserId(), "transaction", "amount_effective", transaction.getId())));
+    return encryptedValueReader.readMoney(
+        transaction.getUserId(),
+        "transaction",
+        "amount_effective",
+        transaction.getId(),
+        transaction.getAmountEffectiveEnc());
   }
 
   private String decryptDescription(Transaction transaction) {
-    return cryptoService.decryptString(
-        transaction.getDescriptionEffectiveEnc(),
-        new CryptoContext(
-            transaction.getUserId(), "transaction", "description_effective", transaction.getId()));
+    return encryptedValueReader.read(
+        transaction.getUserId(),
+        "transaction",
+        "description_effective",
+        transaction.getId(),
+        transaction.getDescriptionEffectiveEnc());
   }
 }

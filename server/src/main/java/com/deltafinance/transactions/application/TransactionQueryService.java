@@ -1,9 +1,7 @@
 package com.deltafinance.transactions.application;
 
 import com.deltafinance.categories.domain.CategoryRepository;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoException;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.ValidationException;
 import com.deltafinance.shared.pagination.CursorPage;
 import com.deltafinance.shared.pagination.PageRequest;
@@ -28,15 +26,15 @@ public class TransactionQueryService {
 
   private final TransactionRepository transactionRepository;
   private final CategoryRepository categoryRepository;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
 
   public TransactionQueryService(
       TransactionRepository transactionRepository,
       CategoryRepository categoryRepository,
-      CryptoService cryptoService) {
+      EncryptedValueReader encryptedValueReader) {
     this.transactionRepository = transactionRepository;
     this.categoryRepository = categoryRepository;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
   }
 
   public CursorPage<TransactionView> list(
@@ -156,11 +154,12 @@ public class TransactionQueryService {
   }
 
   private BigDecimal effectiveAmount(Transaction transaction) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            transaction.getAmountEffectiveEnc(),
-            new CryptoContext(
-                transaction.getUserId(), "transaction", "amount_effective", transaction.getId())));
+    return encryptedValueReader.readMoney(
+        transaction.getUserId(),
+        "transaction",
+        "amount_effective",
+        transaction.getId(),
+        transaction.getAmountEffectiveEnc());
   }
 
   private static void validateAmountRange(BigDecimal minAmount, BigDecimal maxAmount) {
@@ -289,14 +288,7 @@ public class TransactionQueryService {
   }
 
   private String decrypt(UUID userId, String table, String column, UUID recordId, byte[] value) {
-    if (value == null) {
-      return null;
-    }
-    try {
-      return cryptoService.decryptString(value, new CryptoContext(userId, table, column, recordId));
-    } catch (CryptoException exception) {
-      return null;
-    }
+    return encryptedValueReader.tryRead(userId, table, column, recordId, value).orElse(null);
   }
 
   private static String encode(LocalDate postedOn, UUID id) {

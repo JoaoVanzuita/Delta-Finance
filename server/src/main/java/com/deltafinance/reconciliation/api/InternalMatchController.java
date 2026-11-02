@@ -39,21 +39,19 @@ public class InternalMatchController {
     CursorPage<InternalMatchView> page =
         matchService.list(authenticatedUser.requireId(), status, limit, cursor);
     return new InternalMatchPageResponse(
-        page.items().stream().map(InternalMatchResponse::from).toList(),
-        page.nextCursor(),
-        page.hasMore());
+        page.items().stream().toList(), page.nextCursor(), page.hasMore());
   }
 
   @PostMapping("/{id}/confirm")
-  public InternalMatchResponse confirm(@PathVariable UUID id) {
-    return InternalMatchResponse.from(decisionService.confirm(authenticatedUser.requireId(), id));
+  public InternalMatchView confirm(@PathVariable UUID id) {
+    return decisionService.confirm(authenticatedUser.requireId(), id);
   }
 
   @PostMapping("/{id}/reject")
-  public InternalMatchResponse reject(@PathVariable UUID id) {
-    return InternalMatchResponse.from(decisionService.reject(authenticatedUser.requireId(), id));
+  public InternalMatchView reject(@PathVariable UUID id) {
+    return decisionService.reject(authenticatedUser.requireId(), id);
   }
 
   public record InternalMatchPageResponse(
-      List<InternalMatchResponse> items, String nextCursor, boolean hasMore) {}
+      List<InternalMatchView> items, String nextCursor, boolean hasMore) {}
 }

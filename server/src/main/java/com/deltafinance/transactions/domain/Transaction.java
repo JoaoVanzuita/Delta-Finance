@@ -396,16 +396,26 @@ public class Transaction extends BaseEntity {
     }
   }
 
-  /** Mês da fatura informado pela origem; usado para alocar compras e pagamentos ao ciclo certo. */
+  /**
+   * Mês da fatura informado pela origem.
+   *
+   * <p>Ausência de metadado não apaga a alocação já conhecida; o provedor pode omitir o campo em
+   * uma leitura parcial.
+   */
   public void applyProviderBillMonth(LocalDate providerBillMonth) {
-    this.providerBillMonth = providerBillMonth == null ? null : providerBillMonth.withDayOfMonth(1);
+    if (providerBillMonth != null) {
+      this.providerBillMonth = providerBillMonth.withDayOfMonth(1);
+    }
   }
 
-  /** Metadados de parcelamento informados pela origem, quando existirem. */
+  /**
+   * Metadados de parcelamento informados pela origem.
+   *
+   * <p>Assim como os demais metadados do provedor, valores ausentes preservam o estado atual em vez
+   * de apagar o parcelamento em uma sincronização parcial.
+   */
   public void applyInstallments(Integer installmentNumber, Integer totalInstallments) {
     if (installmentNumber == null || totalInstallments == null) {
-      this.installmentNumber = null;
-      this.totalInstallments = null;
       return;
     }
     if (installmentNumber < 1 || totalInstallments < 1 || installmentNumber > totalInstallments) {

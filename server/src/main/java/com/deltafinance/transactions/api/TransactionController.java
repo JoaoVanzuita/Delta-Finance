@@ -54,8 +54,6 @@ public class TransactionController {
             minAmount,
             maxAmount);
     return new TransactionPageResponse(
-        page.items().stream().map(TransactionResponse::from).toList(),
-        page.nextCursor(),
-        page.hasMore());
+        page.items().stream().toList(), page.nextCursor(), page.hasMore());
   }
 }

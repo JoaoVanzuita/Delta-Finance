@@ -10,9 +10,9 @@ import com.deltafinance.reconciliation.domain.InternalMatch;
 import com.deltafinance.reconciliation.domain.InternalMatchKind;
 import com.deltafinance.reconciliation.domain.InternalMatchRepository;
 import com.deltafinance.reconciliation.domain.InternalMatchStatus;
-import com.deltafinance.shared.crypto.CryptoContext;
-import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.pagination.CursorPage;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.domain.ReconciliationState;
@@ -89,7 +89,7 @@ public class InternalMatchService {
   private final FinancialAccountRepository accountRepository;
   private final InternalMatchRepository matchRepository;
   private final CategoryRepository categoryRepository;
-  private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final Clock clock;
 
   public InternalMatchService(
@@ -97,13 +97,13 @@ public class InternalMatchService {
       FinancialAccountRepository accountRepository,
       InternalMatchRepository matchRepository,
       CategoryRepository categoryRepository,
-      CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
     this.matchRepository = matchRepository;
     this.categoryRepository = categoryRepository;
-    this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.clock = clock;
   }
 
@@ -266,32 +266,31 @@ public class InternalMatchService {
   }
 
   private BigDecimal effectiveAmount(Transaction transaction) {
-    return new BigDecimal(
-        cryptoService.decryptString(
-            transaction.getAmountEffectiveEnc(),
-            new CryptoContext(
-                transaction.getUserId(), "transaction", "amount_effective", transaction.getId())));
+    return encryptedValueReader.readMoney(
+        transaction.getUserId(),
+        "transaction",
+        "amount_effective",
+        transaction.getId(),
+        transaction.getAmountEffectiveEnc());
   }
 
   /** Tokens do nome/descrição usados apenas como desempate, nunca como critério isolado. */
   private Set<String> nameTokens(Transaction transaction) {
-    String description;
-    try {
-      description =
-          cryptoService.decryptString(
-              transaction.getDescriptionEffectiveEnc(),
-              new CryptoContext(
-                  transaction.getUserId(),
-                  "transaction",
-                  "description_effective",
-                  transaction.getId()));
-    } catch (RuntimeException exception) {
+    String description =
+        encryptedValueReader
+            .tryRead(
+                transaction.getUserId(),
+                "transaction",
+                "description_effective",
+                transaction.getId(),
+                transaction.getDescriptionEffectiveEnc())
+            .orElse(null);
+    if (description == null) {
       return Set.of();
     }
     Set<String> tokens = new HashSet<>();
     for (String token :
-        java.text.Normalizer.normalize(
-                description == null ? "" : description, java.text.Normalizer.Form.NFD)
+        java.text.Normalizer.normalize(description, java.text.Normalizer.Form.NFD)
             .replaceAll("\\p{M}", "")
             .toLowerCase(java.util.Locale.ROOT)
             .split("[^a-z0-9]+")) {
@@ -422,10 +421,7 @@ public class InternalMatchService {
                     BigDecimal.valueOf(dayDiff)
                         .divide(BigDecimal.valueOf(window * 2L), 6, RoundingMode.HALF_EVEN)))
             .max(BigDecimal.ZERO);
-    return valueScore
-        .add(dateScore)
-        .add(BigDecimal.valueOf(20))
-        .setScale(2, RoundingMode.HALF_EVEN);
+    return Money.scaled(valueScore.add(dateScore).add(BigDecimal.valueOf(20)));
   }
 
   private static String reason(Candidate candidate) {

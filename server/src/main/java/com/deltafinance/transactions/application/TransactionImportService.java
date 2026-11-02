@@ -4,8 +4,6 @@ import com.deltafinance.accounts.domain.AccountStatus;
 import com.deltafinance.accounts.domain.AccountType;
 import com.deltafinance.accounts.domain.FinancialAccount;
 import com.deltafinance.accounts.domain.FinancialAccountRepository;
-import com.deltafinance.categories.application.CategoryService;
-import com.deltafinance.categories.application.CategoryTaxonomy;
 import com.deltafinance.integrations.domain.PluggyIntegration;
 import com.deltafinance.integrations.infrastructure.PluggyAuthClient;
 import com.deltafinance.integrations.infrastructure.PluggyDataClient;
@@ -15,7 +13,10 @@ import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.crypto.IndexHmacService;
+import com.deltafinance.shared.money.Money;
+import com.deltafinance.shared.recalculation.RecalculationBatch;
 import com.deltafinance.shared.sync.SyncCancellationRegistry;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.domain.ExternalIdentityHistory;
@@ -27,19 +28,16 @@ import com.deltafinance.transactions.domain.TransactionSource;
 import com.deltafinance.transactions.domain.TransactionStatus;
 import com.deltafinance.transactions.domain.TransactionType;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.YearMonth;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.JsonNode;
 
 /**
  * Importa transações com idempotência.
@@ -76,12 +74,13 @@ public class TransactionImportService {
   private final TransactionRepository transactionRepository;
 
   private final FinancialAccountRepository accountRepository;
-  private final CategoryService categoryService;
+  private final ImportCategoryResolver categoryResolver;
   private final ExternalIdentityHistoryRepository identityRepository;
   private final RefundMatcher refundMatcher;
   private final PluggyAuthClient authClient;
   private final PluggyDataClient dataClient;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final IndexHmacService hmacService;
   private final AuditService auditService;
   private final ApplicationEventPublisher eventPublisher;
@@ -91,12 +90,13 @@ public class TransactionImportService {
   public TransactionImportService(
       TransactionRepository transactionRepository,
       FinancialAccountRepository accountRepository,
-      CategoryService categoryService,
+      ImportCategoryResolver categoryResolver,
       ExternalIdentityHistoryRepository identityRepository,
       RefundMatcher refundMatcher,
       PluggyAuthClient authClient,
       PluggyDataClient dataClient,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       IndexHmacService hmacService,
       AuditService auditService,
       ApplicationEventPublisher eventPublisher,
@@ -104,12 +104,13 @@ public class TransactionImportService {
       Clock clock) {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
-    this.categoryService = categoryService;
+    this.categoryResolver = categoryResolver;
     this.identityRepository = identityRepository;
     this.refundMatcher = refundMatcher;
     this.authClient = authClient;
     this.dataClient = dataClient;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.hmacService = hmacService;
     this.auditService = auditService;
     this.eventPublisher = eventPublisher;
@@ -178,46 +179,59 @@ public class TransactionImportService {
       page = dataClient.listTransactions(apiKey, externalAccountId, from, null);
     }
 
-    int read = 0;
-    int created = 0;
-    int updated = 0;
-    int skipped = 0;
-    int failed = 0;
-    Set<byte[]> seenHashes = new HashSet<>();
-    for (PluggyModels.PluggyTransaction imported : page.items()) {
-      cancellationRegistry.checkpoint();
-      read++;
-      if (imported.externalId() == null || imported.externalId().isBlank()) {
-        skipped++;
-        continue;
-      }
-      seenHashes.add(hmacService.externalIdHash(SOURCE, imported.externalId()));
-      Outcome outcome =
-          upsert(
-              integration.getUserId(),
-              connectionId,
-              account,
-              externalAccountId,
-              imported,
-              reconcileIdentity);
-      switch (outcome) {
-        case CREATED -> created++;
-        case UPDATED -> updated++;
-        case SKIPPED -> skipped++;
-        case FAILED -> failed++;
-        default -> {
-          // Enum fechado: nenhum outcome adicional é esperado.
+    RecalculationBatch.begin();
+    try {
+      int read = 0;
+      int created = 0;
+      int updated = 0;
+      int skipped = 0;
+      int failed = 0;
+      Set<byte[]> seenHashes = new HashSet<>();
+      // A taxonomia tem poucas chaves distintas; resolver uma vez por lote evita 16 consultas por
+      // linha importada.
+      Map<String, UUID> categoryCache = new HashMap<>();
+      for (PluggyModels.PluggyTransaction imported : page.items()) {
+        cancellationRegistry.checkpoint();
+        read++;
+        if (imported.externalId() == null || imported.externalId().isBlank()) {
+          skipped++;
+          continue;
+        }
+        seenHashes.add(hmacService.externalIdHash(SOURCE, imported.externalId()));
+        Outcome outcome =
+            upsert(
+                integration.getUserId(),
+                connectionId,
+                account,
+                externalAccountId,
+                imported,
+                reconcileIdentity,
+                categoryCache);
+        switch (outcome) {
+          case CREATED -> created++;
+          case UPDATED -> updated++;
+          case SKIPPED -> skipped++;
+          case FAILED -> failed++;
+          default -> {
+            // Enum fechado: nenhum outcome adicional é esperado.
+          }
         }
       }
-    }
 
-    // Lista vazia é inconclusiva: não marque ausências a partir dela (FR-040/FR-046).
-    // Leitura truncada/cursor inválido também é inconclusiva.
-    if (read > 0 && page.complete()) {
-      cancellationRegistry.checkpoint();
-      updated += markMissingAsSourceRemoved(integration.getUserId(), account, from, seenHashes);
+      // Lista vazia é inconclusiva: não marque ausências a partir dela (FR-040/FR-046).
+      // Leitura truncada/cursor inválido também é inconclusiva.
+      if (read > 0 && page.complete()) {
+        cancellationRegistry.checkpoint();
+        updated += markMissingAsSourceRemoved(integration.getUserId(), account, from, seenHashes);
+      }
+      return new ImportStats(read, created, updated, skipped, failed);
+    } finally {
+      Set<UUID> dirty = RecalculationBatch.end();
+      if (!dirty.isEmpty()) {
+        eventPublisher.publishEvent(
+            new CardRecalculationRequestedEvent(integration.getUserId(), dirty));
+      }
     }
-    return new ImportStats(read, created, updated, skipped, failed);
   }
 
   private int markMissingAsSourceRemoved(
@@ -260,7 +274,8 @@ public class TransactionImportService {
       FinancialAccount account,
       String externalAccountId,
       PluggyModels.PluggyTransaction imported,
-      boolean reconcileIdentity) {
+      boolean reconcileIdentity,
+      Map<String, UUID> categoryCache) {
     if (imported.amount() == null || imported.date() == null) {
       // Sem valor/data não invente 0,00 nem "hoje": registre a falha e siga.
       return Outcome.FAILED;
@@ -275,21 +290,21 @@ public class TransactionImportService {
             : sourceAmount;
     // Pluggy inverte o sinal em cartões: positivo é compra (dívida) e negativo é pagamento. A
     // convenção interna é única (negativo = saída), então normalizamos já na importação.
-    BigDecimal amount = normalizeAmount(account, accountAmount);
-    String effectiveCurrency = effectiveCurrency(account, imported);
+    BigDecimal amount = ImportTransactionRules.normalizeAmount(account, accountAmount);
+    String effectiveCurrency = ImportTransactionRules.effectiveCurrency(account, imported);
     String description = imported.description() == null ? "" : imported.description();
     LocalDate postedOn = imported.date();
-    TransactionStatus status = mapStatus(imported.status());
-    TransactionType type = mapType(account, amount, description);
+    TransactionStatus status = ImportTransactionRules.mapStatus(imported.status());
+    TransactionType type = ImportTransactionRules.mapType(account, amount, description);
     byte[] dedupKey =
         hmacService.dedupKey(SOURCE, connectionId, externalAccountId, imported.externalId());
     byte[] fingerprint =
         hmacService.fingerprint(
             account.getId().toString(),
-            sourceAmount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
+            Money.plain(sourceAmount),
             postedOn.toString(),
-            normalize(description),
-            installmentMetadata(imported.creditCardMetadata()));
+            ImportTransactionRules.normalize(description),
+            ImportTransactionRules.installmentMetadata(imported.creditCardMetadata()));
 
     Transaction transaction =
         transactionRepository.findByUserIdAndDedupKey(userId, dedupKey).orElse(null);
@@ -305,7 +320,7 @@ public class TransactionImportService {
         && status == TransactionStatus.PENDING
         && account.getType() == AccountType.CREDIT
         && type == TransactionType.REFUND
-        && looksLikeCardPayment(description)
+        && ImportTransactionRules.looksLikeCardPayment(description)
         && hasEffectivePaymentDuplicate(userId, account.getId(), postedOn, type, amount)) {
       // O provedor pode manter a via PENDING da instituição e a via POSTED sintética do mesmo
       // pagamento. A via efetiva já representa o evento; não crie uma segunda linha.
@@ -315,8 +330,15 @@ public class TransactionImportService {
     UUID categoryId =
         transaction != null && transaction.hasEdited("category")
             ? transaction.getCategoryId()
-            : resolveCategory(
-                userId, account, type, amount, imported.category(), description, transaction);
+            : categoryResolver.resolve(
+                userId,
+                account,
+                type,
+                amount,
+                imported.category(),
+                description,
+                transaction,
+                categoryCache);
     UUID relatedId =
         transaction == null
             ? refundMatcher
@@ -378,16 +400,19 @@ public class TransactionImportService {
               amountEffectiveEnc,
               descriptionSourceEnc,
               descriptionEffectiveEnc);
-      transaction.applySourceCurrency(sourceCurrency(account, imported));
+      transaction.applySourceCurrency(ImportTransactionRules.sourceCurrency(account, imported));
       transaction.setCategoryId(categoryId);
       if (relatedId != null) {
         transaction.linkRelatedTransaction(relatedId);
       }
       transaction.setReconciliationState(ReconciliationState.NONE);
       transaction.applyInstallments(
-          installmentValue(imported.creditCardMetadata(), "installmentNumber"),
-          installmentValue(imported.creditCardMetadata(), "totalInstallments"));
-      transaction.applyProviderBillMonth(billForecastMonth(imported.creditCardMetadata()));
+          ImportTransactionRules.installmentValue(
+              imported.creditCardMetadata(), "installmentNumber"),
+          ImportTransactionRules.installmentValue(
+              imported.creditCardMetadata(), "totalInstallments"));
+      transaction.applyProviderBillMonth(
+          ImportTransactionRules.billForecastMonth(imported.creditCardMetadata()));
       transaction.applyProviderMetadata(
           imported.operationType(),
           imported.providerId(),
@@ -435,6 +460,43 @@ public class TransactionImportService {
     byte[] preservedDescription = transaction.getDescriptionEffectiveEnc();
     LocalDate preservedPostedOn = transaction.getPostedOn();
     TransactionType preservedType = transaction.getType();
+    String previousAmount =
+        amountEdited
+            ? null
+            : decryptEffective(userId, preservedAmount, "amount_effective", transaction.getId());
+    String previousDescription =
+        descriptionEdited
+            ? null
+            : decryptEffective(
+                userId, preservedDescription, "description_effective", transaction.getId());
+    Integer incomingInstallment =
+        ImportTransactionRules.installmentValue(imported.creditCardMetadata(), "installmentNumber");
+    Integer incomingTotal =
+        ImportTransactionRules.installmentValue(imported.creditCardMetadata(), "totalInstallments");
+    LocalDate incomingBillMonth =
+        ImportTransactionRules.billForecastMonth(imported.creditCardMetadata());
+
+    boolean financialChange =
+        wasSourceRemoved
+            || (!amountEdited && !sameAmount(previousAmount, amount))
+            || (!descriptionEdited && !description.equals(previousDescription))
+            || (!postedOnEdited && !postedOn.equals(preservedPostedOn))
+            || (!amountEdited && preservedType != type)
+            || (!statusEdited && preservedStatus != status)
+            || (!categoryEdited
+                && categoryId != null
+                && !categoryId.equals(transaction.getCategoryId()))
+            || (incomingInstallment != null
+                && incomingTotal != null
+                && (!java.util.Objects.equals(
+                        transaction.getInstallmentNumber(), incomingInstallment)
+                    || !java.util.Objects.equals(
+                        transaction.getTotalInstallments(), incomingTotal)))
+            || (incomingBillMonth != null
+                && !java.util.Objects.equals(transaction.getProviderBillMonth(), incomingBillMonth))
+            // Salvaguarda para dados antigos: uma compra de cartão ainda sem fatura precisa de um
+            // evento para criar o espelho, mesmo que o provedor não tenha mudado nada.
+            || (account.getType() == AccountType.CREDIT && transaction.getInvoiceId() == null);
 
     transaction.applyImported(
         type,
@@ -450,7 +512,7 @@ public class TransactionImportService {
         dedupKey,
         fingerprint);
     transaction.applyAccountCurrency(effectiveCurrency);
-    transaction.applySourceCurrency(sourceCurrency(account, imported));
+    transaction.applySourceCurrency(ImportTransactionRules.sourceCurrency(account, imported));
     if (amountEdited) {
       transaction.setAmountEffectiveEnc(preservedAmount);
       transaction.setType(preservedType);
@@ -506,10 +568,8 @@ public class TransactionImportService {
     if (relatedId != null && transaction.getRelatedTransactionId() == null) {
       transaction.linkRelatedTransaction(relatedId);
     }
-    transaction.applyInstallments(
-        installmentValue(imported.creditCardMetadata(), "installmentNumber"),
-        installmentValue(imported.creditCardMetadata(), "totalInstallments"));
-    transaction.applyProviderBillMonth(billForecastMonth(imported.creditCardMetadata()));
+    transaction.applyInstallments(incomingInstallment, incomingTotal);
+    transaction.applyProviderBillMonth(incomingBillMonth);
     transaction.applyProviderMetadata(
         imported.operationType(),
         imported.providerId(),
@@ -518,8 +578,26 @@ public class TransactionImportService {
     transactionRepository.save(transaction);
     upsertIdentityHistory(
         userId, account.getId(), transaction.getId(), imported.externalId(), externalIdEnc);
-    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, transaction.getId()));
+    if (financialChange) {
+      eventPublisher.publishEvent(
+          new TransactionFinancialChangedEvent(userId, transaction.getId()));
+    }
     return Outcome.UPDATED;
+  }
+
+  private boolean sameAmount(String previousAmount, BigDecimal amount) {
+    if (previousAmount == null) {
+      return false;
+    }
+    try {
+      return new BigDecimal(previousAmount).compareTo(amount) == 0;
+    } catch (NumberFormatException unreadable) {
+      return false;
+    }
+  }
+
+  private String decryptEffective(UUID userId, byte[] value, String column, UUID transactionId) {
+    return encryptedValueReader.tryRead(userId, TABLE, column, transactionId, value).orElse(null);
   }
 
   private enum Outcome {
@@ -551,59 +629,9 @@ public class TransactionImportService {
     identityRepository.save(history);
   }
 
-  private UUID resolveCategory(
-      UUID userId,
-      FinancialAccount account,
-      TransactionType type,
-      BigDecimal amount,
-      String providerCategory,
-      String description,
-      Transaction existing) {
-    if (existing != null
-        && existing.getCategoryId() != null
-        && (providerCategory == null || providerCategory.isBlank())) {
-      return existing.getCategoryId();
-    }
-    String canonicalKey =
-        providerCategory == null || providerCategory.isBlank()
-            ? CategoryTaxonomy.OUTROS
-            : CategoryTaxonomy.canonicalKey(providerCategory);
-    // Salário costuma chegar como "Same person transfer" porque a conta pagadora não está
-    // conectada. A descrição explícita prevalece sobre esse rótulo genérico e garante que a
-    // entrada componha receitas.
-    if (type == TransactionType.CREDIT
-        && account.getType() != AccountType.CREDIT
-        && CategoryTaxonomy.isSalaryDescription(description)) {
-      canonicalKey = CategoryTaxonomy.SALARIO;
-    }
-    // Débito bancário que paga a fatura do cartão é transferência, não despesa.
-    if (type == TransactionType.DEBIT
-        && account.getType() != AccountType.CREDIT
-        && CategoryTaxonomy.isCardInvoicePaymentDescription(description)) {
-      canonicalKey = CategoryTaxonomy.TRANSFERENCIAS;
-    }
-    // Aplicação e resgate são movimentos patrimoniais, não receita/despesa. O Pluggy usa a mesma
-    // família de categorias ("Investments" e filhos) para os dois sentidos; a direção separa.
-    // O débito de corretagem compra o ativo (Aplicações); o crédito vende/resgata (Resgates).
-    if (CategoryTaxonomy.isInvestmentKey(canonicalKey)) {
-      canonicalKey =
-          type == TransactionType.CREDIT ? CategoryTaxonomy.RESGATES : CategoryTaxonomy.APLICACOES;
-    }
-    // Em conta bancária, um crédito numa categoria de despesa é uma entrada atípica (reembolso,
-    // devolução ou categorização incorreta do provedor). Ele não pode aparecer como “despesa” no
-    // gráfico de receitas; vai para Outros e o usuário pode recategorizar depois. No cartão, o
-    // crédito é estorno e deve permanecer na categoria original para reduzir a despesa correta.
-    if (type == TransactionType.CREDIT
-        && account.getType() != AccountType.CREDIT
-        && CategoryTaxonomy.isExpenseKey(canonicalKey)) {
-      canonicalKey = CategoryTaxonomy.OUTROS;
-    }
-    return categoryService.canonicalCategoryId(userId, canonicalKey);
-  }
-
   private byte[] encrypt(UUID userId, String column, UUID recordId, BigDecimal amount) {
     return cryptoService.encrypt(
-        amount.setScale(2, RoundingMode.HALF_EVEN).toPlainString(),
+        Money.plain(amount),
         new CryptoContext(userId, TABLE, column, recordId == null ? UUID.randomUUID() : recordId));
   }
 
@@ -614,127 +642,12 @@ public class TransactionImportService {
   }
 
   private String decryptAccountId(FinancialAccount account) {
-    return cryptoService.decryptString(
-        account.getExternalAccountIdEnc(),
-        new CryptoContext(
-            account.getUserId(), "financial_account", "external_account_id", account.getId()));
-  }
-
-  /**
-   * Converte o valor da origem para o sinal interno.
-   *
-   * <p>Para contas {@code CREDIT}, o Pluggy retorna compras como positivas (aumentam a dívida) e
-   * pagamentos/créditos como negativos. No restante do sistema a saída é negativa, então o valor é
-   * invertido. Contas {@code BANK}, {@code CASH} e {@code WALLET} já seguem a convenção interna.
-   */
-  private static BigDecimal normalizeAmount(FinancialAccount account, BigDecimal amount) {
-    return account.getType() == AccountType.CREDIT ? amount.negate() : amount;
-  }
-
-  /** Moeda de origem só é preservada quando difere da moeda da conta. */
-  private static String sourceCurrency(
-      FinancialAccount account, PluggyModels.PluggyTransaction imported) {
-    String source = imported.currency();
-    if (source == null || source.isBlank() || source.equalsIgnoreCase(account.getCurrency())) {
-      return null;
-    }
-    return source;
-  }
-
-  /**
-   * Moeda do valor efetivo.
-   *
-   * <p>Com {@code amountInAccountCurrency}, o valor já está na moeda da conta. Sem conversão
-   * disponível, mantém a moeda original para que o relatório continue excluindo o lançamento em vez
-   * de tratá-lo como BRL.
-   */
-  private static String effectiveCurrency(
-      FinancialAccount account, PluggyModels.PluggyTransaction imported) {
-    if (imported.amountInAccountCurrency() != null) {
-      return account.getCurrency();
-    }
-    return imported.currency() == null || imported.currency().isBlank()
-        ? account.getCurrency()
-        : imported.currency();
-  }
-
-  private static TransactionStatus mapStatus(String status) {
-    return status != null && "PENDING".equalsIgnoreCase(status)
-        ? TransactionStatus.PENDING
-        : TransactionStatus.POSTED;
-  }
-
-  private static TransactionType mapType(
-      FinancialAccount account, BigDecimal amount, String description) {
-    if (amount.signum() > 0) {
-      String normalized = normalize(description);
-      if (normalized.contains("chargeback")) {
-        return TransactionType.CHARGEBACK;
-      }
-      if (normalized.contains("estorno")
-          || normalized.contains("reembolso")
-          || normalized.contains("refund")) {
-        return TransactionType.REFUND;
-      }
-      // Entrada em cartão é crédito/estorno que reduz a despesa, nunca receita.
-      return account.getType() == AccountType.CREDIT
-          ? TransactionType.REFUND
-          : TransactionType.CREDIT;
-    }
-    return TransactionType.DEBIT;
-  }
-
-  private static Integer installmentValue(JsonNode metadata, String field) {
-    if (metadata == null || metadata.isMissingNode() || metadata.isNull()) {
-      return null;
-    }
-    JsonNode value = metadata.path(field);
-    if (value.isMissingNode() || value.isNull()) {
-      return null;
-    }
-    int parsed = value.asInt(0);
-    return parsed > 0 ? parsed : null;
-  }
-
-  private static LocalDate billForecastMonth(JsonNode metadata) {
-    if (metadata == null || metadata.isMissingNode() || metadata.isNull()) {
-      return null;
-    }
-    String text = metadata.path("billForecastDate").asString(null);
-    if (text == null || text.isBlank()) {
-      return null;
-    }
-    try {
-      return YearMonth.parse(text.trim()).atDay(1);
-    } catch (RuntimeException exception) {
-      return null;
-    }
-  }
-
-  private static String installmentMetadata(JsonNode metadata) {
-    if (metadata == null || metadata.isMissingNode() || metadata.isNull()) {
-      return "";
-    }
-    return metadata.path("totalInstallments").asString("")
-        + "/"
-        + metadata.path("installmentNumber").asString("");
-  }
-
-  private static String normalize(String value) {
-    return Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFKC)
-        .strip()
-        .toLowerCase(Locale.ROOT)
-        .replaceAll("\\s+", " ");
-  }
-
-  private static boolean looksLikeCardPayment(String description) {
-    String normalized =
-        Normalizer.normalize(description == null ? "" : description, Normalizer.Form.NFD)
-            .replaceAll("\\p{M}", "")
-            .toLowerCase(Locale.ROOT);
-    return normalized.contains("pagamento")
-        || normalized.contains("payment")
-        || normalized.contains("boleto");
+    return encryptedValueReader.read(
+        account.getUserId(),
+        "financial_account",
+        "external_account_id",
+        account.getId(),
+        account.getExternalAccountIdEnc());
   }
 
   /**
@@ -753,23 +666,26 @@ public class TransactionImportService {
         continue;
       }
       BigDecimal candidateAmount =
-          new BigDecimal(
-              cryptoService.decryptString(
-                  candidate.getAmountEffectiveEnc(),
-                  new CryptoContext(userId, TABLE, "amount_effective", candidate.getId())));
+          encryptedValueReader.readMoney(
+              userId,
+              TABLE,
+              "amount_effective",
+              candidate.getId(),
+              candidate.getAmountEffectiveEnc());
       if (candidateAmount.compareTo(amount) != 0) {
         continue;
       }
-      try {
-        String candidateDescription =
-            cryptoService.decryptString(
-                candidate.getDescriptionEffectiveEnc(),
-                new CryptoContext(userId, TABLE, "description_effective", candidate.getId()));
-        if (looksLikeCardPayment(candidateDescription)) {
-          return true;
-        }
-      } catch (RuntimeException exception) {
-        // Descrição ilegível não confirma a duplicata.
+      String candidateDescription =
+          encryptedValueReader
+              .tryRead(
+                  userId,
+                  TABLE,
+                  "description_effective",
+                  candidate.getId(),
+                  candidate.getDescriptionEffectiveEnc())
+              .orElse("");
+      if (ImportTransactionRules.looksLikeCardPayment(candidateDescription)) {
+        return true;
       }
     }
     return false;

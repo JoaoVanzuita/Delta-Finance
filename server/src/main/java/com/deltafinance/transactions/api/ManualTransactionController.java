@@ -3,6 +3,7 @@ package com.deltafinance.transactions.api;
 import com.deltafinance.security.AuthenticatedUser;
 import com.deltafinance.transactions.application.ManualTransactionService;
 import com.deltafinance.transactions.application.TransactionCorrectionService;
+import com.deltafinance.transactions.application.TransactionView;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -35,16 +36,14 @@ public class ManualTransactionController {
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public TransactionResponse create(@Valid @RequestBody ManualTransactionRequest request) {
-    return TransactionResponse.from(
-        manualTransactionService.create(authenticatedUser.requireId(), request));
+  public TransactionView create(@Valid @RequestBody ManualTransactionRequest request) {
+    return manualTransactionService.create(authenticatedUser.requireId(), request);
   }
 
   @PatchMapping("/{id}")
-  public TransactionResponse correct(
+  public TransactionView correct(
       @PathVariable UUID id, @Valid @RequestBody TransactionCorrectionRequest request) {
-    return TransactionResponse.from(
-        correctionService.correct(authenticatedUser.requireId(), id, request));
+    return correctionService.correct(authenticatedUser.requireId(), id, request);
   }
 
   @DeleteMapping("/{id}")

@@ -245,7 +245,9 @@ class InternalMatchIT extends PostgresTestBase {
     assertThat(payment.path("type").asString()).isEqualTo("REFUND");
 
     JsonNode summary = summary("from=2026-10-01&to=2026-10-31");
-    assertThat(summary.path("expenses").asString()).isEqualTo("400.00");
+    // FR-054/FR-055: o pagamento de fatura é movimento interno e nunca vira despesa, mesmo
+    // antes da confirmação; a pendência continua visível em pendingInternalMatches.
+    assertThat(summary.path("expenses").asString()).isEqualTo("100.00");
     assertThat(summary.path("pendingInternalMatches").asInt()).isEqualTo(1);
 
     JsonNode match = internalMatches("PENDING").path("items").get(0);

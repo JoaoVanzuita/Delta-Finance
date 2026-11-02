@@ -5,10 +5,12 @@ import com.deltafinance.shared.audit.AuditEventType;
 import com.deltafinance.shared.audit.AuditService;
 import com.deltafinance.shared.crypto.CryptoContext;
 import com.deltafinance.shared.crypto.CryptoService;
+import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.errors.ConflictException;
 import com.deltafinance.shared.errors.ErrorCode;
 import com.deltafinance.shared.errors.NotFoundException;
 import com.deltafinance.shared.errors.ValidationException;
+import com.deltafinance.shared.money.Money;
 import com.deltafinance.shared.time.Clock;
 import com.deltafinance.transactions.api.TransactionCorrectionRequest;
 import com.deltafinance.transactions.domain.Transaction;
@@ -17,7 +19,6 @@ import com.deltafinance.transactions.domain.TransactionCorrectionRepository;
 import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionType;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,7 @@ public class TransactionCorrectionService {
   private final CategoryService categoryService;
   private final TransactionQueryService queryService;
   private final CryptoService cryptoService;
+  private final EncryptedValueReader encryptedValueReader;
   private final AuditService auditService;
   private final JdbcTemplate jdbcTemplate;
   private final ApplicationEventPublisher eventPublisher;
@@ -58,6 +60,7 @@ public class TransactionCorrectionService {
       CategoryService categoryService,
       TransactionQueryService queryService,
       CryptoService cryptoService,
+      EncryptedValueReader encryptedValueReader,
       AuditService auditService,
       JdbcTemplate jdbcTemplate,
       ApplicationEventPublisher eventPublisher,
@@ -68,6 +71,7 @@ public class TransactionCorrectionService {
     this.categoryService = categoryService;
     this.queryService = queryService;
     this.cryptoService = cryptoService;
+    this.encryptedValueReader = encryptedValueReader;
     this.auditService = auditService;
     this.jdbcTemplate = jdbcTemplate;
     this.eventPublisher = eventPublisher;
@@ -259,12 +263,12 @@ public class TransactionCorrectionService {
       TransactionType type, BigDecimal previous, BigDecimal requested) {
     BigDecimal magnitude = requested.abs();
     if (type == TransactionType.ADJUSTMENT) {
-      return requested.setScale(2, RoundingMode.HALF_EVEN);
+      return Money.scaled(requested);
     }
     if (previous.signum() < 0 || (previous.signum() == 0 && type == TransactionType.DEBIT)) {
-      return magnitude.negate().setScale(2, RoundingMode.HALF_EVEN);
+      return Money.scaled(magnitude.negate());
     }
-    return magnitude.setScale(2, RoundingMode.HALF_EVEN);
+    return Money.scaled(magnitude);
   }
 
   private static BigDecimal parseAmount(String value) {
@@ -276,8 +280,7 @@ public class TransactionCorrectionService {
   }
 
   private String decrypt(UUID userId, UUID transactionId, String column, byte[] value) {
-    return cryptoService.decryptString(
-        value, new CryptoContext(userId, TABLE, column, transactionId));
+    return encryptedValueReader.read(userId, TABLE, column, transactionId, value);
   }
 
   private byte[] encrypt(UUID userId, UUID transactionId, String column, String value) {
