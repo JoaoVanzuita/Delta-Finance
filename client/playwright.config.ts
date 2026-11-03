@@ -30,7 +30,9 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
-    stdout: 'ignore',
+    // O preview escuta apenas em 127.0.0.1 (IPv4), que é o endereço de BASE_URL.
+    // Mantenha a saída visível para diagnosticar falhas de inicialização no CI.
+    stdout: 'pipe',
     stderr: 'pipe',
   },
 })
