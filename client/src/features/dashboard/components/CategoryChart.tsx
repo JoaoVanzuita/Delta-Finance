@@ -118,7 +118,10 @@ export function CategoryChart({
           </figcaption>
         </figure>
 
-        <ul className="space-y-1" aria-label={`${income ? 'Receitas' : 'Despesas'} por categoria`}>
+        <ul
+          className="min-w-0 space-y-1"
+          aria-label={`${income ? 'Receitas' : 'Despesas'} por categoria`}
+        >
           {slices.map((slice) => (
             <li key={slice.key}>
               <CategoryRow

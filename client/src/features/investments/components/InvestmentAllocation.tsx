@@ -96,7 +96,7 @@ export function InvestmentAllocation({
           </figcaption>
         </figure>
 
-        <ul className="space-y-1" aria-label="Alocação por classe de investimento">
+        <ul className="min-w-0 space-y-1" aria-label="Alocação por classe de investimento">
           {allocation.map((entry) => {
             const visual = investmentVisual(entry.assetClass)
             const label = assetClassLabel(entry.assetClass)

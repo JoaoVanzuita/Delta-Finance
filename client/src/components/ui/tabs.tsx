@@ -45,7 +45,7 @@ export function Tabs({ value, onValueChange, children, className }: TabsProps) {
         },
       }}
     >
-      <div className={className}>{children}</div>
+      <div className={cn('min-w-0', className)}>{children}</div>
     </TabsContext.Provider>
   )
 }
@@ -61,7 +61,10 @@ export function TabList({ label, children, className }: TabListProps) {
     <div
       role="tablist"
       aria-label={label}
-      className={cn('flex gap-1 overflow-x-auto border-b border-line', className)}
+      className={cn(
+        'flex min-w-0 max-w-full gap-1 overflow-x-auto border-b border-line',
+        className,
+      )}
     >
       {children}
     </div>
