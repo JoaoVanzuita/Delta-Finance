@@ -109,10 +109,12 @@ run_actionlint() {
 
 run_backend() {
   require_command java
-  step "Backend (./mvnw verify)"
+  step "Backend (./mvnw verify, TZ=UTC)"
   (
     cd "${ROOT_DIR}/server"
-    ./mvnw -B --no-transfer-progress verify
+    # O runner do GitHub usa UTC; execute assim para expor dependências do
+    # fuso local que não apareceriam no CI.
+    TZ=UTC ./mvnw -B --no-transfer-progress verify
   )
 }
 

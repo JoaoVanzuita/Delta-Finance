@@ -253,7 +253,9 @@ Esse comando compila, roda testes unitários e de integração e aplica Spotless
 Checkstyle, SpotBugs e JaCoCo. A cobertura mínima do domínio é 80%; `Money` e
 `AuthenticatedUser` exigem 100%. `ArchUnit` bloqueia dependências indevidas,
 consulta sem escopo de usuário e `@Transactional` na borda HTTP. `QueryBudgetIT`
-limita a quantidade de consultas do dashboard e das faturas.
+limita a quantidade de consultas do dashboard e das faturas. Os testes de JVM
+fixam `user.timezone=America/Sao_Paulo` no Maven para acompanhar o `SystemClock`;
+o CI roda com `TZ=UTC` para expor dependências do fuso do runner.
 
 Frontend:
 

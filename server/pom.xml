@@ -182,6 +182,11 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <!-- A aplicação usa America/Sao_Paulo; alinhe o fuso dos testes para
+               evitar divergência de data quando o runner está em UTC. -->
+          <systemPropertyVariables>
+            <user.timezone>America/Sao_Paulo</user.timezone>
+          </systemPropertyVariables>
           <excludes>
             <exclude>**/*IT.java</exclude>
           </excludes>
@@ -193,6 +198,10 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
         <configuration>
+          <!-- Mesmo fuso do SystemClock para testes que usam LocalDate.now(). -->
+          <systemPropertyVariables>
+            <user.timezone>America/Sao_Paulo</user.timezone>
+          </systemPropertyVariables>
           <includes>
             <include>**/*IT.java</include>
           </includes>

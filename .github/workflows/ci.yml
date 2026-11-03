@@ -33,6 +33,9 @@ jobs:
     name: Backend (Java 25, Spotless, Checkstyle, JaCoCo)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # O runner já usa UTC; deixe explícito para reproduzir o fuso do CI.
+      TZ: UTC
     defaults:
       run:
         working-directory: server
