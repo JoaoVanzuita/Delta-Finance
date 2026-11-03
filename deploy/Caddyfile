@@ -20,7 +20,7 @@
 		-Server
 	}
 
-	reverse_proxy client:80 {
+	reverse_proxy client:8080 {
 		# Sobrescreve X-Forwarded-For na borda: o valor enviado pelo cliente nunca é confiado.
 		header_up X-Forwarded-For {remote_host}
 		health_uri /healthz

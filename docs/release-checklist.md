@@ -8,7 +8,7 @@ publicar uma versão do MVP bancário.
 | Componente                      | Versão                    | Digest (multi-arch)                                                       |
 | ------------------------------- | ------------------------- | ------------------------------------------------------------------------- |
 | PostgreSQL                      | 18.6-alpine               | `sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5` |
-| Caddy (dentro da imagem client) | 2.11.7-alpine             | `sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5` |
+| Caddy (dentro da imagem client) | 2.11.7-alpine + rebuild   | runtime `sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5`; builder `sha256:95a5e7e2692b5eb9545aadc5b90a39f6f509bee59c9508a493f83ee902eaef63` |
 | Maven build                     | 3.9.16-eclipse-temurin-25 | `sha256:93b8a14ea2f412782e4e842651273b4d903e35cc496284f178fbbe2d67d00976` |
 | JRE runtime                     | 25.0.4.1_1-jre            | `sha256:78f1f183913482ef390c2722f46c3f0ce76ada341d69590e7c482ec943ee72d5` |
 | Node build                      | 24.22.0-alpine            | `sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f` |
@@ -20,6 +20,11 @@ publicar uma versão do MVP bancário.
 
 Digests conferidos com `docker buildx imagetools inspect <imagem>` em 2026-11-02.
 Ao atualizar uma imagem, atualize esta tabela e o Compose/Dockerfile juntos.
+
+O `client` recompila Caddy v2.11.7 com o toolchain Go 1.27.3 do builder e
+atualiza `golang.org/x/net` e `go-jose` para as versões corrigidas; o runtime
+também aplica `apk upgrade` para receber os pacotes Alpine de segurança. O
+processo roda como usuário `caddy` (UID 10001) na porta interna 8080.
 
 ## 2. Gates automatizados
 

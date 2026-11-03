@@ -13,7 +13,7 @@ publica apenas o `client` e persiste o banco no volume
 ## Topologia
 
 ```text
-Internet ──▶ proxy (Caddy :80/:443, TLS) ──▶ client (Caddy :80, SPA + /api) ──▶ server (:8080) ──▶ db (:5432)
+Internet ──▶ proxy (Caddy :80/:443, TLS) ──▶ client (Caddy :8080, SPA + /api) ──▶ server (:8080) ──▶ db (:5432)
 ```
 
 - Apenas `proxy` publica portas no host. A exceção é o desenvolvimento local,

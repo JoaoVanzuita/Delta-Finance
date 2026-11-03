@@ -19,7 +19,7 @@ Meu Pluggy, sem compartilhamento de credenciais.
 
 | Camada   | Tecnologia                                                                      |
 | -------- | ------------------------------------------------------------------------------- |
-| Backend  | Java 25 (Temurin), Spring Boot 4.1.1, Spring Security, Spring Data JPA          |
+| Backend  | Java 25 (Temurin), Spring Boot 4.1.2, Spring Security, Spring Data JPA          |
 | Banco    | PostgreSQL 18.6, migrações Flyway                                               |
 | Frontend | Node.js 24, React 19.3, TypeScript 6.0, Vite 8.3, Tailwind CSS 4.3              |
 | Testes   | JUnit 5, Testcontainers 2.0, ArchUnit, Vitest, Testing Library, Playwright, axe |
@@ -33,7 +33,7 @@ eventos internos. Não há chamada direta de controller para repositório nem
 consulta financeira sem escopo de usuário.
 
 ```text
-Internet ──▶ proxy (Caddy :80/:443) ──▶ client (Caddy :80, SPA + /api)
+Internet ──▶ proxy (Caddy :80/:443) ──▶ client (Caddy :8080, SPA + /api)
                                               └──▶ server (:8080) ──▶ db (:5432)
 ```
 

@@ -241,7 +241,7 @@ services:
     image: "ghcr.io/SEU_USUARIO/delta-finance-client:${DELTA_VERSION:?defina DELTA_VERSION}"
     restart: unless-stopped
     ports:
-      - "${LAN_PORT:-8080}:80"
+      - "${LAN_PORT:-8080}:8080"
     depends_on:
       server:
         condition: service_healthy
@@ -249,7 +249,7 @@ services:
       - app
     healthcheck:
       test:
-        ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+        ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
