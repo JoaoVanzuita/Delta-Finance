@@ -276,6 +276,38 @@ npx playwright install
 npm run test:e2e
 ```
 
+### Hooks locais
+
+Instale uma vez por clone:
+
+```bash
+./deploy/scripts/install-git-hooks.sh
+```
+
+O `pre-commit` valida o que está staged: segredos com Gitleaks, whitespace,
+alinhamento de versão e formatação do backend/frontend quando essas áreas
+mudam. O `pre-push` executa validações rápidas em branches comuns e, em `main`
+ou tags `v*`, roda os gates completos:
+
+- `./mvnw verify` no backend;
+- `npm run format:check` e `npm run verify` no frontend;
+- testes E2E com Playwright;
+- configuração dos Compose de desenvolvimento e release;
+- Gitleaks no histórico completo;
+- actionlint nos workflows;
+- Trivy filesystem e imagens do backend/frontend.
+
+Para forçar o pacote completo em outra branch:
+
+```bash
+DELTA_PREPUSH_FULL=1 git push
+```
+
+O primeiro `pre-push` completo baixa as bases do Trivy (incluindo o Java DB,
+com cerca de 1 GB) e pode demorar alguns minutos; as execuções seguintes usam
+cache. Use `git commit --no-verify` ou `git push --no-verify` apenas em
+emergência.
+
 ## Segurança
 
 - Nenhum segredo real é versionado. `.env`, `secrets/`, dumps e backups estão

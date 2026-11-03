@@ -23,6 +23,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Validar sintaxe dos hooks e scripts locais
+        run: bash -n .githooks/* deploy/scripts/*.sh
+
       - name: Conferir VERSION, Maven e npm
         run: ./deploy/scripts/check-version.sh
 

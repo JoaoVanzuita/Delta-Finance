@@ -39,6 +39,8 @@ processo roda como usuário `caddy` (UID 10001) na porta interna 8080.
 - [ ] `npm run openapi:lint` e tipos gerados sem diff.
 - [ ] Workflow `security.yml`: gitleaks, Trivy fs e Trivy image sem
       HIGH/CRITICAL corrigíveis.
+- [ ] `./deploy/scripts/install-git-hooks.sh` executado e `pre-push` completo
+      verde antes de criar a tag.
 - [ ] `deploy/scripts/tests/backup-retention-test.sh` OK.
 - [ ] `BackupRestoreIT`, `KeyRotationIT`, `PasswordResetIT` verdes.
 - [ ] `MigrationIT` verde em banco vazio e existente.

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# Validações antes do push.
+#
+# - Branches comuns: validações rápidas.
+# - main e tags v*: gates completos (backend, frontend, E2E, Compose, Gitleaks,
+#   actionlint e Trivy filesystem/imagens).
+#
+# Para forçar os gates completos em outra branch:
+#   DELTA_PREPUSH_FULL=1 git push
+#
+# Instale os hooks com:
+#   ./deploy/scripts/install-git-hooks.sh
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT_DIR}"
+
+is_main=0
+is_tag=0
+saw_ref=0
+
+if [[ ! -t 0 ]]; then
+  while IFS= read -r line; do
+    [[ -z "${line}" ]] && continue
+    saw_ref=1
+    read -r _local_ref _local_sha remote_ref _remote_sha <<<"${line}"
+    case "${remote_ref}" in
+      refs/heads/main) is_main=1 ;;
+      refs/tags/v*) is_tag=1 ;;
+    esac
+  done
+fi
+
+if [[ "${saw_ref}" -eq 0 ]]; then
+  current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+  if [[ "${current_branch}" == "main" ]]; then
+    is_main=1
+  fi
+fi
+
+mode="--quick"
+if [[ "${is_main}" -eq 1 || "${is_tag}" -eq 1 || "${DELTA_PREPUSH_FULL:-0}" == "1" ]]; then
+  mode="--full"
+fi
+
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+  printf '[pre-push] Aviso: há alterações não commitadas; os gates validam a árvore de trabalho.\n' >&2
+fi
+
+if [[ "${mode}" == "--full" ]]; then
+  printf '[pre-push] Gates completos (main/tag ou DELTA_PREPUSH_FULL=1).\n'
+else
+  printf '[pre-push] Validação rápida. Use DELTA_PREPUSH_FULL=1 para rodar todos os gates.\n'
+fi
+
+exec "${ROOT_DIR}/deploy/scripts/verify-local.sh" "${mode}"

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+#
+# Validações rápidas do que está sendo commitado.
+#
+# Instale os hooks com:
+#   ./deploy/scripts/install-git-hooks.sh
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT_DIR}"
+
+warn() { printf '[aviso] %s\n' "$*" >&2; }
+trap 'printf "\n[pre-commit] Commit bloqueado: corrija a validação acima.\n" >&2' ERR
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [[ -z "${staged}" ]]; then
+  exit 0
+fi
+
+printf '[pre-commit] Validando arquivos staged...\n'
+
+git diff --cached --check
+
+"${ROOT_DIR}/deploy/scripts/check-version.sh"
+
+if printf '%s\n' "${staged}" | grep -qE '^server/(pom\.xml|.*\.java)$'; then
+  printf '[pre-commit] Spotless (backend)...\n'
+  (
+    cd "${ROOT_DIR}/server"
+    ./mvnw -q spotless:check
+  )
+fi
+
+if printf '%s\n' "${staged}" | grep -qE '^client/'; then
+  if [[ -x "${ROOT_DIR}/client/node_modules/.bin/prettier" ]]; then
+    printf '[pre-commit] Prettier (frontend)...\n'
+    (
+      cd "${ROOT_DIR}/client"
+      npm run format:check
+    )
+  else
+    warn "client/node_modules ausente; rode 'npm ci' para validar a formatação."
+  fi
+fi
+
+if printf '%s\n' "${staged}" | grep -qE '^\.github/workflows/.*\.ya?ml$'; then
+  if command -v actionlint >/dev/null 2>&1; then
+    printf '[pre-commit] actionlint...\n'
+    actionlint .github/workflows/*.yml
+  elif command -v docker >/dev/null 2>&1 \
+    && docker info >/dev/null 2>&1 \
+    && docker image inspect rhysd/actionlint:1.7.10 >/dev/null 2>&1; then
+    printf '[pre-commit] actionlint (Docker)...\n'
+    docker run --rm -v "${ROOT_DIR}:/repo" -w /repo rhysd/actionlint:1.7.10 \
+      -color .github/workflows/*.yml
+  else
+    warn "actionlint não disponível; o pre-push completo fará a validação."
+  fi
+fi
+
+if printf '%s\n' "${staged}" | grep -qE '^(\.githooks/|deploy/scripts/.*\.sh$)'; then
+  printf '[pre-commit] Sintaxe dos scripts...\n'
+  bash -n .githooks/* deploy/scripts/*.sh
+fi
+
+if command -v gitleaks >/dev/null 2>&1; then
+  printf '[pre-commit] Gitleaks (staged)...\n'
+  gitleaks git --staged --config .gitleaks.toml --redact --no-banner
+elif command -v docker >/dev/null 2>&1 \
+  && docker info >/dev/null 2>&1 \
+  && docker image inspect ghcr.io/gitleaks/gitleaks:v8.24.3 >/dev/null 2>&1; then
+  printf '[pre-commit] Gitleaks (staged, Docker)...\n'
+  docker run --rm -v "${ROOT_DIR}:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.24.3 \
+    git --staged --config .gitleaks.toml --redact --no-banner
+else
+  warn "Gitleaks não disponível; o pre-push completo fará o scan do histórico."
+fi
+
+printf '[pre-commit] OK\n'
