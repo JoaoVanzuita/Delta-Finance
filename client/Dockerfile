@@ -4,7 +4,7 @@
 # Dockerfile possa reutilizar deploy/client.Caddyfile.
 
 # ---------- Build ----------
-FROM node:24.22.0-alpine AS build
+FROM node:24.22.0-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS build
 WORKDIR /app
 
 COPY client/package.json client/package-lock.json ./
@@ -18,7 +18,7 @@ COPY specs/001-finance/contracts/openapi.yaml /specs/001-finance/contracts/opena
 RUN npm run build
 
 # ---------- Runtime ----------
-FROM caddy:2.11.7-alpine AS runtime
+FROM caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5 AS runtime
 
 COPY deploy/client.Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv

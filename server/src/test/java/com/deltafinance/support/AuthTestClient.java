@@ -20,18 +20,25 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public final class AuthTestClient {
 
-  public static final String SESSION_COOKIE = "__Host-delta_session";
+  public static final String DEFAULT_SESSION_COOKIE = "__Host-delta_session";
+  public static final String SESSION_COOKIE = DEFAULT_SESSION_COOKIE;
   public static final String CSRF_COOKIE = "XSRF-TOKEN";
   public static final String CSRF_HEADER = "X-XSRF-TOKEN";
 
   private final MockMvc mockMvc;
   private final JsonMapper jsonMapper;
+  private final String sessionCookieName;
   private String sessionId;
   private String csrfToken;
 
   public AuthTestClient(MockMvc mockMvc, JsonMapper jsonMapper) {
+    this(mockMvc, jsonMapper, DEFAULT_SESSION_COOKIE);
+  }
+
+  public AuthTestClient(MockMvc mockMvc, JsonMapper jsonMapper, String sessionCookieName) {
     this.mockMvc = mockMvc;
     this.jsonMapper = jsonMapper;
+    this.sessionCookieName = sessionCookieName;
   }
 
   /** Obtém/renova o cookie CSRF. */
@@ -59,9 +66,9 @@ public final class AuthTestClient {
         post("/api/v1/auth/login", java.util.Map.of("username", username, "password", password))
             .andExpect(status().isOk())
             .andReturn();
-    sessionId = cookieValue(result, SESSION_COOKIE);
+    sessionId = cookieValue(result, sessionCookieName);
     if (sessionId == null) {
-      throw new AssertionError("Login não emitiu o cookie de sessão " + SESSION_COOKIE);
+      throw new AssertionError("Login não emitiu o cookie de sessão " + sessionCookieName);
     }
     return this;
   }
@@ -141,7 +148,7 @@ public final class AuthTestClient {
 
   public MockHttpServletRequestBuilder withCookies(MockHttpServletRequestBuilder builder) {
     if (sessionId != null) {
-      builder.cookie(new Cookie(SESSION_COOKIE, sessionId));
+      builder.cookie(new Cookie(sessionCookieName, sessionId));
     }
     if (csrfToken != null) {
       // O navegador envia o cookie e o header; o repositório carrega o token do cookie.

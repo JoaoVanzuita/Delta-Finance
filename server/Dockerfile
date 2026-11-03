@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Build ----------
-FROM maven:3.9.16-eclipse-temurin-25 AS build
+FROM maven:3.9.16-eclipse-temurin-25@sha256:93b8a14ea2f412782e4e842651273b4d903e35cc496284f178fbbe2d67d00976 AS build
 WORKDIR /workspace
 
 # Dependências primeiro, para aproveitar cache de camadas.
@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -DskipTests package
 
 # ---------- Runtime ----------
-FROM eclipse-temurin:25.0.4.1_1-jre AS runtime
+FROM eclipse-temurin:25.0.4.1_1-jre@sha256:78f1f183913482ef390c2722f46c3f0ce76ada341d69590e7c482ec943ee72d5 AS runtime
 
 # curl é necessário apenas para o healthcheck do Compose.
 RUN apt-get update \

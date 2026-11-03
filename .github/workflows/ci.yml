@@ -15,6 +15,17 @@ permissions:
   contents: read
 
 jobs:
+  versions:
+    name: Versões alinhadas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Conferir VERSION, Maven e npm
+        run: ./deploy/scripts/check-version.sh
+
   backend:
     name: Backend (Java 25, Spotless, Checkstyle, JaCoCo)
     runs-on: ubuntu-latest
@@ -101,8 +112,13 @@ jobs:
           cp .env.example .env
           mkdir -p secrets
 
-      - name: Validar configuração do Compose
+      - name: Validar configuração do Compose de desenvolvimento
         run: docker compose config --quiet
+
+      - name: Validar configuração do Compose de release
+        run: |
+          cp deploy/release/.env.example .env.release
+          docker compose --env-file .env.release -f compose.release.yaml config --quiet
 
       - name: Build das imagens
         run: docker compose build

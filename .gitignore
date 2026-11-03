@@ -26,9 +26,12 @@ crypto-keys.json
 
 # Dumps, backups e artefatos operacionais
 backups/
+dist/
 *.dump
 *.sql.gz
 *.zip
+*.tar.gz
+*.sha256
 *.age
 
 # Logs

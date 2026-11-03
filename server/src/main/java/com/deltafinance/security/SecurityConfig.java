@@ -29,10 +29,11 @@ import tools.jackson.databind.json.JsonMapper;
  * Configuração de segurança da aplicação.
  *
  * <ul>
- *   <li>sessão por cookie {@code __Host-delta_session}, 30 min de inatividade (Spring Session) e 12
- *       h absolutas ({@link AbsoluteSessionTimeoutFilter});
+ *   <li>sessão por cookie {@code __Host-delta_session} em TLS ou {@code delta_session} em {@code
+ *       lan-http}, com 30 min de inatividade (Spring Session) e 12 h absolutas ({@link
+ *       AbsoluteSessionTimeoutFilter});
  *   <li>CSRF por cookie {@code XSRF-TOKEN} + header {@code X-XSRF-TOKEN};
- *   <li>headers de segurança e CSP restritiva;
+ *   <li>headers de segurança e CSP restritiva; HSTS apenas quando o cookie usa {@code Secure};
  *   <li>401/403 em JSON (nunca redirect/HTML);
  *   <li>logout explícito no controller, com invalidação de sessão.
  * </ul>
@@ -72,9 +73,12 @@ public class SecurityConfig {
       ProblemFactory problemFactory,
       JsonMapper jsonMapper,
       AuditService auditService,
-      @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookie)
+      @Value("${delta.deployment.mode:tls}") String deploymentMode,
+      @Value("${server.servlet.session.cookie.secure:true}") boolean configuredSecureCookie)
       throws Exception {
 
+    boolean lanHttp = "lan-http".equalsIgnoreCase(deploymentMode.trim());
+    boolean secureCookie = !lanHttp && configuredSecureCookie;
     CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
     csrfTokenRepository.setCookieCustomizer(
         cookie -> cookie.path("/").sameSite("Lax").secure(secureCookie));
@@ -110,17 +114,20 @@ public class SecurityConfig {
                     .authenticationEntryPoint(new JsonAuthenticationEntryPoint(problemWriter))
                     .accessDeniedHandler(new JsonAccessDeniedHandler(problemWriter, auditService)))
         .headers(
-            headers ->
-                headers
-                    .contentSecurityPolicy(csp -> csp.policyDirectives(CSP))
-                    .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
-                    .httpStrictTransportSecurity(
-                        hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000))
-                    .referrerPolicy(
-                        referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-                    .permissionsPolicyHeader(
-                        policy ->
-                            policy.policy("camera=(), microphone=(), geolocation=(), payment=()")))
+            headers -> {
+              headers
+                  .contentSecurityPolicy(csp -> csp.policyDirectives(CSP))
+                  .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
+                  .referrerPolicy(
+                      referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                  .permissionsPolicyHeader(
+                      policy ->
+                          policy.policy("camera=(), microphone=(), geolocation=(), payment=()"));
+              if (secureCookie) {
+                headers.httpStrictTransportSecurity(
+                    hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000));
+              }
+            })
         // API sem páginas protegidas: não guardar requisição para redirect (evita sessão anônima).
         .requestCache(RequestCacheConfigurer::disable)
         .logout(AbstractHttpConfigurer::disable)

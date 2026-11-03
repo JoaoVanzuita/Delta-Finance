@@ -10,6 +10,7 @@ client/test-results
 client/.env*
 server
 docs
+deploy/release
 .env
 .env.*
 secrets

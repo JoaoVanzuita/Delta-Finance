@@ -99,6 +99,10 @@ springdoc:
     enabled: false
 
 delta:
+  deployment:
+    # tls (padrão) ou lan-http. Em lan-http, o cookie de sessão usa
+    # delta_session sem Secure e o HSTS não é enviado.
+    mode: ${DELTA_DEPLOYMENT_MODE:tls}
   crypto:
     # Caminho local padrão; o Compose sobrescreve com /run/secrets/crypto-keys.json.
     key-file: ${DELTA_CRYPTO_KEY_FILE:./secrets/crypto-keys.json}
@@ -145,7 +149,7 @@ delta:
   security:
     sessions:
       absolute-timeout: 12h
-    # Proxies reversos confiáveis entre o cliente e a aplicação (edge Caddy + client Caddy).
+    # Proxies reversos confiáveis entre o cliente e a aplicação.
     # O IP de rate limit é lido da direita para a esquerda; 0 ignora X-Forwarded-For.
     trusted-proxy-hops: ${DELTA_TRUSTED_PROXY_HOPS:2}
     # Mantido por compatibilidade com instalações que usavam o nome anterior.

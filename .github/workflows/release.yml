@@ -1,0 +1,211 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  version:
+    name: Validar versão da tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Conferir VERSION, Maven, npm e tag
+        run: ./deploy/scripts/check-version.sh "${GITHUB_REF_NAME}"
+
+      - name: Validar Compose de release
+        run: |
+          cp deploy/release/.env.example .env.release
+          docker compose --env-file .env.release -f compose.release.yaml config --quiet
+
+  backend:
+    name: Backend (verify)
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: server/pom.xml
+
+      - name: Build, lint e testes
+        run: ./mvnw -B --no-transfer-progress verify
+
+  frontend:
+    name: Frontend (verify)
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configurar Node.js 24.22.0
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.22.0'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Verificar formatação
+        run: npm run format:check
+
+      - name: Verificar contrato, tipos, lint, testes e build
+        run: npm run verify
+
+  e2e:
+    name: E2E (Playwright)
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configurar Node.js 24.22.0
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.22.0'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Instalar Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Executar E2E
+        run: npm run test:e2e
+
+  images:
+    name: Publicar imagens no GHCR
+    needs: [backend, frontend, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      owner: ${{ steps.owner.outputs.owner }}
+      server_digest: ${{ steps.server.outputs.digest }}
+      client_digest: ${{ steps.client.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Calcular versão
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Normalizar owner do GHCR
+        id: owner
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build e push do backend
+        id: server
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/delta-finance-server:${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=Delta Finance server
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+
+      - name: Build e push do client
+        id: client
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./client/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/delta-finance-client:${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=Delta Finance client
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=client
+          cache-to: type=gha,mode=max,scope=client
+
+  release:
+    name: Publicar kit no GitHub Releases
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Montar kit e checksums
+        env:
+          VERSION: ${{ needs.images.outputs.version }}
+          OWNER: ${{ needs.images.outputs.owner }}
+          SERVER_DIGEST: ${{ needs.images.outputs.server_digest }}
+          CLIENT_DIGEST: ${{ needs.images.outputs.client_digest }}
+          REQUIRE_DIGESTS: '1'
+        run: ./deploy/scripts/build-release-kit.sh
+
+      - name: Publicar GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Delta Finance ${{ needs.images.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/delta-finance-${{ needs.images.outputs.version }}-amd64.zip
+            dist/delta-finance-${{ needs.images.outputs.version }}-amd64.zip.sha256
+            dist/delta-finance-${{ needs.images.outputs.version }}-amd64.tar.gz
+            dist/delta-finance-${{ needs.images.outputs.version }}-amd64.tar.gz.sha256
+            dist/delta-finance-${{ needs.images.outputs.version }}/release.json
