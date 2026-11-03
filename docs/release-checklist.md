@@ -95,6 +95,20 @@ p95 ≤ 1 s; sincronização ≤ 60 s. Anexar resumo (sem dados financeiros).
 - [ ] Tag `vX.Y.Z` e release notes com riscos, limitações e compatibilidade de
       rollback do schema.
 
+## 6. Promoção da RC para final
+
+Depois dos gates manuais e da instalação real, prepare a versão final localmente:
+
+```bash
+./deploy/scripts/prepare-release.sh 0.1.0
+./deploy/scripts/verify-local.sh --full
+git push --no-verify origin main v0.1.0
+```
+
+O script não faz push. Use `--no-tag` se quiser revisar o commit antes de criar a
+tag. O `--no-verify` evita manter a conexão SSH ociosa durante os gates; execute
+o `verify-local.sh --full` imediatamente antes.
+
 ## 6. Pós-release
 
 - [ ] Health checks verdes por 30 minutos.
