@@ -1,0 +1,10 @@
+title = "Delta Finance Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Key rings deterministicos usados apenas por testes automatizados."
+paths = [
+  '''server/src/test/resources/crypto-keys-test\.json''',
+]

@@ -34,6 +34,7 @@ jobs:
           # o gitleaks roda sem licença.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
           GITLEAKS_ENABLE_COMMENTS: 'false'
+          GITLEAKS_CONFIG: .gitleaks.toml
 
   dependency-scan:
     name: Dependency scanning (Trivy filesystem)
