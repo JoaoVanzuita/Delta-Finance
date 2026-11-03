@@ -116,6 +116,15 @@ async function installStub(page: Page): Promise<State> {
         body: JSON.stringify({ items: state.goals }),
       })
     }
+    if (path.startsWith('/goals/') && path.endsWith('/progress') && method === 'GET') {
+      const id = path.split('/')[2]
+      const found = state.goals.find((item) => item.id === id)
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: found?.progressHistory ?? [], hasMore: false }),
+      })
+    }
     if (path === '/goals' && method === 'POST') {
       const body = request.postDataJSON() as Record<string, unknown>
       const target = Number(body.targetAmount ?? 0)

@@ -1,14 +1,15 @@
 # Override exclusivo de desenvolvimento local.
 #
-# O stack de produção (`compose.yaml`) não publica o banco no host. Para rodar
-# o backend fora do Compose (`./mvnw spring-boot:run`), o `db` precisa ser
+# O stack de release (`compose.release.yaml`) não publica o banco no host. Para
+# rodar o backend fora do Compose (`./mvnw spring-boot:run`), o `db` precisa ser
 # acessível em 127.0.0.1. Este override nunca é carregado automaticamente:
 # use sempre `-f compose.yaml -f compose.dev.yaml`.
 #
 # A porta publicada é `DELTA_DB_PORT` (a mesma que o backend local usa),
-# limitada ao loopback para não expor o banco na rede.
+# limitada ao loopback para não expor o banco na rede. O padrão 5435 evita a
+# 5432 usada por outros projetos e a 5432 interna do PostgreSQL de release.
 
 services:
   db:
     ports:
-      - '127.0.0.1:${DELTA_DB_PORT:-5432}:5432'
+      - '127.0.0.1:${DELTA_DB_PORT:-5435}:5432'

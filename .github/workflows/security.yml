@@ -69,13 +69,13 @@ jobs:
 
       - name: Build das imagens do backend e do frontend
         run: |
-          docker build -t delta-finance/server:scan ./server
-          docker build -t delta-finance/client:scan -f client/Dockerfile .
+          docker build -t delta-finance-dev/server:scan ./server
+          docker build -t delta-finance-dev/client:scan -f client/Dockerfile .
 
       - name: Escanear imagem do backend
         uses: aquasecurity/trivy-action@0.36.0
         with:
-          image-ref: delta-finance/server:scan
+          image-ref: delta-finance-dev/server:scan
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
@@ -84,7 +84,7 @@ jobs:
       - name: Escanear imagem do frontend
         uses: aquasecurity/trivy-action@0.36.0
         with:
-          image-ref: delta-finance/client:scan
+          image-ref: delta-finance-dev/client:scan
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'

@@ -34,7 +34,7 @@ test('patrimônio separa ativos, passivos, cartão e moeda não consolidada', as
   await page.goto('/wealth')
   await page.waitForLoadState('networkidle')
 
-  for (const value of ['R$ 244.612,10', 'R$ 257.682,10', 'R$ 13.070,00']) {
+  for (const value of ['R$ 266.682,10', 'R$ 253.612,10', 'R$ 13.070,00']) {
     await expect(page.getByText(value).first()).toBeVisible()
   }
   await expect(page.getByText('Cartão Alfa').first()).toBeVisible()

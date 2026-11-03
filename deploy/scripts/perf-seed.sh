@@ -6,7 +6,7 @@
 # use contra produção: o usuário de performance é recriado do zero.
 #
 # Uso:
-#   DELTA_DB_URL=jdbc:postgresql://localhost:5432/delta_finance \
+#   DELTA_DB_URL=jdbc:postgresql://localhost:5435/delta_finance \
 #   DELTA_DB_USER=delta DELTA_DB_PASSWORD=delta \
 #   DELTA_CRYPTO_KEY_FILE=./secrets/crypto-keys.json \
 #   ./deploy/scripts/perf-seed.sh

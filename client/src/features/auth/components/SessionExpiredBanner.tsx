@@ -37,7 +37,7 @@ export function SessionExpiredBanner() {
           clearSessionExpired()
           setVisible(false)
         }}
-        className="self-start rounded-card border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:bg-surface-muted sm:self-auto"
+        className="inline-flex min-h-11 items-center justify-center self-start rounded-card border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:bg-surface-muted sm:self-auto"
       >
         Fechar aviso
       </button>

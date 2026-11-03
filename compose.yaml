@@ -1,4 +1,4 @@
-# Stack self-hosted do Delta Finance.
+# Stack de desenvolvimento local do Delta Finance.
 #
 # Uso:
 #   cp .env.example .env
@@ -7,12 +7,13 @@
 #
 # Serviços: db (PostgreSQL 18.6), server (Spring Boot), client (SPA + proxy /api)
 # e proxy (Caddy com TLS). O backend não é publicado diretamente.
+# O nome do projeto isola o desenvolvimento do ambiente de release.
 
-name: delta-finance
+name: delta-finance-dev
 
 services:
   db:
-    image: postgres:18.6-alpine
+    image: postgres:18.6-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DELTA_DB_NAME}
@@ -38,7 +39,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    image: delta-finance/server:local
+    image: delta-finance-dev/server:dev
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -92,7 +93,7 @@ services:
     build:
       context: .
       dockerfile: client/Dockerfile
-    image: delta-finance/client:local
+    image: delta-finance-dev/client:dev
     restart: unless-stopped
     depends_on:
       server:

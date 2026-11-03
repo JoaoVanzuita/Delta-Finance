@@ -781,7 +781,14 @@ export async function installMockApi(
     if (path === '/goals' && method === 'GET') {
       return json(route, 200, { items: db.goals })
     }
-    if (path.startsWith('/goals/') && method === 'GET') {
+    if (path.startsWith('/goals/') && path.endsWith('/progress') && method === 'GET') {
+      const id = path.split('/')[2]
+      const goal = db.goals.find((item) => item.id === id)
+      return goal
+        ? json(route, 200, { items: goal.progressHistory, hasMore: false })
+        : notFound(route)
+    }
+    if (/^\/goals\/[^/]+$/.test(path) && method === 'GET') {
       const id = path.split('/')[2]
       const goal = db.goals.find((item) => item.id === id)
       return goal ? json(route, 200, goal) : notFound(route)
