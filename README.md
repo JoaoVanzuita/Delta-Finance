@@ -1,8 +1,8 @@
 # Delta Finance
 
-Controle financeiro privado para uma família, operado em infraestrutura própria
+Controle financeiro privado com suporte a múltiplos usuários, operado em infraestrutura própria
 (self-hosted). Cada usuário enxerga apenas as próprias contas, transações,
-integrações e relatórios. A integração bancária é configurada individualmente no
+integrações e relatórios. Integração bancária configurada individualmente no
 Meu Pluggy, sem compartilhamento de credenciais.
 
 > **Estado**: MVP bancário e módulos secundários implementados. O escopo cobre
@@ -10,10 +10,6 @@ Meu Pluggy, sem compartilhamento de credenciais.
 > faturas, reconciliação, dashboard, relatórios, investimentos, patrimônio,
 > metas, privacidade e exportação. A estabilização inclui guardrails de
 > arquitetura, análise estática, orçamento de consultas e contrato OpenAPI.
->
-> Nenhum módulo movimenta dinheiro, cria ordens ou oferece recomendação de
-> investimento. O produto é um painel de acompanhamento, não um intermediário
-> financeiro.
 
 ## Stack
 
