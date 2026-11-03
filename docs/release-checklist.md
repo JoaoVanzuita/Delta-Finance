@@ -15,7 +15,7 @@ publicar uma versão do MVP bancário.
 | Java                            | 25.0.4.1+1                | toolchain do CI                                                           |
 | k6                              | 2.3.0                     | imagem oficial `grafana/k6:2.3.0`                                         |
 | ZAP                             | 2.16.1                    | `zaproxy/zap-stable:2.16.1`                                               |
-| Trivy                           | ação 0.36.0               | workflow de segurança                                                     |
+| Trivy                           | ação v0.36.0               | workflow de segurança                                                     |
 | Gitleaks                        | ação v2                   | workflow de segurança                                                     |
 
 Digests conferidos com `docker buildx imagetools inspect <imagem>` em 2026-11-02.

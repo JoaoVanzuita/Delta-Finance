@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Trivy (Maven, npm e Dockerfiles)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -54,6 +54,8 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
           format: table
+          # Fixture determinístico de testes; não é segredo operacional.
+          skip-files: server/src/test/resources/crypto-keys-test.json
 
   container-scan:
     name: Container scanning (Trivy image)
@@ -74,7 +76,7 @@ jobs:
           docker build -t delta-finance-dev/client:scan -f client/Dockerfile .
 
       - name: Escanear imagem do backend
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: delta-finance-dev/server:scan
           severity: HIGH,CRITICAL
@@ -83,7 +85,7 @@ jobs:
           format: table
 
       - name: Escanear imagem do frontend
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: delta-finance-dev/client:scan
           severity: HIGH,CRITICAL
