@@ -5,6 +5,7 @@
 # - Branches comuns: validações rápidas.
 # - main e tags v*: gates completos (backend, frontend, E2E, Compose, Gitleaks,
 #   actionlint e Trivy filesystem/imagens).
+# - Exclusões de branches/tags não executam gates.
 #
 # Para forçar os gates completos em outra branch:
 #   DELTA_PREPUSH_FULL=1 git push
@@ -18,13 +19,20 @@ cd "${ROOT_DIR}"
 
 is_main=0
 is_tag=0
-saw_ref=0
+saw_push=0
+interactive=0
 
-if [[ ! -t 0 ]]; then
+if [[ -t 0 ]]; then
+  interactive=1
+else
   while IFS= read -r line; do
     [[ -z "${line}" ]] && continue
-    saw_ref=1
-    read -r _local_ref _local_sha remote_ref _remote_sha <<<"${line}"
+    read -r _local_ref local_sha remote_ref _remote_sha <<<"${line}"
+    if [[ "${local_sha}" =~ ^0+$ ]]; then
+      printf '[pre-push] Exclusão de ref ignorada pelos gates: %s\n' "${remote_ref}" >&2
+      continue
+    fi
+    saw_push=1
     case "${remote_ref}" in
       refs/heads/main) is_main=1 ;;
       refs/tags/v*) is_tag=1 ;;
@@ -32,7 +40,12 @@ if [[ ! -t 0 ]]; then
   done
 fi
 
-if [[ "${saw_ref}" -eq 0 ]]; then
+if [[ "${interactive}" -eq 0 && "${saw_push}" -eq 0 ]]; then
+  printf '[pre-push] Apenas exclusões de refs; nenhum gate é necessário.\n'
+  exit 0
+fi
+
+if [[ "${interactive}" -eq 1 ]]; then
   current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
   if [[ "${current_branch}" == "main" ]]; then
     is_main=1
