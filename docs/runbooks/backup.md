@@ -4,6 +4,10 @@
 restauração em banco limpo e comprovação de que o dump sem key ring não revela
 campos protegidos.
 
+> Para o kit de release LAN, o procedimento simplificado com `docker compose cp`,
+> sem depender de `age` no host, está em `deploy/release/README.md`. Este runbook
+> descreve o fluxo cifrado usado na operação com `age`.
+
 ## 1. Modelo
 
 - `deploy/scripts/backup.sh`: `pg_dump -Fc` no container `db`, cifrado com
@@ -98,14 +102,14 @@ um backup com 31 dias e a preservação de um backup atual e do key ring.
 
 ## 7. Falhas comuns
 
-| Sintoma | Causa provável | Ação |
-|---|---|---|
-| `age não encontrado` | binário ausente | instalar `age`; não usar backup sem cifra |
-| `dump vazio` | `db` indisponível | verificar `docker compose ps db` e repetir |
-| `checksum inválido` | arquivo corrompido/truncado | descartar e usar outro backup |
-| Restauração com erro | migração incompatível ou conexões abertas | manter `server` parado, revisar log e repetir |
-| Campos ilegíveis após restaurar | key ring diferente/ausente | restaurar o key ring correspondente; sem ele os dados são irrecuperáveis |
-| Disco cheio | retenção não aplicada | verificar cron do backup e permissões do diretório |
+| Sintoma                         | Causa provável                            | Ação                                                                     |
+| ------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| `age não encontrado`            | binário ausente                           | instalar `age`; não usar backup sem cifra                                |
+| `dump vazio`                    | `db` indisponível                         | verificar `docker compose ps db` e repetir                               |
+| `checksum inválido`             | arquivo corrompido/truncado               | descartar e usar outro backup                                            |
+| Restauração com erro            | migração incompatível ou conexões abertas | manter `server` parado, revisar log e repetir                            |
+| Campos ilegíveis após restaurar | key ring diferente/ausente                | restaurar o key ring correspondente; sem ele os dados são irrecuperáveis |
+| Disco cheio                     | retenção não aplicada                     | verificar cron do backup e permissões do diretório                       |
 
 ## 8. Rollback e comunicação
 

@@ -21,9 +21,7 @@ Edite `secrets/crypto-keys.json` mantendo as versões antigas:
     { "version": 1, "key": "<base64 32B antiga>" },
     { "version": 2, "key": "<base64 32B nova>" }
   ],
-  "index": [
-    { "version": 1, "key": "<base64 32B>" }
-  ]
+  "index": [{ "version": 1, "key": "<base64 32B>" }]
 }
 ```
 
@@ -53,7 +51,8 @@ código 0 se não houver falhas. O job:
   `invoice`, `invoice_item`, `invoice_payment`, `provider_bill`,
   `provider_bill_payment`, `provider_investment`,
   `provider_investment_transaction`, `investment_income`, correções,
-  `manual_asset_liability`, `financial_goal`, `goal_allocation`,
+  `manual_asset_liability`, `wealth_snapshot`, `wealth_snapshot_item`,
+  `financial_goal`, `goal_allocation`,
   `goal_progress_snapshot` e `idempotency_key.response_body`);
 - regrava cada valor com a versão ativa, preservando o AAD
   (`user_id`, tabela, coluna, ID do registro);
@@ -81,6 +80,8 @@ select count(*) from transaction where get_byte(amount_effective_enc, 1) < 2;
 select count(*) from financial_account where get_byte(alias_enc, 1) < 2;
 select count(*) from invoice where get_byte(total_enc, 1) < 2;
 select count(*) from idempotency_key where get_byte(response_body_enc, 1) < 2;
+select count(*) from wealth_snapshot where get_byte(gross_assets_enc, 1) < 2;
+select count(*) from wealth_snapshot_item where get_byte(value_enc, 1) < 2;
 ```
 
 ## 5. Remover a chave antiga
@@ -111,9 +112,9 @@ e o responsável no ticket operacional.
 
 ## 7. Falhas
 
-| Sintoma | Ação |
-|---|---|
-| `failed>0` | mantenha ambas as chaves; investigue a linha pelo ID no log sanitizado e repita |
-| `CryptoException` de autenticação | AAD/registro divergente ou chave antiga ausente; restaure o key ring e o backup |
-| Health readiness vermelho | versão ativa não existe no key ring; corrija o arquivo e reinicie |
-| Valores ilegíveis após remover chave | restaure a chave antiga e o backup imediatamente |
+| Sintoma                              | Ação                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| `failed>0`                           | mantenha ambas as chaves; investigue a linha pelo ID no log sanitizado e repita |
+| `CryptoException` de autenticação    | AAD/registro divergente ou chave antiga ausente; restaure o key ring e o backup |
+| Health readiness vermelho            | versão ativa não existe no key ring; corrija o arquivo e reinicie               |
+| Valores ilegíveis após remover chave | restaure a chave antiga e o backup imediatamente                                |

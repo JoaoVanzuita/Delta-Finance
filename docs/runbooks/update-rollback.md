@@ -1,48 +1,62 @@
 # Runbook: atualização e rollback
 
-**Escopo**: T187. Atualização controlada do stack self-hosted e retorno seguro à
-versão anterior, respeitando migrações expand/contract.
+**Escopo**: atualização controlada do stack self-hosted por imagens versionadas
+no GHCR e retorno seguro à versão anterior, respeitando migrações
+expand/contract.
+
+> Execute este runbook no diretório do kit de release. O projeto Compose é
+> `delta-finance` e o banco usa o volume `delta-finance-prod_pgdata`, separado
+> do desenvolvimento (`delta-finance-dev_pgdata`).
 
 ## 1. Antes de atualizar
 
-1. Leia o `docs/release-checklist.md` e confirme versões/digests.
-2. Faça backup verificado: `./deploy/scripts/backup.sh`.
-3. Copie o key ring para local seguro (não vai no dump).
-4. Registre a versão atual:
+1. Leia o `docs/release-checklist.md` e confirme versão, tag e digests.
+2. Faça backup do banco e copie `secrets/crypto-keys.json` e `.env` para local
+   seguro. O procedimento está em `deploy/release/README.md`.
+3. Registre a versão atual:
 
 ```bash
 docker compose images
-docker compose exec -T db psql -U "$DELTA_DB_USER" -d "$DELTA_DB_NAME" -tAc \
-  "select max(version) from flyway_schema_history"
+docker compose exec -T db sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "select max(version) from flyway_schema_history"'
 ```
 
-5. Garanta que não há sincronização/job em andamento:
+4. Garanta que não há sincronização/job em andamento:
    `GET /api/v1/sync/status` deve mostrar fila vazia ou apenas jobs concluídos.
-6. Valide o Compose sem subir: `docker compose config --quiet`.
+5. Valide o Compose sem subir:
+
+```bash
+docker compose config --quiet
+```
+
+6. Confirme que `DELTA_VERSION` no `.env` corresponde à versão que está rodando.
 
 ## 2. Atualizar
 
+1. Altere `DELTA_VERSION` no `.env` para a nova versão, sem o prefixo `v`.
+2. Baixe e recrie os serviços:
+
 ```bash
-git fetch --tags
-git checkout <tag-ou-commit>
 docker compose pull
-docker compose build
-docker compose up -d
+docker compose up -d --remove-orphans
 docker compose ps
 ```
+
+Não use `docker compose down -v`; a opção `-v` remove o volume do PostgreSQL.
 
 Verifique:
 
 - `server` saudável em `/actuator/health/readiness`;
 - migrações aplicadas no log (`Flyway`), sem falha;
-- `client` e `proxy` saudáveis;
+- `client` saudável em `/healthz`;
 - login, dashboard, uma sincronização e uma exportação.
 
-Smoke test mínimo:
+Smoke test mínimo no host:
 
 ```bash
-curl -fsS https://SEU_DOMINIO/healthz
-curl -fsS https://SEU_DOMINIO/api/v1/auth/csrf -o /dev/null -w '%{http_code}\n'
+curl -fsS http://localhost:8080/healthz
+curl -fsS http://localhost:8080/api/v1/auth/csrf -o /dev/null -w '%{http_code}\n'
+docker compose exec server curl -fsS http://127.0.0.1:8080/actuator/health/readiness
 ```
 
 ## 3. Migrações expand/contract
@@ -65,26 +79,32 @@ Se a migração falhar:
 ### 4.1 Somente aplicação (sem migração destrutiva)
 
 ```bash
-docker compose stop server
-git checkout <tag-anterior>
-docker compose build server
-docker compose up -d server
+# Edite DELTA_VERSION no .env para a versão anterior.
+docker compose pull
+docker compose up -d --remove-orphans
+docker compose ps
 ```
 
-Valide health, login e dashboard. Se o schema já recebeu apenas colunas/tabelas
-novas (expand), a versão anterior continua funcionando.
+Se a imagem anterior ainda estiver local, o `pull` pode ser omitido. Valide
+health, login e dashboard. Se o schema recebeu apenas colunas/tabelas novas
+(expand), a versão anterior continua funcionando.
 
 ### 4.2 Com migração incompatível
 
-1. Pare `server` e `client`.
-2. Restaure o backup anterior:
+1. Pare `server` e `client`:
 
 ```bash
-export AGE_IDENTITY_FILE="$HOME/age-key.txt"
-./deploy/scripts/restore.sh --file backups/<backup>.dump.age --yes
+docker compose stop server client
 ```
 
-3. Faça checkout da versão anterior e suba o stack.
+2. Restaure o backup anterior. Use o procedimento do `deploy/release/README.md`
+   com o mesmo key ring do momento do backup.
+3. Ajuste `DELTA_VERSION` para a versão anterior e suba o stack:
+
+```bash
+docker compose up -d --remove-orphans
+```
+
 4. Valide contagens, dashboard, login e uma sincronização.
 5. Comunique o incidente e registre a causa.
 
@@ -95,31 +115,6 @@ código da versão correspondente.
 
 - Confirme retenção de backup e rotação de chaves vigentes.
 - Verifique métricas de sincronização e fila.
-- Atualize o registro de versão no `docs/release-checklist.md`.
+- Atualize o registro de versão e digests no `docs/release-checklist.md`.
 - Mantenha o backup anterior por pelo menos 30 dias.
-
-
-## 6. Ensaio executado em 2026-10-24
-
-Drill sintético em ambiente isolado, sem dados reais:
-
-- projeto Compose separado `delta-drill`, PostgreSQL 18.6, key ring descartável;
-- versão N-1 com migrações V001–V006;
-- versão N com migração expand-only `V007__release_drill.sql` (tabela
-  `release_drill_marker`);
-- usuário, conta e transação sintéticos; backup `pg_dump -Fc` antes do upgrade.
-
-Resultado:
-
-1. N-1 subiu, health `UP`, dashboard com saldo `1000.00` e despesa `100.00`.
-2. N aplicou V007, health `UP`, tabela marcadora presente; contagens
-   `app_user=1`, `financial_account=1`, `transaction=1`.
-3. Rollback para N-1: health `UP`, mesmas contagens e mesmos totais. O Flyway
-   registrou o aviso esperado de schema 007 mais novo que a última migração
-   local (006), mas a aplicação subiu e operou normalmente — a migração era
-   compatível (expand-only).
-4. Banco, volume, imagens e diretório temporários foram removidos; nenhuma
-   alteração no repositório ou no ambiente real.
-
-Limite do ensaio: não foi executada uma migração destrutiva (contract). Nesse
-caso, o rollback exige `restore.sh` com o backup, conforme seções 3 e 4.
+- Mantenha as imagens/tags anteriores no GHCR para permitir novo rollback.

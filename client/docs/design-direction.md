@@ -1,18 +1,13 @@
 # Direção visual — Delta Finance
 
-> **Status:** aprovada na Fase 0 da refatoração de UI/UX (30/10/2026).
+> **Status:** direção visual vigente.
 > **Substitui integralmente** a direção anterior baseada em “livro-caixa”.
 > **Fonte oficial** para tokens, componentes, telas, gráficos, temas e copy.
 >
-> Documentos relacionados:
-> [`docs/refatoracao-ui-ux/00-baseline-e-decisoes.md`](../../docs/refatoracao-ui-ux/00-baseline-e-decisoes.md)
-> e [`docs/refatoracao-ui-ux/relatorio-investigacao-tecnica.md`](../../docs/refatoracao-ui-ux/relatorio-investigacao-tecnica.md).
->
-> **Estado de implementação:** fases 0–4 concluídas. Tokens, temas, primitivas,
-> AppShell, Dashboard, operações financeiras, investimentos, patrimônio e metas
-> já seguem esta direção. A Fase 5 migra configurações; até lá, telas ainda não
-> redesenhadas podem manter a composição anterior. Não troque apenas os valores de `tokens.css` sem migrar os
-> consumidores de `text-surface`, `primary` e `primary-hover`.
+> **Estado de implementação:** tokens, temas, primitivas e AppShell seguem esta
+> direção. Telas ainda não migradas podem manter a composição anterior. Não
+> troque apenas os valores de `tokens.css` sem migrar os consumidores de
+> `text-surface`, `primary` e `primary-hover`.
 
 ---
 
@@ -151,8 +146,8 @@ paleta escolhida.
 
 `on-primary` é definido por paleta e por tema — nunca presuma branco. A paleta
 âmbar clara usa texto branco sobre `#B45309`; no escuro, usa texto escuro sobre
-`#FBBF24`. A Fase 1 deve validar contraste de cada par com ferramenta automática
-antes de liberar a troca de paleta.
+`#FBBF24`. Cada par deve ser validado com ferramenta automática antes de liberar
+a troca de paleta.
 
 ### 3.3 Categorias
 
@@ -183,7 +178,7 @@ Regras:
   slots; colisões são aceitáveis porque nome e ícone desambiguam.
 - O ícone vem de um mapa estável de `predefinedKey`/palavras-chave, com fallback
   `Tag` (Lucide). Um mapa de apresentação no frontend é suficiente; não crie
-  migration de cor/ícone nesta fase.
+  migration de cor/ícone.
 - Categorias de receita não usam a cor de “receita” como identidade; a direção do
   valor (entrada/saída) é comunicada por sinal, rótulo e cor semântica.
 - Em gráficos, no máximo uma cor por categoria visível; “Outras” usa um tom
@@ -374,7 +369,7 @@ Regras obrigatórias:
   depender de hover.
 - Não invente pontos, categorias, séries ou valores. Lacunas são lacunas.
 - Não plote séries históricas de patrimônio ou investimentos enquanto não
-  existirem snapshots (Fase 7). Não use a data atual para simular passado.
+  existirem snapshots. Não use a data atual para simular passado.
 - Para períodos longos, agregue visualmente e preserve o total; ofereça a
   granularidade detalhada na tabela. Acima de ~120 pontos, agregue por mês ou
   intervalo, salvo necessidade explícita.
@@ -398,7 +393,7 @@ Regras obrigatórias:
 | **ORGANIZAR**     | Categorias, Reconciliação                     | `/categories`, `/reconciliation`                                                   |
 | **CONFIGURAÇÕES** | Preferências*, Integração, Privacidade, Conta | `/settings/preferences`*, `/settings/integration`, `/settings/privacy`, `/account` |
 
-\* `Preferências` foi criada na Fase 5, com tema, paleta e prévia. Integração,
+\* `Preferências` inclui tema, paleta e prévia. Integração,
 Privacidade e Conta compartilham a navegação secundária e mantêm URLs próprias.
 Nenhum recurso existente é removido.
 
@@ -604,10 +599,10 @@ backend; a UI formata e organiza, mas não recalcula totais financeiros.
   incompatíveis com o estado.
 - “Compras não alocadas” lista somente débitos. Créditos e estornos aparecem
   separados como “Créditos não alocados”; nunca como compra.
-- Proventos não entram nas receitas do Dashboard nesta fase. A UI deve dizer
+- Proventos não entram nas receitas do Dashboard neste momento. A UI deve dizer
   isso de forma direta, sem prometer integração futura como se já existisse.
-- Não prometa histórico patrimonial ou de investimentos. O histórico é a Fase 7
-  e exige snapshots, endpoint e migration próprios.
+- Não prometa histórico patrimonial ou de investimentos. O histórico exige
+  snapshots, endpoint e migration próprios.
 - Toda estimativa, lacuna ou dado desatualizado tem rótulo visível e data de
   referência. “Não compartilhado pelo provedor” ≠ “saldo zero”.
 - A origem do dado (importado/manual/provedor) fica acessível no detalhe, sem
@@ -714,14 +709,15 @@ Antes de considerar uma tela concluída:
   violações críticas/sérias;
 - dados: moeda, período, origem, cobertura e estimativa corretos;
 - testes: unitário/componente, E2E relevante, lint, typecheck e build;
-- screenshots atualizados quando a fase exigir;
+- screenshots atualizados quando a mudança exigir;
 - nenhuma regra financeira alterada sem decisão e teste específicos.
 
 ### 17.4 Governança
 
-Mudanças nesta direção exigem atualização deste documento e registro no relatório
-da fase. Conflitos com código existente são resolvidos a favor da integridade
-financeira, acessibilidade e contratos — nunca por conveniência visual.
+Mudanças nesta direção exigem atualização deste documento e registro na
+documentação da mudança. Conflitos com código existente são resolvidos a favor
+da integridade financeira, acessibilidade e contratos — nunca por conveniência
+visual.
 
 ### 17.5 Carregamento e desempenho
 

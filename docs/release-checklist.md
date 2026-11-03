@@ -5,30 +5,30 @@ publicar uma versão do MVP bancário.
 
 ## 1. Versões fixadas
 
-| Componente | Versão | Digest (multi-arch) |
-|---|---|---|
-| PostgreSQL | 18.6-alpine | `sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5` |
-| Caddy (proxy e cliente) | 2.11.7-alpine | `sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f` |
-| Maven build | 3.9.16-eclipse-temurin-25 | `sha256:93b8a14ea2f412782e4e842651273b4d903e35cc496284f178fbbe2d67d00976` |
-| JRE runtime | 25.0.4.1_1-jre | `sha256:dbb43d81099eec91e0800226ed2296d03146ee7857165b95112372ad0d67e87f` |
-| Node build | 24.22.0-alpine | `sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f` |
-| Java | 25.0.4.1+1 | toolchain do CI |
-| k6 | 2.3.0 | imagem oficial `grafana/k6:2.3.0` |
-| ZAP | 2.16.1 | `zaproxy/zap-stable:2.16.1` |
-| Trivy | ação 0.36.0 | workflow de segurança |
-| Gitleaks | ação v2 | workflow de segurança |
+| Componente                      | Versão                    | Digest (multi-arch)                                                       |
+| ------------------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| PostgreSQL                      | 18.6-alpine               | `sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5` |
+| Caddy (dentro da imagem client) | 2.11.7-alpine             | `sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5` |
+| Maven build                     | 3.9.16-eclipse-temurin-25 | `sha256:93b8a14ea2f412782e4e842651273b4d903e35cc496284f178fbbe2d67d00976` |
+| JRE runtime                     | 25.0.4.1_1-jre            | `sha256:78f1f183913482ef390c2722f46c3f0ce76ada341d69590e7c482ec943ee72d5` |
+| Node build                      | 24.22.0-alpine            | `sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f` |
+| Java                            | 25.0.4.1+1                | toolchain do CI                                                           |
+| k6                              | 2.3.0                     | imagem oficial `grafana/k6:2.3.0`                                         |
+| ZAP                             | 2.16.1                    | `zaproxy/zap-stable:2.16.1`                                               |
+| Trivy                           | ação 0.36.0               | workflow de segurança                                                     |
+| Gitleaks                        | ação v2                   | workflow de segurança                                                     |
 
-Digests conferidos com `docker buildx imagetools inspect <imagem>` em 2026-10-24.
+Digests conferidos com `docker buildx imagetools inspect <imagem>` em 2026-11-02.
 Ao atualizar uma imagem, atualize esta tabela e o Compose/Dockerfile juntos.
 
 ## 2. Gates automatizados
 
 - [ ] `server/`: `./mvnw verify` verde (testes unitários + IT + Spotless +
-      Checkstyle + JaCoCo).
-- [ ] Cobertura de linhas no domínio ≥ 80%; `Money`, `OwnershipGuard` e
-      `AuthenticatedUser` em 100%.
-- [ ] `client/`: `npm run format:check`, `npm run lint`, `npm run typecheck`,
-      `npm test`, `npm run build`.
+      Checkstyle + SpotBugs + JaCoCo).
+- [ ] Cobertura de linhas no domínio ≥ 80%; `Money` e `AuthenticatedUser` em
+      100%; `QueryBudgetIT` verde.
+- [ ] `client/`: `npm run verify` verde (typecheck, lint, testes, build e
+      `openapi:check`) e `npm run format:check`.
 - [ ] `npx playwright test` verde, incluindo `a11y.spec.ts` e
       `responsive.spec.ts`.
 - [ ] `npm run openapi:lint` e tipos gerados sem diff.
@@ -62,16 +62,31 @@ CONNECTION_ID=<uuid> docker run --rm --network host -i grafana/k6:2.3.0 run - \
 Metas: dashboard/filtros p95 ≤ 2 s; CRUD/listas p95 ≤ 500 ms; login/logout
 p95 ≤ 1 s; sincronização ≤ 60 s. Anexar resumo (sem dados financeiros).
 
-## 5. Empacotamento
+## 5. Empacotamento e publicação
 
-- [ ] `docker compose config --quiet` sem erro.
-- [ ] `docker compose build` reproduzível.
-- [ ] `.env.example` atualizado; nenhum segredo real versionado.
+- [ ] Workflow `release.yml` verde para a tag `vX.Y.Z`.
+- [ ] `./deploy/scripts/check-version.sh vX.Y.Z` confirma `VERSION`,
+      `server/pom.xml`, `client/package.json` e tag.
+- [ ] `docker compose config --quiet` (desenvolvimento) sem erro.
+- [ ] `docker compose --env-file deploy/release/.env.example -f compose.release.yaml config --quiet`
+      sem erro.
+- [ ] Imagens `linux/amd64` publicadas no GHCR com a tag `X.Y.Z`:
+      `delta-finance-server` e `delta-finance-client`.
+- [ ] Pacotes do GHCR públicos, ou login com PAT documentado para os usuários.
+- [ ] Compose de release usa `db`, `server` e `client`; não tem `build`, apenas
+      `client` publica porta e o banco usa `delta-finance-prod_pgdata`.
+- [ ] Desenvolvimento usa o projeto `delta-finance-dev` e o volume
+      `delta-finance-dev_pgdata`, sem compartilhar dados com produção.
+- [ ] Kit do GitHub Release publicado em `.zip` e `.tar.gz`, com checksums, e
+      contém `compose.yaml`, `.env.example`, `README.md`, `VERSION`,
+      `release.json` e `SHA256SUMS`.
+- [ ] `.env.example` atualizado; nenhum segredo real ou key ring no kit.
 - [ ] Migrações Flyway novas a partir de `V002`; nenhuma migração aplicada foi
       editada (a baseline é `V001__baseline.sql`).
 - [ ] `application-prod.yml` sem stubs, debug ou dados de teste.
 - [ ] `client/.env.production` apenas com limites versionados.
-- [ ] Tag/commit assinado e changelog com riscos e limitações.
+- [ ] Tag `vX.Y.Z` e release notes com riscos, limitações e compatibilidade de
+      rollback do schema.
 
 ## 6. Pós-release
 
@@ -79,4 +94,6 @@ p95 ≤ 1 s; sincronização ≤ 60 s. Anexar resumo (sem dados financeiros).
 - [ ] Fila de sincronização drenando; sem falhas repetidas.
 - [ ] Backup pós-release concluído e checksum validado.
 - [ ] Alertas de falha de backup e sincronização ativos.
-- [ ] Registro de versão e digests neste arquivo atualizado.
+- [ ] `release.json` registra commit, plataforma e digests das imagens.
+- [ ] Pacotes do GHCR continuam públicos e as tags antigas foram preservadas
+      para rollback.

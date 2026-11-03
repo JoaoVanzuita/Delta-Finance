@@ -1,7 +1,14 @@
 # Deploy e operação do stack
 
 Este diretório contém a configuração de borda e os scripts operacionais. O
-`compose.yaml` da raiz orquestra `db`, `server`, `client` e `proxy`.
+`compose.yaml` da raiz é o stack de desenvolvimento (`delta-finance-dev`) e
+orquestra `db`, `server`, `client` e `proxy`.
+
+Para a release self-hosted em LAN, use o kit do GitHub Releases e o
+[`release/README.md`](release/README.md). O `compose.release.yaml` da raiz usa o
+projeto `delta-finance`, não tem `build`, usa imagens versionadas do GHCR,
+publica apenas o `client` e persiste o banco no volume
+`delta-finance-prod_pgdata`.
 
 ## Topologia
 
@@ -76,10 +83,10 @@ Regras:
 
 ## Scripts
 
-| Script | Uso |
-|---|---|
-| `scripts/backup.sh` | `pg_dump` comprimido, cifrado com `age`, retenção de 30 dias |
-| `scripts/restore.sh` | restauração em banco limpo, com confirmação explícita |
+| Script               | Uso                                                          |
+| -------------------- | ------------------------------------------------------------ |
+| `scripts/backup.sh`  | `pg_dump` comprimido, cifrado com `age`, retenção de 30 dias |
+| `scripts/restore.sh` | restauração em banco limpo, com confirmação explícita        |
 
 Exemplos:
 

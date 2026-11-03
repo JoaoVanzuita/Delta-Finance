@@ -36,11 +36,12 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
 - Política: 12–128 caracteres, sem composição obrigatória; rejeita a senha igual
   ou contendo o nome de usuário normalizado e senhas da lista local versionada
   de 10.000+ entradas comuns, sem chamada externa.
-- Sessão: cookie `HttpOnly`, `Secure`, `SameSite=Lax`, 30 minutos de inatividade
-  e 12 horas absolutas; CSRF por cookie + header; logout invalida a sessão no
-  servidor. O cliente também expira a sessão localmente nesses prazos, revalida
-  ao voltar o foco e limpa todo o cache financeiro em 401, logout, timeout ou
-  troca de usuário.
+- Sessão: cookie `HttpOnly`, `SameSite=Lax`, 30 minutos de inatividade e 12
+  horas absolutas. Em TLS, usa `__Host-delta_session` com `Secure`; no modo
+  `lan-http`, usa `delta_session` sem `Secure` para funcionar em HTTP na LAN.
+  CSRF por cookie + header; logout invalida a sessão no servidor. O cliente
+  também expira a sessão localmente nesses prazos, revalida ao voltar o foco e
+  limpa todo o cache financeiro em 401, logout, timeout ou troca de usuário.
 - Login limitado a 5 falhas por 15 minutos por usuário+IP, com bloqueio de 15
   minutos persistido a partir da falha que atingiu o limite e contador zerado em
   sucesso. O fim do bloqueio sobrevive a reinícios e não depende da janela
@@ -48,6 +49,14 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
 - Cadastro limitado a 5 tentativas por hora por IP, em memória, antes do custo de
   Argon2id. Reiniciar a aplicação zera a janela; a limitação de instância única
   está registrada em `docs/operations.md`.
+- O IP desses limites é resolvido da direita para a esquerda em
+  `X-Forwarded-For`, ignorando prefixos forjados pelo cliente. O padrão
+  (`DELTA_TRUSTED_PROXY_HOPS=2`) cobre o Caddy de borda e o Caddy do client; o
+  release LAN usa `1` porque só existe o Caddy do client; deploy sem proxy deve
+  usar `0`. A borda também sobrescreve o cabeçalho.
+- Troca de senha e confirmação de exclusão reutilizam o mesmo limitador de
+  usuário+IP para validar a senha atual; após 5 falhas retornam `429` com
+  `Retry-After`. Uma sessão sequestrada não pode testar senhas sem limite.
 - Mensagens de erro de autenticação são genéricas e não revelam se o usuário
   existe.
 
@@ -87,18 +96,18 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
 - `GET /api/v1/me/export` gera, em streaming, um ZIP com JSON Lines e CSV por
   conjunto de dados ativo do titular: perfil, contas, cartões, posições de
   investimento manuais e importadas, movimentações de investimento, proventos
-  manuais, cobertura de investimentos por conexão, ativos/passivos manuais, metas, alocações e
-  histórico de metas, categorias, transações, faturas, itens, pagamentos, Bills
+  manuais, cobertura de investimentos por conexão, ativos/passivos manuais, snapshots patrimoniais e seus itens, metas,
+  alocações e histórico de metas, categorias, transações, faturas, itens, pagamentos, Bills
   oficiais e pagamentos oficiais, correções, reconciliações, integrações (somente
   metadados), conexões (sem itemId/HMAC), execuções de sincronização, jobs e
   auditoria sanitizada.
 - O arquivo `manifest.json` documenta formato (`delta-finance-export`, versão 1),
   data, fuso `America/Sao_Paulo`, moeda `BRL`, total de registros e contagem por
   arquivo. Os nomes `*.jsonl` e `*.csv` são estáveis para uso portátil.
-- Datasets de recursos removidos (webhooks e snapshots patrimoniais) não são
-  gerados nem existem no schema desde a baseline `V001__baseline.sql`. O
-  histórico de metas permanece no dataset `goal_progress_snapshots`; a dívida
-  inicial não faz parte do schema nem da exportação.
+- Datasets de recursos removidos (webhooks) não são gerados. Os snapshots
+  patrimoniais existem desde `V011__wealth_snapshots.sql` e são exportados em
+  `wealth_snapshots`/`wealth_snapshot_items`. O histórico de metas permanece no
+  dataset `goal_progress_snapshots`.
 - Valores financeiros, descrições, apelidos e nomes de categoria são decifrados
   para o titular. Nunca são exportados: Client Secret, Client ID, API Key,
   `password_hash`, tokens, chaves, HMACs e itens externos brutos.
@@ -108,19 +117,21 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
 
 ## Retenção e exclusão
 
-| Dado | Prazo/regra |
-|---|---|
-| `login_attempt` | 30 dias |
-| `sync_run` | 90 dias |
-| `audit_event` | 1 ano |
-| `idempotency_key` | 24 h após `expires_at` |
-| Backups criptografados | 30 dias |
-| Dados ativos após exclusão | removidos imediatamente |
-| Tombstone de identidade | mantido em `app_user` com status `DELETED`; senha substituída por hash inutilizável |
-| Eventos de auditoria da exclusão | mantidos por 1 ano |
+| Dado                                       | Prazo/regra                                                                         |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `login_attempt`                            | 30 dias                                                                             |
+| `sync_run`                                 | 90 dias                                                                             |
+| `audit_event`                              | 1 ano                                                                               |
+| `idempotency_key`                          | 24 h após `expires_at`                                                              |
+| `wealth_snapshot` / `wealth_snapshot_item` | 60 meses (configurável); expurgo diário                                             |
+| Backups criptografados                     | 30 dias                                                                             |
+| Dados ativos após exclusão                 | removidos imediatamente                                                             |
+| Tombstone de identidade                    | mantido em `app_user` com status `DELETED`; senha substituída por hash inutilizável |
+| Eventos de auditoria da exclusão           | mantidos por 1 ano                                                                  |
 
-O job diário `RetentionJob` executa o expurgo e registra apenas contadores
-sanitizados. A desconexão padrão remove credenciais, interrompe jobs e preserva
+O job diário `RetentionJob` executa o expurgo operacional. O
+`WealthSnapshotRetentionJob` expurga snapshots fora da retenção e registra
+apenas contadores sanitizados. A desconexão padrão remove credenciais, interrompe jobs e preserva
 contas, transações e histórico; `deleteImportedData=true` apaga somente os dados
 de origem importada, mantendo contas manuais, lançamentos nessas contas e categorias.
 
@@ -133,19 +144,21 @@ em `docs/runbooks/deletion.md`.
 
 ## Cabeçalhos, cookies e CORS
 
-- HTTPS obrigatório na rede, terminado pelo proxy Caddy; HSTS por 1 ano com
-  `includeSubDomains`.
+- Em TLS, HTTPS obrigatório terminado pelo proxy Caddy, com HSTS por 1 ano e
+  `includeSubDomains`. No modo `lan-http` do release, o acesso é HTTP restrito
+  à LAN e o HSTS não é enviado; esse modo só é apropriado em rede confiável.
 - CSP restritiva na SPA e na API (`default-src 'self'`, `frame-ancestors
-  'none'`, `object-src 'none'`), `X-Frame-Options: DENY`,
+'none'`, `object-src 'none'`), `X-Frame-Options: DENY`,
   `X-Content-Type-Options: nosniff`, `Referrer-Policy` restritiva,
   `Permissions-Policy` sem câmera/microfone/geolocalização/pagamento,
   `Cross-Origin-Opener-Policy` e `Cross-Origin-Resource-Policy` same-origin.
 - CORS desabilitado no backend: a SPA é servida na mesma origem pelo Caddy. Não
   existe `Access-Control-Allow-Origin` para outra origem; desenvolvimento local
   usa proxy do Vite, não CORS.
-- Cookie de sessão `__Host-delta_session` (`HttpOnly`, `Secure`, `SameSite=Lax`,
-  path `/`) e CSRF por cookie `XSRF-TOKEN` + header `X-XSRF-TOKEN`. Mutações sem
-  token válido retornam `403`.
+- Cookie de sessão `__Host-delta_session` em TLS ou `delta_session` em
+  `lan-http` (`HttpOnly`, `SameSite=Lax`, path `/`; `Secure` apenas em TLS) e
+  CSRF por cookie `XSRF-TOKEN` + header `X-XSRF-TOKEN`. Mutações sem token
+  válido retornam `403`.
 - Rate limits: login com 5 falhas/15 min por usuário+IP e bloqueio de 15 min
   persistido; cadastro com 5 tentativas/hora por IP em memória; chamadas à Pluggy
   usam o limitador do provedor (`RateLimit-Reset`/`Retry-After`). Não há limite
@@ -158,13 +171,13 @@ em `docs/runbooks/deletion.md`.
 O PostgreSQL não recebe texto claro dos campos financeiros sensíveis. A tabela
 completa está em `specs/001-finance/data-model.md` e `research.md`; resumo:
 
-| Classe | Campos | Pesquisa/índice |
-|---|---|---|
-| Texto claro | `user_id`, IDs locais, datas, tipo, status, moeda, origem, ciclo, timestamps | índices B-tree e filtros SQL |
-| HMAC | `username_hash`, `ip_hash`, `dedup_key`, `fingerprint`, hashes de IDs externos e de nome de categoria | igualdade/unicidade; não reversível |
-| Cifrado | valores, saldos, descrições, apelidos, instituição, nomes de categoria, totais de fatura, juros, pagamentos, observações, Client ID/Secret | decifrado em memória no backend; sem `LIKE`, soma ou ordenação no banco |
-| Hash de senha | `password_hash` | somente verificação Argon2id |
-| Metadado de auditoria | evento, resultado, código, contadores | sanitizado, retenção de 1 ano |
+| Classe                | Campos                                                                                                                                     | Pesquisa/índice                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Texto claro           | `user_id`, IDs locais, datas, tipo, status, moeda, origem, ciclo, timestamps                                                               | índices B-tree e filtros SQL                                            |
+| HMAC                  | `username_hash`, `ip_hash`, `dedup_key`, `fingerprint`, hashes de IDs externos e de nome de categoria                                      | igualdade/unicidade; não reversível                                     |
+| Cifrado               | valores, saldos, descrições, apelidos, instituição, nomes de categoria, totais de fatura, juros, pagamentos, observações, Client ID/Secret | decifrado em memória no backend; sem `LIKE`, soma ou ordenação no banco |
+| Hash de senha         | `password_hash`                                                                                                                            | somente verificação Argon2id                                            |
+| Metadado de auditoria | evento, resultado, código, contadores                                                                                                      | sanitizado, retenção de 1 ano                                           |
 
 Consequências: a busca textual livre não faz parte do MVP; filtros por valor são
 aplicados após a decifragem; relatórios percorrem candidatos filtrados por
@@ -181,21 +194,22 @@ administrador que controle backend e chaves; não há conhecimento zero.
 - Gate de cobertura: 80% de linhas no domínio e 100% dos caminhos críticos de
   autorização e dinheiro (`Money`, `OwnershipGuard`, `AuthenticatedUser`) em
   `server/pom.xml`.
-- Testes de segurança da Fase 1: `AuthSessionIT`, `IdempotencyIT`,
+- Testes de segurança de autenticação e sessão: `AuthSessionIT`, `IdempotencyIT`,
   `RegistrationRateLimitIT`, `PasswordResetIT`, `PasswordResetNonWebIT`,
   `SecurityHeadersIT`, `OwnershipGuardTest` e `SessionExpiry.test.tsx`.
 
 ### Resultado do ZAP baseline
 
-Execução de 2026-10-24 contra a imagem de produção do cliente servida pelo Caddy
-(`delta-finance/client:zap`, porta local 4174), sem backend:
+Execução de 2026-10-24 contra a imagem local do cliente servida pelo Caddy
+(`delta-finance-dev/client:zap`, porta local 4174), sem backend:
 
 - **FAIL: 0**; 5 avisos (WARN): `style-src 'unsafe-inline'` exigido por estilos
   inline de gráficos/React, comentários de biblioteca no bundle, conteúdo
   dinâmico não cacheável, detecção de SPA e versão do próprio ZAP.
 - Headers verificados: CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy`,
   `Permissions-Policy`, COOP, CORP e COEP.
-- Relatório: `docs/security/zap/zap-127.0.0.1_4174-20261024T003619.*`.
+- Os relatórios completos ficam em `docs/security/zap/` quando o scan é
+  executado.
 
 O `style-src 'unsafe-inline'` é uma decisão consciente para não quebrar os
 gráficos; scripts continuam sem `unsafe-inline`/`unsafe-eval`. Rotas
@@ -212,10 +226,8 @@ sessões por JDBC — inclusive no modo `web-application-type=none` —, limpa
 bloqueios de login e grava `PASSWORD_RESET_ASSISTED` sem a senha. Procedimento e
 walkthrough em `docs/runbooks/password-reset.md`.
 
-
 ## Reportar vulnerabilidades
 
 Não abra issue pública com detalhes exploráveis. Contate o operador da
 instalação por canal privado, informe versão/commit, impacto e passos de
 reprodução, e não inclua dados reais de terceiros.
-

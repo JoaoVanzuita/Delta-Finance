@@ -14,19 +14,24 @@ docker compose up -d --build
 docker compose ps
 ```
 
+O fluxo acima é de desenvolvimento (build local, projeto `delta-finance-dev`).
+Para a release self-hosted, use o kit do GitHub Releases e o
+`deploy/release/README.md`; o Compose de release usa o projeto `delta-finance`,
+não usa `build` e baixa imagens versionadas do GHCR.
+
 Atualizações seguem expand/contract: migrações compatíveis são aplicadas no
 start do backend; uma migração com falha impede o readiness e o tráfego não é
 liberado. Procedimento completo em `runbooks/update-rollback.md`.
 
 ## Health checks
 
-| Serviço | Endpoint | Observação |
-|---|---|---|
-| `server` | `/actuator/health/liveness` | processo vivo |
+| Serviço  | Endpoint                     | Observação                                               |
+| -------- | ---------------------------- | -------------------------------------------------------- |
+| `server` | `/actuator/health/liveness`  | processo vivo                                            |
 | `server` | `/actuator/health/readiness` | banco + key ring (versões ativas, sem material de chave) |
-| `client` | `/healthz` | SPA servida pelo Caddy interno |
-| `proxy` | `127.0.0.1:2019/config/` | liveness do Caddy (admin local) |
-| `db` | `pg_isready` | pronto para conexões |
+| `client` | `/healthz`                   | SPA servida pelo Caddy interno                           |
+| `proxy`  | `127.0.0.1:2019/config/`     | apenas na stack de desenvolvimento com TLS               |
+| `db`     | `pg_isready`                 | pronto para conexões                                     |
 
 O Actuator não deve ser exposto publicamente; apenas a rede interna do Compose
 tem acesso.
@@ -64,7 +69,7 @@ tem acesso.
 - **Contrato da Pluggy**: em `GET /v2/transactions` use `dateFrom`/`dateTo` e o
   cursor `next` como query string (o `after` deve ser extraído e decodificado).
   **Não envie `pageSize`**: a API responde `400 property pageSize should not
-  exist`; o tamanho padrão é 500. Um `400` de parâmetro é registrado no log como
+exist`; o tamanho padrão é 500. Um `400` de parâmetro é registrado no log como
   `Falha do provedor: endpoint=... status=400` e não significa,
   necessariamente, indisponibilidade do provedor.
 - **Retries**: até `MAX_ATTEMPTS=5` por job, com backoff exponencial (base 30 s,
@@ -195,7 +200,7 @@ tem acesso.
 
 ## Investimentos
 
-- Módulo da fase secundária (`/investments`). Usa apenas posições importadas de
+- Módulo de investimentos (`/investments`). Usa apenas posições importadas de
   itens do Meu Pluggy; não há cadastro manual de posições.
 - **Estado atual**: a importação, o dashboard, os proventos manuais e o custo
   informado estão implementados (`V006` e `V007`). O sync persiste posições,
@@ -229,9 +234,17 @@ tem acesso.
   automaticamente às receitas do dashboard principal.
 - O resultado estimado de uma posição importada é
   `balance + proventos + resgates - custo`. O custo manual tem prioridade sobre
-  `amountOriginal`; sem custo conhecido não há estimativa. `SELL` e
-  `AMORTIZATION` entram como resgates; `INTEREST` e proventos manuais entram como
-  proventos. O percentual é o resultado dividido pelo custo.
+  `amountOriginal`; quando nenhum dos dois existe, o custo é derivado da soma
+  das compras (`BUY`) **se a soma das quantidades compradas conferir com a
+  quantidade atual da posição**. O custo derivado não inclui corretagem.
+  `SELL` e `AMORTIZATION` entram como resgates; `INTEREST` e proventos manuais
+  entram como proventos. O percentual é o resultado dividido pelo custo.
+- A conta de caixa do perímetro é marcada explicitamente em
+  `PUT /api/v1/accounts/{id}/investment`. Créditos nessa conta vindos de fora
+  são aportes; débitos de liquidação de corretagem são aplicações; débitos para
+  fora são resgates. `GET /api/v1/investments/contributions` concilia esses
+  fluxos com as compras do provedor. Aporte e aplicação são etapas distintas do
+  mesmo dinheiro e nunca são somados como um único evento.
 - A classificação manual do usuário sobrepõe `type/subtype` e a heurística por
   código; limpar a classificação volta à regra automática.
 - Proventos manuais usam `investment_income` e apontam para exatamente uma
@@ -257,6 +270,14 @@ tem acesso.
   com o motivo explícito e não compõem o total.
 - Valores manuais e de referência são os informados pelo usuário, não cotação de
   mercado.
+- Saldos reservados (`bankData.reservedBalances`) são lidos das contas importadas
+  e persistidos em `reserved_balance`; não são conta nem investimento. O
+  tratamento `SEPARATE_ASSET` soma a reserva ao patrimônio; `UNKNOWN` e
+  `INCLUDED_IN_BALANCE` não somam de novo. Mercado Pago validado como
+  `SEPARATE_ASSET` (saldo disponível + reserva). O padrão é definido por conexão e
+  pode ser sobrescrito por conta; a conta informa se o tratamento é próprio ou
+  herdado. A remuneração contratada é exibida a partir de `availableAmounts`; a
+  evolução mensal vem dos snapshots e não calcula rendimento.
 - Snapshots patrimoniais foram removidos em 2026-10-26 (S-02); a visão atual não
   reconstrói saldos passados. As tabelas foram removidas pela baseline
   `V001__baseline.sql`.
@@ -300,10 +321,10 @@ tem acesso.
   consulta e ordenação.
 - O schema ativo tem as tabelas de domínio do núcleo bancário, cartões,
   investimentos, patrimônio e metas, mais as tabelas de sessão do Spring e o
-  histórico do Flyway. Webhooks, snapshots patrimoniais e dívida inicial não
-  fazem parte da baseline; Bills estão em migração própria (`V003`) e os
-  investimentos importados em `V006`, proventos manuais em `V007` e a remoção
-  das posições manuais de investimento em `V009`.
+  histórico do Flyway. Webhooks e dívida inicial não fazem parte da baseline;
+  Bills estão em migração própria (`V003`), investimentos importados em `V006`,
+  proventos manuais em `V007`, remoção das posições manuais em `V009` e snapshots
+  patrimoniais em `V011`.
 - Acesso administrativo local:
 
 ```bash
@@ -317,13 +338,17 @@ docker compose exec db psql -U "$DELTA_DB_USER" -d "$DELTA_DB_NAME"
 - `deploy/scripts/restore.sh`: restauração em banco limpo, com confirmação.
 - O key ring é copiado separadamente; backup do banco sem chaves não permite
   leitura dos campos cifrados.
+- No kit de release LAN, use o procedimento de `deploy/release/README.md` com
+  `docker compose cp`; ele não exige `age` no host.
 - RPO de 24 h e RTO de 2 h para a operação de referência. Ensaio automatizado
   em `BackupRestoreIT`; procedimento em `runbooks/backup.md` e `runbooks/restore.md`.
 
 ## Retenção de dados
 
 Prazos implementados pelo `RetentionJob`: `login_attempt` 30 dias, `sync_run` 90
-dias, `audit_event` 1 ano, `idempotency_key` 24 h.
+dias, `audit_event` 1 ano, `idempotency_key` 24 h. O
+`WealthSnapshotRetentionJob` expurga snapshots patrimoniais após 60 meses
+(configurável por `DELTA_WEALTH_SNAPSHOT_RETENTION_MONTHS`).
 
 ## Autenticação e limites
 
@@ -345,6 +370,27 @@ dias, `audit_event` 1 ano, `idempotency_key` 24 h.
   fila acumulada, expiração de autorização anual da Pluggy e falha de backup.
 - Não há cache de dados financeiros; no máximo metadados curtos de status.
 
+## Manutenção histórica
+
+Os runners de correção pontual ficam em `com.deltafinance.maintenance` e só
+executam com a propriedade explícita. Eles não fazem parte do fluxo normal e
+devem ser removidos depois que a base de referência estiver corrigida.
+
+| Propriedade                                | Efeito                                  | Dry-run                                            |
+| ------------------------------------------ | --------------------------------------- | -------------------------------------------------- |
+| `delta.categories.backfill`                | consolida categorias duplicadas         | `delta.categories.backfill.dry-run`                |
+| `delta.categories.investment-rename`       | renomeia categoria de investimento      | não                                                |
+| `delta.categories.salary-backfill`         | reclassifica salários                   | `delta.categories.salary-backfill.dry-run`         |
+| `delta.categories.card-payment-backfill`   | reclassifica pagamento de fatura        | `delta.categories.card-payment-backfill.dry-run`   |
+| `delta.transactions.currency-repair`       | converte ajuste manual de câmbio        | `delta.transactions.currency-repair.dry-run`       |
+| `delta.transactions.pending-dedup`         | limpa duplicatas `PENDING`/`POSTED`     | `delta.transactions.pending-dedup.dry-run`         |
+| `delta.cards.backfill`                     | promove compras pendentes para a fatura | `delta.cards.backfill.dry-run`                     |
+| `delta.invoices.payment-allocation-repair` | realoca pagamento importado             | `delta.invoices.payment-allocation-repair.dry-run` |
+
+Execute com `--spring.main.web-application-type=none`; os runners encerram o
+processo ao final. `KeyRotationRunner` e `AssistedPasswordResetRunner` continuam
+como operações permanentes, não históricas.
+
 ## Recuperação assistida de senha
 
 O MVP não usa e-mail transacional. O procedimento assistido, com verificação de
@@ -356,7 +402,8 @@ portanto o runner funciona com `--spring.main.web-application-type=none`.
 ## Segurança operacional
 
 - Segredos apenas em `.env` e `secrets/`, ambos fora do Git.
-- Acesso ao host restrito ao operador; TLS obrigatório na rede.
+- Acesso ao host restrito ao operador. Use TLS; a exceção é o modo `lan-http`
+  do kit de release, restrito a uma LAN confiável e sem exposição externa.
 - Dependências, imagens e segredos são escaneados por `.github/workflows/security.yml`
   (gitleaks, Trivy filesystem e Trivy image).
 
@@ -370,7 +417,7 @@ login/logout p95 ≤ 1 s e sincronização de uma conexão ≤ 60 s.
 2. Semeie dados sintéticos:
 
 ```bash
-DELTA_DB_URL=jdbc:postgresql://localhost:5432/delta_finance \
+DELTA_DB_URL=jdbc:postgresql://localhost:5435/delta_finance \
 DELTA_DB_USER=delta DELTA_DB_PASSWORD=delta \
 DELTA_CRYPTO_KEY_FILE=./secrets/crypto-keys.json \
 ./deploy/scripts/perf-seed.sh
@@ -397,6 +444,17 @@ transações no usuário de performance, 3 VUs por 30 s para dashboard e 1–4 V
 58 ms (stub local com 1.000 transações); 0% de falhas HTTP. A sincronização usa
 um stub local apenas para medir a fila e o processamento; a latência real do
 provedor deve ser medida no gate `pluggy-acceptance.md`.
+
+## Snapshots patrimoniais
+
+- O `WealthSnapshotJob` roda no primeiro dia do mês, às 00:10
+  (`DELTA_WEALTH_SNAPSHOT_CRON`), e captura o fechamento do dia anterior.
+  `DELTA_WEALTH_SNAPSHOT_ENABLED=false` desabilita captura e expurgo.
+- `DELTA_WEALTH_SNAPSHOT_RETENTION_CRON` controla o expurgo diário.
+- A captura manual fica disponível em Patrimônio (`POST /wealth/history`).
+- Falhas de captura não inventam valores: o snapshot é pulado e o motivo fica
+  nos logs/auditoria sanitizada.
+- Nenhum backfill é executado; a série começa no primeiro snapshot real.
 
 ## Rotação de chave
 

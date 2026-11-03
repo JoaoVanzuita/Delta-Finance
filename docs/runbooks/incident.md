@@ -5,14 +5,14 @@ falha de backup. Prioriza contenção, evidência sanitizada e comunicação.
 
 ## 1. Classificação inicial
 
-| Sinal | Gravidade | Primeira ação |
-|---|---|---|
-| Stack fora do ar | alta | verificar `docker compose ps`, health e logs |
-| Suspeita de vazamento de credencial/dados | crítica | revogar credenciais, isolar host, preservar logs |
-| Sincronização falhando para todos | alta | verificar provedor, rate limit e fila |
-| Falha repetida de backup | alta | corrigir e gerar backup manual cifrado |
-| Erro 5xx isolado | média | correlação por `requestId` |
-| Acesso cruzado suspeito | crítica | bloquear sessões, revisar `audit_event`, seguir isolamento |
+| Sinal                                     | Gravidade | Primeira ação                                              |
+| ----------------------------------------- | --------- | ---------------------------------------------------------- |
+| Stack fora do ar                          | alta      | verificar `docker compose ps`, health e logs               |
+| Suspeita de vazamento de credencial/dados | crítica   | revogar credenciais, isolar host, preservar logs           |
+| Sincronização falhando para todos         | alta      | verificar provedor, rate limit e fila                      |
+| Falha repetida de backup                  | alta      | corrigir e gerar backup manual cifrado                     |
+| Erro 5xx isolado                          | média     | correlação por `requestId`                                 |
+| Acesso cruzado suspeito                   | crítica   | bloquear sessões, revisar `audit_event`, seguir isolamento |
 
 ## 2. Contenção
 
@@ -29,7 +29,8 @@ falha de backup. Prioriza contenção, evidência sanitizada e comunicação.
 
 ```bash
 docker compose ps
-docker compose logs --tail=200 server client proxy db
+docker compose logs --tail=200 server client db
+# Na stack de desenvolvimento com TLS, inclua também `proxy`.
 curl -fsS http://localhost:8080/actuator/health/readiness
 ```
 

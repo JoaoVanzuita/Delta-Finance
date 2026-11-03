@@ -3,6 +3,9 @@
 **Escopo**: restaurar um backup verificado em banco limpo. Complementa
 `backup.md`, que descreve geração, cifra e retenção.
 
+> Para o kit de release LAN, o procedimento simplificado com `docker compose cp`
+> está em `deploy/release/README.md`.
+
 ## 1. Antes
 
 1. Confirme o incidente e o horário-alvo (RPO de 24 h).
@@ -50,13 +53,13 @@ ring do backup separado. O ensaio `BackupRestoreIT` comprova essa propriedade.
 
 ## 5. Falhas
 
-| Sintoma | Ação |
-|---|---|
-| checksum inválido | usar outro backup; não ignorar |
-| `pg_restore` com erro | manter `server` parado, revisar log, repetir |
-| readiness vermelho | verificar datasource, Flyway e key ring |
-| dados ilegíveis | key ring divergente; restaurar o correspondente |
-| migração pendente | subir a versão de código compatível com o dump |
+| Sintoma               | Ação                                            |
+| --------------------- | ----------------------------------------------- |
+| checksum inválido     | usar outro backup; não ignorar                  |
+| `pg_restore` com erro | manter `server` parado, revisar log, repetir    |
+| readiness vermelho    | verificar datasource, Flyway e key ring         |
+| dados ilegíveis       | key ring divergente; restaurar o correspondente |
+| migração pendente     | subir a versão de código compatível com o dump  |
 
 ## 6. Encerrar
 

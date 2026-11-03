@@ -21,7 +21,7 @@ teste **não** contam como aceitação real.
 - Duas pessoas (A e B), cada uma com a própria conta Meu Pluggy.
 - Cada pessoa cria uma aplicação pessoal no Dashboard Pluggy e conecta ao menos
   duas instituições/itemIds próprios.
-- Instância limpa, com HTTPS ou localhost seguro e key ring configurado.
+- Instância limpa, com HTTPS ou HTTP restrito à LAN e key ring configurado.
 - Nenhum dado de teste visível.
 
 ## 2. Roteiro por usuário
@@ -45,7 +45,7 @@ teste **não** contam como aceitação real.
 10. Repetir a sincronização três vezes; confirmar ausência de duplicatas.
 11. Confirmar estado, última tentativa e último sucesso.
 12. Confirmar que nenhuma API Key ou Connect Token aparece no navegador, log ou
-   exportação.
+    exportação.
 13. Confirmar que A não vê dados de B e vice-versa, mesmo com IDs manipulados.
 
 ## 3. Casos de falha
