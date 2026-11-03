@@ -102,10 +102,25 @@ updated = pattern.sub(lambda match: f"{match.group(1)}{version}{match.group(3)}"
 path.write_text(updated, encoding="utf-8")
 PY
 
-(
-  cd "${ROOT_DIR}/client"
-  npm version "${VERSION_ARG}" --no-git-tag-version --allow-same-version >/dev/null
-)
+python3 - "${ROOT_DIR}/client" "${VERSION_ARG}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+client_dir = Path(sys.argv[1])
+version = sys.argv[2]
+
+for name in ("package.json", "package-lock.json"):
+    path = client_dir / name
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["version"] = version
+    if name == "package-lock.json" and "" in data.get("packages", {}):
+        data["packages"][""]["version"] = version
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+PY
 
 "${ROOT_DIR}/deploy/scripts/check-version.sh" "${tag}"
 
