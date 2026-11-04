@@ -129,7 +129,7 @@ jobs:
       - name: Validar Caddyfile de release (TLS)
         run: |
           docker run --rm \
-            -e DELTA_LAN_HOST=delta.local \
+            -e DELTA_LAN_HOST=192.168.1.50 \
             -v "$PWD/deploy/client-tls.Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.11.7-alpine \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

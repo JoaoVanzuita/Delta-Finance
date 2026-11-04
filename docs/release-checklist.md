@@ -25,8 +25,8 @@ O `client` recompila Caddy v2.11.7 com o toolchain Go 1.27.3 do builder e
 atualiza `golang.org/x/net` e `go-jose` para as versões corrigidas; o runtime
 também aplica `apk upgrade` para receber os pacotes Alpine de segurança. O
 processo roda como usuário `caddy` (UID 10001) nas portas internas 8080
-(health/redirect) e 8443 (TLS). A definição entre hostname e IP para
-`DELTA_LAN_HOST` permanece pendente.
+(health/redirect) e 8443 (TLS). O acesso usa o IP fixo do host configurado em
+`DELTA_LAN_HOST`.
 
 ## 2. Gates automatizados
 
@@ -46,7 +46,7 @@ processo roda como usuário `caddy` (UID 10001) nas portas internas 8080
 - [ ] `deploy/scripts/tests/backup-retention-test.sh` OK.
 - [ ] `BackupRestoreIT`, `KeyRotationIT`, `PasswordResetIT` verdes.
 - [ ] `MigrationIT` verde em banco vazio e existente.
-- [ ] `DELTA_LAN_HOST` definido e resolvido pelos dispositivos da LAN.
+- [ ] `DELTA_LAN_HOST` com o IP fixo do host, fora da faixa DHCP do roteador.
 - [ ] `bash export-ca.sh` gera a CA e ela é confiada em Linux, Windows, Android
       e iOS.
 - [ ] HTTPS, redirect de HTTP, HSTS e cookie `__Host-delta_session` validados.

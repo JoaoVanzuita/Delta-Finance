@@ -84,7 +84,7 @@ run_caddy_validate() {
   fi
   step "Caddyfile de release (TLS)"
   docker run --rm \
-    -e "DELTA_LAN_HOST=${DELTA_LAN_HOST:-delta.local}" \
+    -e "DELTA_LAN_HOST=${DELTA_LAN_HOST:-192.168.1.50}" \
     -v "${ROOT_DIR}/deploy/client-tls.Caddyfile:/etc/caddy/Caddyfile:ro" \
     caddy:2.11.7-alpine \
     caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

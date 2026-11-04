@@ -1,7 +1,7 @@
 # Arquitetura simplificada de distribuição — Delta Finance
 
 - **Status:** em implementação — TLS com CA interna na branch
-  `feat/tls-producao`; a definição entre hostname e IP permanece pendente.
+  `feat/tls-producao`; acesso por IP fixo no host.
 - **Modelo de uso:** cada pessoa mantém sua própria instalação e seus próprios
   dados.
 - **Acesso:** computador host e outros dispositivos na mesma rede local (LAN).
@@ -26,7 +26,7 @@ A arquitetura recomendada é baseada em:
 - procedimento simples e documentado de backup e restauração;
 - limites de log e de memória para o host ficar ligado por longos períodos.
 
-Não fazem parte do escopo inicial: launcher em Go, atualizador próprio, rollback automatizado, certificados públicos/ACME, interface desktop, Kubernetes, registry local e inicialização automática específica de sistema operacional. A escolha entre hostname e IP para o certificado interno permanece pendente.
+Não fazem parte do escopo inicial: launcher em Go, atualizador próprio, rollback automatizado, certificados públicos/ACME, interface desktop, Kubernetes, registry local e inicialização automática específica de sistema operacional. O acesso é por IP fixo configurado no host; não há dependência de DNS, mDNS ou reserva no roteador.
 
 ## 2. Arquitetura recomendada
 
@@ -47,7 +47,7 @@ Somente o `client` publica portas no host: `80` para redirect/health e `443` par
 
 ```text
 Celular/PC na LAN
-      │ https://DELTA_LAN_HOST
+      │ https://<IP-FIXO>
       ▼
 ┌─────────────────────────────────────┐
 │ client (Caddy)                      │  portas 80/443 no host
@@ -84,17 +84,20 @@ Um Caddy de borda só volta a fazer sentido se um certificado público for usado
 
 ## 3. Acesso pela rede local
 
-O acesso será feito por HTTPS usando o valor configurado em `DELTA_LAN_HOST`:
+O acesso será feito por HTTPS usando o IP fixo do host, configurado em
+`DELTA_LAN_HOST`:
 
-| Dispositivo                   | Endereço de exemplo                |
-| ----------------------------- | ---------------------------------- |
-| Computador host               | `https://DELTA_LAN_HOST`           |
-| Celular na mesma LAN          | `https://DELTA_LAN_HOST`           |
-| Outro computador na mesma LAN | `https://DELTA_LAN_HOST`           |
+| Dispositivo                   | Endereço de exemplo      |
+| ----------------------------- | ------------------------ |
+| Computador host               | `https://192.168.1.50`   |
+| Celular na mesma LAN          | `https://192.168.1.50`   |
+| Outro computador na mesma LAN | `https://192.168.1.50`   |
 
-A escolha entre hostname e IP permanece pendente. O valor precisa ser resolvido
-pelos dispositivos da LAN; se for IP, recomenda-se reserva no DHCP. O certificado
-é emitido pela CA interna do Caddy para esse nome/IP.
+O IP precisa ser **fixo no host** (configurado no sistema operacional, fora da
+faixa DHCP do roteador) e repetido em `DELTA_LAN_HOST`. Como não há nome a
+resolver, nenhum dispositivo depende de DNS, mDNS, arquivos `hosts` ou reserva
+no roteador — basta digitar o IP. O certificado é emitido pela CA interna do
+Caddy para esse IP.
 
 ### 3.1 TLS e confiança na CA
 
@@ -575,8 +578,9 @@ Se já existir uma instalação com o `compose.yaml` atual (com `proxy` e TLS), 
 2. copiar `secrets/crypto-keys.json` e `.env`;
 3. parar a stack com `docker compose down` (sem `-v`);
 4. extrair o kit novo e manter o mesmo `DELTA_DB_NAME`, `DELTA_DB_USER`, `DELTA_DB_PASSWORD` e o mesmo key ring;
-5. definir `DELTA_VERSION`, `DELTA_LAN_HOST`, `LAN_HTTP_PORT=80`,
-   `LAN_HTTPS_PORT=443` e `DELTA_KEYRING_GID` no novo `.env`;
+5. definir `DELTA_VERSION`, `DELTA_LAN_HOST` (o IP fixo do host),
+   `LAN_HTTP_PORT=80`, `LAN_HTTPS_PORT=443` e `DELTA_KEYRING_GID` no novo
+   `.env`;
 6. executar `docker compose pull` e `docker compose up -d --remove-orphans`;
 7. exportar a CA com `bash export-ca.sh` e confiá-la nos dispositivos;
 8. validar login, dashboard, sincronização e health checks.
@@ -592,7 +596,7 @@ no volume `delta-finance-prod_caddy_data`. O volume legado
 `delta-finance_pgdata` também pode ser mantido
 como backup até a validação da migração.
 
-O novo acesso é `https://DELTA_LAN_HOST`; HTTP na porta `80` redireciona para
+O novo acesso é `https://<IP-FIXO>`; HTTP na porta `80` redireciona para
 HTTPS. Se o navegador tiver HSTS em cache para um hostname antigo, limpe o HSTS
 antes de testar.
 
@@ -705,7 +709,7 @@ Após validar a experiência, poderá ser adicionada uma configuração simples 
 | Instalação limpa em Windows     | Docker Desktop disponível e stack inicia corretamente                                      |
 | Geração do key ring em Linux    | Arquivo criado com permissões restritas e backend fica saudável                            |
 | Geração do key ring em Windows  | Arquivo legível pelo container e backend fica saudável                                     |
-| Acesso pelo host                | Aplicação acessível em `https://DELTA_LAN_HOST`                                            |
+| Acesso pelo host                | Aplicação acessível em `https://<IP-FIXO>`                                                 |
 | Acesso pelo celular na LAN      | Aplicação acessível com a CA interna confiada                                              |
 | Login e logout por HTTPS        | Sessão `__Host-` e CSRF funcionam no modo `tls`                                            |
 | Reinicialização do PostgreSQL   | Banco recupera-se e backend volta a ficar saudável                                         |

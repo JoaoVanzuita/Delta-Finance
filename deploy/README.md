@@ -40,8 +40,9 @@ aos dispositivos, ou configure um domínio público válido apontando para o
 servidor.
 
 Na release, o próprio `client` termina TLS com `tls internal` e o certificado é
-emitido para `DELTA_LAN_HOST`. O hostname/IP ainda será definido na análise de
-produção; exporte e confie na CA com `bash export-ca.sh` antes de acessar.
+emitido para `DELTA_LAN_HOST`, o IP fixo do host. Fixe o IP no sistema
+operacional e repita-o no `.env`; exporte e confie na CA com
+`bash export-ca.sh` antes de acessar.
 
 Configuração mínima no `.env`:
 

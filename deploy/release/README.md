@@ -12,9 +12,8 @@ dispositivo na mesma rede local.
 - saída para internet para baixar as imagens do GHCR e do Docker Hub;
 - portas `80` e `443` livres no host, ou outras definidas em `LAN_HTTP_PORT` e
   `LAN_HTTPS_PORT`;
-- um hostname ou IP definido em `DELTA_LAN_HOST` e resolvido pelos dispositivos
-  da LAN. A escolha entre hostname e IP permanece pendente para análise; o
-  certificado será emitido para o valor configurado.
+- um IP fixo na LAN, configurado no host e definido em `DELTA_LAN_HOST`; o
+  certificado da CA interna é emitido para esse IP.
 
 Não é necessário instalar Java, Node.js, PostgreSQL ou Maven.
 
@@ -45,6 +44,94 @@ sha256sum -c delta-finance-<versao>-amd64.tar.gz.sha256
 # Windows: compare com o valor exibido no arquivo .sha256
 Get-FileHash delta-finance-<versao>-amd64.zip -Algorithm SHA256
 ```
+
+## Fixar o IP do host
+
+O `DELTA_LAN_HOST` é o endereço pelo qual a família acessa a aplicação e o
+certificado da CA interna é emitido para ele. Se esse endereço mudar, o
+certificado deixa de valer e o acesso quebra. Por isso, **fixe o IP do host
+antes do primeiro `docker compose up`** e use o mesmo valor no `.env`.
+
+Escolha um IP da mesma rede que o roteador, mas **fora da faixa DHCP** para não
+conflitar com outros aparelhos. Exemplo: se o roteador entrega `192.168.1.100` a
+`192.168.1.199`, use `192.168.1.50` ou `192.168.1.250`. Em caso de dúvida,
+consulte a faixa DHCP no painel do roteador — é só para conferir, não é preciso
+configurar nada lá.
+
+### Linux
+
+Identifique a interface e o gateway (o IP depois de `via`):
+
+```bash
+ip route
+# default via 192.168.1.1 dev enp3s0 ...
+```
+
+Use os valores do exemplo abaixo como referência e ajuste para a sua rede
+(substitua a interface, o gateway e o IP escolhido).
+
+**Com NetworkManager** (Ubuntu Desktop, Fedora, Debian Desktop e similares):
+
+```bash
+nmcli con show                          # nome da conexão ativa (coluna NAME)
+sudo nmcli con mod "Conexão com fio" \
+  ipv4.method manual \
+  ipv4.addresses 192.168.1.50/24 \
+  ipv4.gateway 192.168.1.1 \
+  ipv4.dns "192.168.1.1"
+sudo nmcli con up "Conexão com fio"
+```
+
+**Com netplan** (Ubuntu Server e derivados): edite o arquivo em
+`/etc/netplan/` (ex.: `50-cloud-init.yaml` ou `01-network-manager-all.yaml`):
+
+```yaml
+network:
+  version: 2
+  ethernets:
+    enp3s0:
+      dhcp4: false
+      addresses:
+        - 192.168.1.50/24
+      routes:
+        - to: default
+          via: 192.168.1.1
+      nameservers:
+        addresses: [192.168.1.1]
+```
+
+Aplique com:
+
+```bash
+sudo netplan apply
+```
+
+Confirme que o IP fixo está ativo:
+
+```bash
+ip -4 addr show
+```
+
+### Windows
+
+1. Abra **Configurações → Rede e Internet** e clique nas propriedades da conexão
+   ativa (Ethernet ou Wi-Fi).
+2. Anote **endereço IPv4**, **máscara de sub-rede**, **gateway** e **servidores
+   DNS** atuais (você vai reaproveitá-los).
+3. Em **Atribuição de IP**, clique em **Editar** e mude para **Manual → IPv4 →
+   Ativado**.
+4. Preencha:
+   - **Endereço IP:** o IP fixo escolhido (ex.: `192.168.1.50`);
+   - **Máscara de sub-rede:** a anotada (em casa, quase sempre `255.255.255.0`);
+   - **Gateway:** o anotado (ex.: `192.168.1.1`);
+   - **DNS preferencial:** o anotado (pode usar `192.168.1.1`).
+5. Salve e confirme no PowerShell:
+
+```powershell
+ipconfig
+```
+
+Depois de fixar o IP, coloque **esse mesmo IP** em `DELTA_LAN_HOST` no `.env`.
 
 ## Instalação
 
@@ -88,11 +175,9 @@ Descubra o grupo do arquivo e ajuste `DELTA_KEYRING_GID` no `.env`:
 stat -c %g secrets/crypto-keys.json
 ```
 
-Antes de subir, garanta que `DELTA_LAN_HOST` resolve para o IP do host em todos
-os dispositivos que usarão a aplicação. O Caddy usa uma CA interna e emite o
-certificado para esse nome/IP na primeira subida. Se você usa hostname, cadastre
-o registro no DNS do roteador ou nos arquivos `hosts`; se usa IP, reserve o
-endereço no DHCP.
+Antes de subir, confirme que `DELTA_LAN_HOST` no `.env` é exatamente o IP fixo
+configurado no host. O Caddy usa uma CA interna e emite o certificado para esse
+IP na primeira subida.
 
 Depois:
 
@@ -144,15 +229,15 @@ docker compose ps
 Abra em outro dispositivo da LAN:
 
 ```text
-https://DELTA_LAN_HOST
+https://192.168.1.50
 ```
 
-O valor precisa ser exatamente o configurado em `DELTA_LAN_HOST`, sem esquema e
-sem porta. O HTTP na porta `80` redireciona para HTTPS. Se `LAN_HTTPS_PORT` não
-for `443`, a URL incluirá a porta e o HSTS não deve ser usado.
+O endereço é o IP fixo configurado em `DELTA_LAN_HOST` — sem esquema e sem
+porta. O HTTP na porta `80` redireciona para HTTPS. Se `LAN_HTTPS_PORT` não for
+`443`, a URL incluirá a porta e o HSTS não deve ser usado.
 
-No próprio host, use `https://DELTA_LAN_HOST` (ou o IP configurado). O navegador
-mostrará aviso de certificado até a CA interna ser instalada.
+No próprio host, use o mesmo IP (`https://192.168.1.50`). O navegador mostrará
+aviso de certificado até a CA interna ser instalada.
 
 ### Confiar na CA interna
 
@@ -317,7 +402,7 @@ O kit de release usa os volumes `delta-finance-prod_pgdata` e
 `delta-finance-prod_caddy_data`, separados do ambiente de desenvolvimento. Ele
 não reutiliza automaticamente o volume da stack antiga; sem restauração, o banco
 novo começa vazio. O antigo endereço `http://IP:8080` deixa de existir; o novo
-acesso é `https://DELTA_LAN_HOST`, com redirect HTTP na porta `80`.
+acesso é `https://<IP-FIXO>`, com redirect HTTP na porta `80`.
 
 ## Problemas comuns
 
@@ -329,6 +414,6 @@ acesso é `https://DELTA_LAN_HOST`, com redirect HTTP na porta `80`.
 | `pull access denied` no GHCR  | O pacote precisa ser público ou faça `docker login ghcr.io`.     |
 | Porta 80/443 ocupada          | Ajuste `LAN_HTTP_PORT`/`LAN_HTTPS_PORT`; HSTS exige HTTPS em 443. |
 | Aviso de certificado          | Execute `bash export-ca.sh` e confie na CA nos dispositivos.      |
-| Host não resolve               | Confira `DELTA_LAN_HOST` no `.env`, DNS do roteador ou `hosts`.  |
+| Host não responde              | Confira `DELTA_LAN_HOST` no `.env` e o IP fixo configurado no host. |
 | Outro dispositivo não acessa  | Verifique firewall do host e se está na mesma LAN.               |
 | Login não mantém a sessão     | Confirme `DELTA_DEPLOYMENT_MODE=tls` no Compose de release.      |
