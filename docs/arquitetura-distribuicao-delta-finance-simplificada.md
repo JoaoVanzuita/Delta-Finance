@@ -73,10 +73,16 @@ O container `client` atual já contém um Caddy com:
 - `deploy/client-tls.Caddyfile` para a release e `deploy/client.Caddyfile` para
   o desenvolvimento;
 - `admin off`, `skip_install_trust` e `tls internal` na release;
+- `default_sni` apontando para `DELTA_LAN_HOST`: navegadores e curl não enviam
+  SNI ao acessar um IP literal (RFC 6066 veta IP em SNI); sem isso, o Caddy
+  recebe `ServerName` vazio e não escolhe o certificado (alerta `internal
+  error` no handshake). O `default_sni` devolve esse nome ao Caddy quando o
+  cliente não envia nenhum;
 - SPA servida de `/srv`;
 - proxy de `/api/*` para `server:8080`;
 - `X-Content-Type-Options`, `X-Frame-Options`, CSP, Referrer-Policy e demais headers;
-- healthcheck em `/healthz` na porta interna `8080`.
+- healthcheck em `/healthz` na porta interna `8080` (não é rota pública; no
+  HTTPS, `/healthz` cai no fallback da SPA).
 
 Portanto, um quarto serviço `proxy` seria redundante. Ele adicionaria mais uma imagem, mais um Caddyfile, mais dois volumes e mais uma camada de rede sem benefício funcional.
 

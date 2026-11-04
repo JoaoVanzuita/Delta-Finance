@@ -108,8 +108,8 @@ services:
     image: 'ghcr.io/${DELTA_IMAGE_OWNER:-joaovanzuita}/delta-finance-client:${DELTA_VERSION:?defina DELTA_VERSION}'
     restart: unless-stopped
     environment:
-      # Hostname ou IP usado no certificado da CA interna. A escolha fica
-      # pendente; o valor precisa ser definido no .env antes do primeiro start.
+      # IP fixo do host na LAN, usado no certificado da CA interna. Fixe o IP no
+      # sistema operacional do host e repita o mesmo valor no .env.
       DELTA_LAN_HOST: ${DELTA_LAN_HOST:?defina DELTA_LAN_HOST}
     ports:
       # Portas padrão no host para preservar HSTS e uma URL amigável. O Caddy

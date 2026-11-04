@@ -3,6 +3,10 @@
 	admin off
 	# A confiança da CA é feita nos dispositivos, não no container.
 	skip_install_trust
+	# Navegadores e curl não enviam SNI ao acessar um IP literal (RFC 6066);
+	# o Caddy usaria ServerName vazio e não escolheria o certificado. O valor
+	# precisa ser o mesmo de DELTA_LAN_HOST (o IP fixo do host).
+	default_sni {$DELTA_LAN_HOST}
 }
 
 # Entrada HTTP: healthcheck interno e redirect para HTTPS.

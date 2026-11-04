@@ -24,6 +24,7 @@ delta-finance-<versao>/
 ├── compose.yaml
 ├── .env.example
 ├── export-ca.sh
+├── smoke-test.sh
 ├── VERSION
 ├── README.md
 ├── release.json
@@ -267,6 +268,28 @@ esse arquivo como Autoridade Certificadora de confiança nos dispositivos:
 A CA privada fica no volume `delta-finance-prod_caddy_data`. Faça backup desse
 volume ou, no mínimo, guarde o `delta-finance-ca.crt`. Se a CA for perdida, será
 preciso instalar uma nova CA em todos os dispositivos.
+
+## Teste rápido (smoke test)
+
+Com a stack em execução, valide o acesso HTTPS, o certificado e os headers de
+segurança de uma só vez:
+
+```bash
+bash smoke-test.sh
+```
+
+O script confere, em sequência:
+
+- redirect HTTP → HTTPS;
+- container `client` saudável;
+- SPA servida na raiz (com a cadeia TLS validada pela CA interna);
+- HSTS, `X-Frame-Options`, `nosniff` e CSP;
+- certificado emitido para o IP de `DELTA_LAN_HOST` (SAN);
+- `/api/v1/auth/csrf` respondendo na mesma origem.
+
+Saída verde (`SMOKE TEST OK`) significa que o acesso está íntegro; qualquer
+`[FALHA]` indica o que revisar. Requer `curl`, `openssl` e `docker compose`. No
+Windows, execute no Git Bash ou no WSL.
 
 ## Operação diária
 

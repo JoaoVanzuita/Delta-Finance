@@ -52,11 +52,18 @@ Verifique:
 - `client` saudável em `/healthz`;
 - login, dashboard, uma sincronização e uma exportação.
 
-Smoke test mínimo no host:
+Smoke test no host — o script `smoke-test.sh` do kit valida redirect, TLS/CA,
+HSTS, headers e a API de uma só vez:
 
 ```bash
-curl -fsS --cacert delta-finance-ca.crt https://DELTA_LAN_HOST/healthz
-curl -fsS --cacert delta-finance-ca.crt https://DELTA_LAN_HOST/api/v1/auth/csrf \
+bash smoke-test.sh
+```
+
+Equivalente manual, se preferir:
+
+```bash
+curl -fsS --cacert delta-finance-ca.crt https://<IP-FIXO>/ -o /dev/null -w '%{http_code}\n'
+curl -fsS --cacert delta-finance-ca.crt https://<IP-FIXO>/api/v1/auth/csrf \
   -o /dev/null -w '%{http_code}\n'
 docker compose exec server curl -fsS http://127.0.0.1:8080/actuator/health/readiness
 ```

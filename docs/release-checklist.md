@@ -49,7 +49,8 @@ processo roda como usuário `caddy` (UID 10001) nas portas internas 8080
 - [ ] `DELTA_LAN_HOST` com o IP fixo do host, fora da faixa DHCP do roteador.
 - [ ] `bash export-ca.sh` gera a CA e ela é confiada em Linux, Windows, Android
       e iOS.
-- [ ] HTTPS, redirect de HTTP, HSTS e cookie `__Host-delta_session` validados.
+- [ ] HTTPS, redirect de HTTP, HSTS e cookie `__Host-delta_session` validados
+      (`bash smoke-test.sh` em uma instância real).
 
 ## 3. Gates manuais
 
@@ -60,6 +61,8 @@ processo roda como usuário `caddy` (UID 10001) nas portas internas 8080
 - [x] Leitor de tela real — **dispensado em 2026-10-24**; axe/teclado mantidos.
 - [x] Protocolo SC-001 com 5 participantes — **dispensado em 2026-10-24**; roteiro técnico e tempos automatizados registrados.
 - [ ] Lançamento manual em menos de 90 s por um usuário novo.
+- [ ] `bash smoke-test.sh` verde em host Linux real e em host Windows real
+      (acesso por outro dispositivo da LAN com a CA confiada).
 
 ## 4. Performance (k6)
 
