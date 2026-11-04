@@ -126,5 +126,13 @@ jobs:
           cp deploy/release/.env.example .env.release
           docker compose --env-file .env.release -f compose.release.yaml config --quiet
 
+      - name: Validar Caddyfile de release (TLS)
+        run: |
+          docker run --rm \
+            -e DELTA_LAN_HOST=delta.local \
+            -v "$PWD/deploy/client-tls.Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.11.7-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
       - name: Build das imagens
         run: docker compose build

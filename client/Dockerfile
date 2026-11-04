@@ -36,15 +36,19 @@ FROM caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079e
 # versões antigas de bibliotecas do sistema.
 RUN apk upgrade --no-cache
 
+# O release usa TLS interno; o Compose de desenvolvimento seleciona o
+# Caddyfile HTTP atrás do proxy TLS de desenvolvimento.
+ARG CADDYFILE=deploy/client-tls.Caddyfile
+
 COPY --from=caddy-build /out/caddy /usr/bin/caddy
-COPY deploy/client.Caddyfile /etc/caddy/Caddyfile
+COPY ${CADDYFILE} /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv
 
-# Caddy é executado sem privilégios. A porta interna é 8080 para não exigir
-# cap_net_bind_service nem executar o processo como root.
+# Caddy é executado sem privilégios. As portas internas são altas para não
+# exigir cap_net_bind_service nem executar o processo como root.
 RUN addgroup -S -g 10001 caddy \
     && adduser -S -D -H -u 10001 -G caddy caddy \
     && chown -R caddy:caddy /srv /data /config
 
 USER caddy
-EXPOSE 8080
+EXPOSE 8080 8443

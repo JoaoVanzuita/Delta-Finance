@@ -37,8 +37,8 @@ Detalhes de classificação de campos, rotação, backup e recuperação estão 
   ou contendo o nome de usuário normalizado e senhas da lista local versionada
   de 10.000+ entradas comuns, sem chamada externa.
 - Sessão: cookie `HttpOnly`, `SameSite=Lax`, 30 minutos de inatividade e 12
-  horas absolutas. Em TLS, usa `__Host-delta_session` com `Secure`; no modo
-  `lan-http`, usa `delta_session` sem `Secure` para funcionar em HTTP na LAN.
+  horas absolutas. Na release TLS, usa `__Host-delta_session` com `Secure`; no
+  modo de compatibilidade `lan-http`, usa `delta_session` sem `Secure`.
   CSRF por cookie + header; logout invalida a sessão no servidor. O cliente
   também expira a sessão localmente nesses prazos, revalida ao voltar o foco e
   limpa todo o cache financeiro em 401, logout, timeout ou troca de usuário.
@@ -144,9 +144,10 @@ em `docs/runbooks/deletion.md`.
 
 ## Cabeçalhos, cookies e CORS
 
-- Em TLS, HTTPS obrigatório terminado pelo proxy Caddy, com HSTS por 1 ano e
-  `includeSubDomains`. No modo `lan-http` do release, o acesso é HTTP restrito
-  à LAN e o HSTS não é enviado; esse modo só é apropriado em rede confiável.
+- Na release, HTTPS obrigatório terminado pelo Caddy do `client`, com CA interna,
+  HSTS por 1 ano e `includeSubDomains`. O HSTS exige HTTPS na porta `443`.
+  No modo de compatibilidade `lan-http`, o acesso é HTTP restrito à LAN e o HSTS
+  não é enviado; esse modo só é apropriado em rede confiável.
 - CSP restritiva na SPA e na API (`default-src 'self'`, `frame-ancestors
 'none'`, `object-src 'none'`), `X-Frame-Options: DENY`,
   `X-Content-Type-Options: nosniff`, `Referrer-Policy` restritiva,
@@ -155,7 +156,7 @@ em `docs/runbooks/deletion.md`.
 - CORS desabilitado no backend: a SPA é servida na mesma origem pelo Caddy. Não
   existe `Access-Control-Allow-Origin` para outra origem; desenvolvimento local
   usa proxy do Vite, não CORS.
-- Cookie de sessão `__Host-delta_session` em TLS ou `delta_session` em
+- Cookie de sessão `__Host-delta_session` na release TLS ou `delta_session` em
   `lan-http` (`HttpOnly`, `SameSite=Lax`, path `/`; `Secure` apenas em TLS) e
   CSRF por cookie `XSRF-TOKEN` + header `X-XSRF-TOKEN`. Mutações sem token
   válido retornam `403`.

@@ -34,7 +34,8 @@ Internet ──▶ proxy (Caddy :80/:443) ──▶ client (Caddy :8080, SPA + /
 ```
 
 - O diagrama acima é da stack de desenvolvimento.
-- Na release, o `proxy` não existe e o `client` publica a porta `8080` na LAN.
+- Na release, o `proxy` não existe e o `client` publica `80`/`443` na LAN,
+  terminando TLS com a CA interna do Caddy.
 - Apenas o `proxy` (dev) ou o `client` (release) publica portas no host.
 - `server` e `db` ficam na rede interna `backend`.
 - `/api/*` é encaminhado pelo `client` para `server:8080`, na mesma origem.
@@ -42,8 +43,9 @@ Internet ──▶ proxy (Caddy :80/:443) ──▶ client (Caddy :8080, SPA + /
   `127.0.0.1:${DELTA_DB_PORT}` para o backend rodar fora do Compose.
 - O projeto Compose de desenvolvimento é `delta-finance-dev`; o de release é
   `delta-finance`.
-- O volume de desenvolvimento é `delta-finance-dev_pgdata`; o de produção é
-  `delta-finance-prod_pgdata`.
+- O volume de desenvolvimento é `delta-finance-dev_pgdata`; os de produção são
+  `delta-finance-prod_pgdata` e `delta-finance-prod_caddy_data` (CA e
+  certificados TLS).
 
 Estrutura principal:
 
@@ -320,6 +322,9 @@ emergência.
   `X-Forwarded-For`; o Caddy de borda sobrescreve o header. Ajuste
   `DELTA_TRUSTED_PROXY_HOPS` se a topologia de proxies mudar.
 - Sessão usa cookie `HttpOnly`, CSRF e limite absoluto configurável.
+- Na release, o acesso é HTTPS com CA interna do Caddy; distribua
+  `delta-finance-ca.crt` apenas aos dispositivos da família. O HSTS exige HTTPS
+  na porta padrão `443`.
 - A exportação não inclui credenciais, tokens ou identificadores externos
   sensíveis.
 - Connect Token não faz parte do produto.

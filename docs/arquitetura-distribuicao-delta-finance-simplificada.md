@@ -1,13 +1,13 @@
 # Arquitetura simplificada de distribuição — Delta Finance
 
-- **Status:** em implementação — compose de release, modo `lan-http`, workflow
-  e kit mínimo implementados; scripts de conveniência e teste em Windows
-  pendentes.
+- **Status:** em implementação — TLS com CA interna na branch
+  `feat/tls-producao`; a definição entre hostname e IP permanece pendente.
 - **Modelo de uso:** cada pessoa mantém sua própria instalação e seus próprios
   dados.
 - **Acesso:** computador host e outros dispositivos na mesma rede local (LAN).
 - **Atualizações:** manuais, utilizando Docker Compose.
-- **Protocolo inicial:** HTTP restrito à rede local.
+- **Protocolo padrão:** HTTPS com CA interna do Caddy; `lan-http` permanece como
+  modo de compatibilidade.
 
 ---
 
@@ -20,13 +20,13 @@ A arquitetura recomendada é baseada em:
 - Docker Compose para executar e administrar os serviços;
 - imagens pré-compiladas e versionadas, publicadas no GitHub Container Registry (GHCR);
 - o container `client` como único ponto de entrada: ele já é um Caddy que serve a SPA, encaminha `/api/*` para o backend e aplica os headers de segurança;
-- acesso pelo IP local do computador que hospeda a instalação;
+- acesso HTTPS na LAN, com certificado emitido por uma CA interna do Caddy;
 - atualização manual, alterando a versão no arquivo `.env` e executando comandos do Docker Compose;
 - volumes persistentes para o PostgreSQL e persistência protegida do key ring;
 - procedimento simples e documentado de backup e restauração;
 - limites de log e de memória para o host ficar ligado por longos períodos.
 
-Não fazem parte do escopo inicial: launcher em Go, atualizador próprio, rollback automatizado, DNS personalizado, certificados internos, interface desktop, Kubernetes, registry local e inicialização automática específica de sistema operacional.
+Não fazem parte do escopo inicial: launcher em Go, atualizador próprio, rollback automatizado, certificados públicos/ACME, interface desktop, Kubernetes, registry local e inicialização automática específica de sistema operacional. A escolha entre hostname e IP para o certificado interno permanece pendente.
 
 ## 2. Arquitetura recomendada
 
@@ -43,15 +43,15 @@ O Docker Compose cria duas redes internas:
 - `app`: comunicação entre `client` e `server`;
 - `data`: comunicação entre `server` e `db`.
 
-Somente o `client` publica uma porta no host. O backend e o banco ficam acessíveis apenas pelas redes internas do Compose.
+Somente o `client` publica portas no host: `80` para redirect/health e `443` para HTTPS. O backend e o banco ficam acessíveis apenas pelas redes internas do Compose.
 
 ```text
 Celular/PC na LAN
-      │ http://IP-DO-HOST:8080
+      │ https://DELTA_LAN_HOST
       ▼
 ┌─────────────────────────────────────┐
-│ client (Caddy)                      │  única porta publicada
-│ SPA + /api/* → server:8080          │
+│ client (Caddy)                      │  portas 80/443 no host
+│ TLS interno + SPA + /api/*          │
 └──────────────────┬──────────────────┘
                    │ rede app
                    ▼
@@ -70,47 +70,56 @@ Celular/PC na LAN
 
 O container `client` atual já contém um Caddy com:
 
-- `deploy/client.Caddyfile`, embutido na imagem;
-- `auto_https off` e `admin off`;
+- `deploy/client-tls.Caddyfile` para a release e `deploy/client.Caddyfile` para
+  o desenvolvimento;
+- `admin off`, `skip_install_trust` e `tls internal` na release;
 - SPA servida de `/srv`;
 - proxy de `/api/*` para `server:8080`;
 - `X-Content-Type-Options`, `X-Frame-Options`, CSP, Referrer-Policy e demais headers;
-- healthcheck em `/healthz`.
+- healthcheck em `/healthz` na porta interna `8080`.
 
 Portanto, um quarto serviço `proxy` seria redundante. Ele adicionaria mais uma imagem, mais um Caddyfile, mais dois volumes e mais uma camada de rede sem benefício funcional.
 
-Um Caddy de borda só volta a fazer sentido se HTTPS for adicionado no futuro. Nesse caso, ele entra como um overlay opcional na frente do `client`, sem alterar os três serviços principais.
+Um Caddy de borda só volta a fazer sentido se um certificado público for usado no futuro. Nesse caso, ele entra como um overlay opcional na frente do `client`, sem alterar os três serviços principais.
 
 ## 3. Acesso pela rede local
 
-O acesso será feito pelo IP do computador que executa o Docker:
+O acesso será feito por HTTPS usando o valor configurado em `DELTA_LAN_HOST`:
 
-| Dispositivo                   | Endereço de exemplo        |
-| ----------------------------- | -------------------------- |
-| Computador host               | `http://localhost:8080`    |
-| Celular na mesma LAN          | `http://192.168.1.50:8080` |
-| Outro computador na mesma LAN | `http://192.168.1.50:8080` |
+| Dispositivo                   | Endereço de exemplo                |
+| ----------------------------- | ---------------------------------- |
+| Computador host               | `https://DELTA_LAN_HOST`           |
+| Celular na mesma LAN          | `https://DELTA_LAN_HOST`           |
+| Outro computador na mesma LAN | `https://DELTA_LAN_HOST`           |
 
-Não será necessário configurar `home.arpa`, DNS local ou certificados.
+A escolha entre hostname e IP permanece pendente. O valor precisa ser resolvido
+pelos dispositivos da LAN; se for IP, recomenda-se reserva no DHCP. O certificado
+é emitido pela CA interna do Caddy para esse nome/IP.
 
-É recomendável reservar um IP para o computador no DHCP do roteador, para que o endereço não mude frequentemente. Essa reserva é opcional.
+### 3.1 TLS e confiança na CA
 
-### 3.1 Limitações de HTTP
+O Caddy da release termina TLS na porta interna `8443`, publicada como `443` no
+host. A CA interna e os certificados ficam no volume
+`delta-finance-prod_caddy_data`.
 
-HTTP não criptografa as comunicações. Credenciais, cookies de sessão e dados financeiros podem ser interceptados por alguém com capacidade de observar o tráfego da rede.
+Cada dispositivo precisa confiar no certificado raiz exportado por
+`export-ca.sh`. Sem isso, o navegador exibirá aviso de certificado.
 
-O modo HTTP deve ser utilizado somente em uma rede local confiável, sem port forwarding ou exposição direta à internet. Não é apropriado para Wi-Fi público, redes compartilhadas, rede de convidados ou acesso externo.
+O modo `lan-http` permanece disponível como compatibilidade, mas não é o padrão
+da release. Ele não deve ser usado em redes não confiáveis.
 
-Recomenda-se, no mínimo:
+### 3.2 Limitações e cuidados
 
-- Wi-Fi com WPA2 ou WPA3;
-- nenhuma porta aberta no roteador para a internet;
-- rede de convidados isolada da rede onde o Delta Finance roda;
-- firewall do host liberando a porta 8080 apenas na rede privada.
+- HSTS exige HTTPS na porta padrão `443`.
+- Não configure port forwarding no roteador.
+- Não use Wi-Fi público, rede compartilhada ou rede de convidados.
+- Prefira WPA2/WPA3 e mantenha o host atualizado.
+- Restrinja `secrets/`, `.env` e o volume `delta-finance-prod_caddy_data` ao
+  usuário que administra a instalação.
+- Faça backup da CA; se ela for perdida, todos os dispositivos precisam confiar
+  em uma nova CA.
 
-HTTPS poderá ser adicionado posteriormente, caso o cenário de uso justifique o esforço de emissão e distribuição de certificados.
-
-### 3.2 Ajuste necessário na autenticação
+### 3.3 Modo de compatibilidade `lan-http`
 
 O Delta Finance utiliza atualmente o cookie de sessão `__Host-delta_session`. Esse prefixo exige `Secure`, `Path=/` e ausência de `Domain`, sendo incompatível com o acesso HTTP pelo IP da LAN.
 
@@ -139,7 +148,7 @@ O modo é implementado pela propriedade `delta.deployment.mode`, lida de `DELTA_
 
 A variável `DELTA_COOKIE_SECURE` continua valendo apenas no modo `tls`; em `lan-http` ela é ignorada. O `SecurityConfig` condiciona o HSTS a `secureCookie`, então o header não é enviado no modo HTTP.
 
-### 3.3 Trusted proxy hops
+### 3.4 Trusted proxy hops
 
 Com apenas o Caddy embutido no `client`, a configuração correta é:
 
@@ -197,8 +206,8 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      # Implementado pela propriedade delta.deployment.mode; ver §3.2.
-      DELTA_DEPLOYMENT_MODE: lan-http
+      # Modo TLS; cookies __Host-, Secure e HSTS.
+      DELTA_DEPLOYMENT_MODE: tls
       DELTA_DB_HOST: db
       DELTA_DB_PORT: 5432
       DELTA_DB_NAME: ${DELTA_DB_NAME}
@@ -240,8 +249,13 @@ services:
   client:
     image: "ghcr.io/SEU_USUARIO/delta-finance-client:${DELTA_VERSION:?defina DELTA_VERSION}"
     restart: unless-stopped
+    environment:
+      DELTA_LAN_HOST: ${DELTA_LAN_HOST:?defina DELTA_LAN_HOST}
     ports:
-      - "${LAN_PORT:-8080}:8080"
+      - "${LAN_HTTP_PORT:-80}:8080"
+      - "${LAN_HTTPS_PORT:-443}:8443"
+    volumes:
+      - caddy_data:/data
     depends_on:
       server:
         condition: service_healthy
@@ -268,6 +282,9 @@ volumes:
   pgdata:
     # Nome explícito para produção nunca reutilizar o volume de desenvolvimento.
     name: delta-finance-prod_pgdata
+  caddy_data:
+    # CA interna e certificados; perder este volume exige reconfiar a CA.
+    name: delta-finance-prod_caddy_data
 
 networks:
   app:
@@ -278,9 +295,9 @@ O exemplo é estrutural, não um arquivo pronto para execução. Nomes de usuár
 
 Regras importantes:
 
-- manter `name: delta-finance` e o volume explícito `delta-finance-prod_pgdata`
-  para produção não depender do nome da pasta nem reutilizar dados de
-  desenvolvimento;
+- manter `name: delta-finance` e os volumes explícitos
+  `delta-finance-prod_pgdata` e `delta-finance-prod_caddy_data` para produção
+  não depender do nome da pasta nem reutilizar dados de desenvolvimento;
 - manter os nomes `db`, `server` e `client`; o Caddyfile embutido no `client` aponta para `server:8080`;
 - manter `DELTA_DB_*` e `crypto-keys.json` para não quebrar scripts e configuração existentes;
 - fixar imagens base por digest no Compose/Dockerfile e atualizar
@@ -291,16 +308,22 @@ Regras importantes:
 
 ### 4.1 Caddyfile
 
-Não é necessário distribuir um `Caddyfile` separado. O `deploy/client.Caddyfile` é copiado para dentro da imagem do `client` durante o build e já contém:
+Não é necessário distribuir um `Caddyfile` separado. O
+`deploy/client-tls.Caddyfile` é copiado para dentro da imagem de release do
+`client` durante o build; o desenvolvimento usa `deploy/client.Caddyfile`.
 
+O arquivo de release contém:
+
+- TLS interno com `tls internal` na porta interna `8443`;
+- redirect HTTP e healthcheck na porta interna `8080`;
 - SPA com fallback para `index.html`;
 - proxy de `/api/*` para `server:8080`;
-- headers de segurança;
-- `/healthz`;
+- headers de segurança, incluindo HSTS para os assets e o HTML;
 - cache dos assets com hash;
-- `admin off` e `auto_https off`.
+- `admin off` e `skip_install_trust`.
 
-Se for necessário mudar o comportamento do proxy, a alteração é feita no repositório e uma nova imagem é publicada. O host não precisa editar Caddyfile.
+A CA e os certificados ficam no volume `caddy_data`. O host exporta a CA com
+`export-ca.sh`; não edita o Caddyfile.
 
 ### 4.2 Regras de exposição
 
@@ -308,13 +331,13 @@ Somente o serviço `client` deverá declarar `ports`.
 
 | Serviço    | Exposição no host                  |
 | ---------- | ---------------------------------- |
-| Client     | Porta 8080, acessível pela LAN     |
+| Client     | Portas 80 e 443, acessíveis pela LAN |
 | Backend    | Somente rede Docker `app` e `data` |
 | PostgreSQL | Somente rede Docker `data`         |
 
 No Linux, as regras de firewall precisam ser compatíveis com a forma como o Docker publica portas. Não se deve presumir que uma regra padrão do UFW seja suficiente. A instalação deve ser testada a partir de outro dispositivo da LAN e também de uma rede externa.
 
-No Windows, o firewall do Docker Desktop ou do Windows precisa permitir a porta 8080 apenas em redes privadas.
+No Windows, o firewall do Docker Desktop ou do Windows precisa permitir as portas 80 e 443 apenas em redes privadas.
 
 ### 4.3 Logs e memória
 
@@ -552,9 +575,11 @@ Se já existir uma instalação com o `compose.yaml` atual (com `proxy` e TLS), 
 2. copiar `secrets/crypto-keys.json` e `.env`;
 3. parar a stack com `docker compose down` (sem `-v`);
 4. extrair o kit novo e manter o mesmo `DELTA_DB_NAME`, `DELTA_DB_USER`, `DELTA_DB_PASSWORD` e o mesmo key ring;
-5. definir `DELTA_VERSION`, `LAN_PORT` e `DELTA_KEYRING_GID` no novo `.env`;
+5. definir `DELTA_VERSION`, `DELTA_LAN_HOST`, `LAN_HTTP_PORT=80`,
+   `LAN_HTTPS_PORT=443` e `DELTA_KEYRING_GID` no novo `.env`;
 6. executar `docker compose pull` e `docker compose up -d --remove-orphans`;
-7. validar login, dashboard, sincronização e health checks.
+7. exportar a CA com `bash export-ca.sh` e confiá-la nos dispositivos;
+8. validar login, dashboard, sincronização e health checks.
 
 O kit de release usa `name: delta-finance` e o volume explícito
 `delta-finance-prod_pgdata`. Ele não reutiliza automaticamente o volume de
@@ -562,12 +587,14 @@ desenvolvimento `delta-finance-dev_pgdata` nem o volume legado
 `delta-finance_pgdata`. Para migrar dados, restaure o backup no novo volume com
 o mesmo key ring.
 
-O antigo serviço `proxy` deixa de existir, e os volumes `caddy_data`/`caddy_config`
-ficam sem uso. Eles podem ser removidos depois, manualmente, quando não forem
-mais necessários. O volume legado `delta-finance_pgdata` também pode ser mantido
+O antigo serviço `proxy` deixa de existir. A CA e os certificados passam a ficar
+no volume `delta-finance-prod_caddy_data`. O volume legado
+`delta-finance_pgdata` também pode ser mantido
 como backup até a validação da migração.
 
-O endereço antigo `https://hostname` deixa de existir. O novo acesso é `http://IP:8080`. Se o navegador tiver HSTS em cache para o hostname antigo, use o IP ou limpe o HSTS antes de testar.
+O novo acesso é `https://DELTA_LAN_HOST`; HTTP na porta `80` redireciona para
+HTTPS. Se o navegador tiver HSTS em cache para um hostname antigo, limpe o HSTS
+antes de testar.
 
 ## 9. Backup e restauração
 
@@ -663,7 +690,7 @@ Após validar a experiência, poderá ser adicionada uma configuração simples 
 | Fase | Entrega                                                                             |
 | ---- | ----------------------------------------------------------------------------------- |
 | 1    | Compose de release com três serviços, redes internas, limites de log e memória      |
-| 2    | Ajustar o backend para o modo `lan-http`, preservando CSRF e desabilitando HSTS     |
+| 2    | TLS no `client` com CA interna, modo `tls`, cookie `Secure` e HSTS                 |
 | 3    | Gerar key ring e backup/restauração para Linux e Windows                            |
 | 4    | Publicar imagens versionadas no GHCR e criar o workflow de release                  |
 | 5    | Alinhar versões (`VERSION`, `pom.xml`, `package.json`) e criar a tag                |
@@ -678,9 +705,9 @@ Após validar a experiência, poderá ser adicionada uma configuração simples 
 | Instalação limpa em Windows     | Docker Desktop disponível e stack inicia corretamente                                      |
 | Geração do key ring em Linux    | Arquivo criado com permissões restritas e backend fica saudável                            |
 | Geração do key ring em Windows  | Arquivo legível pelo container e backend fica saudável                                     |
-| Acesso pelo host                | Aplicação acessível em `http://localhost:8080`                                             |
-| Acesso pelo celular na LAN      | Aplicação acessível pelo IP do host                                                        |
-| Login e logout por HTTP         | Sessão e CSRF funcionam no modo `lan-http`                                                 |
+| Acesso pelo host                | Aplicação acessível em `https://DELTA_LAN_HOST`                                            |
+| Acesso pelo celular na LAN      | Aplicação acessível com a CA interna confiada                                              |
+| Login e logout por HTTPS        | Sessão `__Host-` e CSRF funcionam no modo `tls`                                            |
 | Reinicialização do PostgreSQL   | Banco recupera-se e backend volta a ficar saudável                                         |
 | Atualização manual              | Dados e configurações permanecem íntegros                                                  |
 | Falha após atualização          | É possível retornar à versão anterior quando o schema for compatível ou restaurar o backup |
@@ -697,7 +724,7 @@ Após validar a experiência, poderá ser adicionada uma configuração simples 
 
 - Docker Compose com PostgreSQL, backend e client (SPA + Caddy);
 - imagens pré-compiladas e versionadas no GHCR;
-- acesso pelo IP local e porta 8080;
+- acesso HTTPS na LAN com CA interna;
 - volumes persistentes;
 - key ring protegido;
 - modo de autenticação compatível com HTTP na LAN, mantendo CSRF;

@@ -402,8 +402,9 @@ portanto o runner funciona com `--spring.main.web-application-type=none`.
 ## Segurança operacional
 
 - Segredos apenas em `.env` e `secrets/`, ambos fora do Git.
-- Acesso ao host restrito ao operador. Use TLS; a exceção é o modo `lan-http`
-  do kit de release, restrito a uma LAN confiável e sem exposição externa.
+- Acesso ao host restrito ao operador. A release usa TLS com CA interna; o modo
+  `lan-http` permanece apenas como compatibilidade em LAN confiável, sem
+  exposição externa.
 - Dependências, imagens e segredos são escaneados por `.github/workflows/security.yml`
   (gitleaks, Trivy filesystem e Trivy image).
 

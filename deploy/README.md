@@ -7,13 +7,21 @@ orquestra `db`, `server`, `client` e `proxy`.
 Para a release self-hosted em LAN, use o kit do GitHub Releases e o
 [`release/README.md`](release/README.md). O `compose.release.yaml` da raiz usa o
 projeto `delta-finance`, não tem `build`, usa imagens versionadas do GHCR,
-publica apenas o `client` e persiste o banco no volume
-`delta-finance-prod_pgdata`.
+publica apenas o `client` e persiste o banco em `delta-finance-prod_pgdata` e a
+CA/certificados TLS em `delta-finance-prod_caddy_data`.
 
 ## Topologia
 
+Desenvolvimento:
+
 ```text
 Internet ──▶ proxy (Caddy :80/:443, TLS) ──▶ client (Caddy :8080, SPA + /api) ──▶ server (:8080) ──▶ db (:5432)
+```
+
+Release:
+
+```text
+LAN ──▶ client (Caddy :8443, TLS interno; :8080 health/redirect) ──▶ server (:8080) ──▶ db (:5432)
 ```
 
 - Apenas `proxy` publica portas no host. A exceção é o desenvolvimento local,
@@ -25,10 +33,15 @@ Internet ──▶ proxy (Caddy :80/:443, TLS) ──▶ client (Caddy :8080, SP
 
 ## TLS
 
-O `Caddyfile` emite e renova certificados automaticamente para
-`${DELTA_DOMAIN}`. Para uso apenas em rede local, use `DELTA_DOMAIN=localhost`
-(CA interna do Caddy) e distribua o certificado raiz aos dispositivos, ou
-configure um domínio público válido apontando para o servidor.
+No desenvolvimento, o `Caddyfile` do `proxy` emite e renova certificados
+automaticamente para `${DELTA_DOMAIN}`. Para uso apenas em rede local, use
+`DELTA_DOMAIN=localhost` (CA interna do Caddy) e distribua o certificado raiz
+aos dispositivos, ou configure um domínio público válido apontando para o
+servidor.
+
+Na release, o próprio `client` termina TLS com `tls internal` e o certificado é
+emitido para `DELTA_LAN_HOST`. O hostname/IP ainda será definido na análise de
+produção; exporte e confie na CA com `bash export-ca.sh` antes de acessar.
 
 Configuração mínima no `.env`:
 

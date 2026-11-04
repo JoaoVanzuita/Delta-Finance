@@ -24,7 +24,9 @@ Ao atualizar uma imagem, atualize esta tabela e o Compose/Dockerfile juntos.
 O `client` recompila Caddy v2.11.7 com o toolchain Go 1.27.3 do builder e
 atualiza `golang.org/x/net` e `go-jose` para as versões corrigidas; o runtime
 também aplica `apk upgrade` para receber os pacotes Alpine de segurança. O
-processo roda como usuário `caddy` (UID 10001) na porta interna 8080.
+processo roda como usuário `caddy` (UID 10001) nas portas internas 8080
+(health/redirect) e 8443 (TLS). A definição entre hostname e IP para
+`DELTA_LAN_HOST` permanece pendente.
 
 ## 2. Gates automatizados
 
@@ -44,6 +46,10 @@ processo roda como usuário `caddy` (UID 10001) na porta interna 8080.
 - [ ] `deploy/scripts/tests/backup-retention-test.sh` OK.
 - [ ] `BackupRestoreIT`, `KeyRotationIT`, `PasswordResetIT` verdes.
 - [ ] `MigrationIT` verde em banco vazio e existente.
+- [ ] `DELTA_LAN_HOST` definido e resolvido pelos dispositivos da LAN.
+- [ ] `bash export-ca.sh` gera a CA e ela é confiada em Linux, Windows, Android
+      e iOS.
+- [ ] HTTPS, redirect de HTTP, HSTS e cookie `__Host-delta_session` validados.
 
 ## 3. Gates manuais
 
@@ -81,12 +87,13 @@ p95 ≤ 1 s; sincronização ≤ 60 s. Anexar resumo (sem dados financeiros).
       `delta-finance-server` e `delta-finance-client`.
 - [ ] Pacotes do GHCR públicos, ou login com PAT documentado para os usuários.
 - [ ] Compose de release usa `db`, `server` e `client`; não tem `build`, apenas
-      `client` publica porta e o banco usa `delta-finance-prod_pgdata`.
+      `client` publica `80`/`443`, o banco usa `delta-finance-prod_pgdata` e a
+      CA usa `delta-finance-prod_caddy_data`.
 - [ ] Desenvolvimento usa o projeto `delta-finance-dev` e o volume
       `delta-finance-dev_pgdata`, sem compartilhar dados com produção.
 - [ ] Kit do GitHub Release publicado em `.zip` e `.tar.gz`, com checksums, e
-      contém `compose.yaml`, `.env.example`, `README.md`, `VERSION`,
-      `release.json` e `SHA256SUMS`.
+      contém `compose.yaml`, `.env.example`, `README.md`, `export-ca.sh`,
+      `VERSION`, `release.json` e `SHA256SUMS`.
 - [ ] `.env.example` atualizado; nenhum segredo real ou key ring no kit.
 - [ ] Migrações Flyway novas a partir de `V002`; nenhuma migração aplicada foi
       editada (a baseline é `V001__baseline.sql`).

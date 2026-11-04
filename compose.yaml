@@ -93,6 +93,9 @@ services:
     build:
       context: .
       dockerfile: client/Dockerfile
+      args:
+        # Desenvolvimento mantém o HTTP atrás do proxy TLS local.
+        CADDYFILE: deploy/client.Caddyfile
     image: delta-finance-dev/client:dev
     restart: unless-stopped
     depends_on:

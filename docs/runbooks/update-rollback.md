@@ -42,7 +42,8 @@ docker compose up -d --remove-orphans
 docker compose ps
 ```
 
-Não use `docker compose down -v`; a opção `-v` remove o volume do PostgreSQL.
+Não use `docker compose down -v`; a opção `-v` remove o volume do PostgreSQL e
+o volume `caddy_data` com a CA/certificados TLS.
 
 Verifique:
 
@@ -54,8 +55,9 @@ Verifique:
 Smoke test mínimo no host:
 
 ```bash
-curl -fsS http://localhost:8080/healthz
-curl -fsS http://localhost:8080/api/v1/auth/csrf -o /dev/null -w '%{http_code}\n'
+curl -fsS --cacert delta-finance-ca.crt https://DELTA_LAN_HOST/healthz
+curl -fsS --cacert delta-finance-ca.crt https://DELTA_LAN_HOST/api/v1/auth/csrf \
+  -o /dev/null -w '%{http_code}\n'
 docker compose exec server curl -fsS http://127.0.0.1:8080/actuator/health/readiness
 ```
 

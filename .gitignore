@@ -23,6 +23,7 @@ secrets/
 *.p12
 *.jks
 crypto-keys.json
+delta-finance-ca.crt
 
 # Dumps, backups e artefatos operacionais
 backups/

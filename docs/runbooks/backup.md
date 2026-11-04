@@ -17,6 +17,9 @@ campos protegidos.
   reinicia.
 - O **key ring** (`secrets/crypto-keys.json`) não vai no dump. Sem ele, os
   campos cifrados são ilegíveis. Guarde-o em local separado do backup.
+- A CA interna e os certificados TLS ficam no volume
+  `delta-finance-prod_caddy_data`. Exporte também `delta-finance-ca.crt`; sem a
+  CA, os dispositivos precisam confiar em uma nova após a restauração.
 - RPO alvo: 24 h. RTO alvo: 2 h.
 
 ## 2. Execução diária

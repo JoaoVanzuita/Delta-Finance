@@ -45,7 +45,7 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DELTA_DEPLOYMENT_MODE: lan-http
+      DELTA_DEPLOYMENT_MODE: tls
       DELTA_DB_HOST: db
       DELTA_DB_PORT: 5432
       DELTA_DB_NAME: ${DELTA_DB_NAME}
@@ -107,8 +107,18 @@ services:
   client:
     image: 'ghcr.io/${DELTA_IMAGE_OWNER:-joaovanzuita}/delta-finance-client:${DELTA_VERSION:?defina DELTA_VERSION}'
     restart: unless-stopped
+    environment:
+      # Hostname ou IP usado no certificado da CA interna. A escolha fica
+      # pendente; o valor precisa ser definido no .env antes do primeiro start.
+      DELTA_LAN_HOST: ${DELTA_LAN_HOST:?defina DELTA_LAN_HOST}
     ports:
-      - '${LAN_PORT:-8080}:8080'
+      # Portas padrão no host para preservar HSTS e uma URL amigável. O Caddy
+      # dentro do container continua sem privilégios nas portas 8080/8443.
+      - '${LAN_HTTP_PORT:-80}:8080'
+      - '${LAN_HTTPS_PORT:-443}:8443'
+    volumes:
+      # Persiste a CA local e os certificados entre atualizações.
+      - caddy_data:/data
     depends_on:
       server:
         condition: service_healthy
@@ -134,6 +144,10 @@ volumes:
   pgdata:
     # Nome explícito para produção nunca reutilizar o volume de desenvolvimento.
     name: delta-finance-prod_pgdata
+  caddy_data:
+    # CA interna e certificados TLS; perder este volume exige reconfiar a CA
+    # em todos os dispositivos.
+    name: delta-finance-prod_caddy_data
 
 networks:
   app:

@@ -10,7 +10,11 @@ dispositivo na mesma rede local.
 - Docker Engine + Docker Compose v2 no Linux, ou Docker Desktop com WSL2 no
   Windows 10/11;
 - saída para internet para baixar as imagens do GHCR e do Docker Hub;
-- porta `8080` livre no host (ou outra definida em `LAN_PORT`).
+- portas `80` e `443` livres no host, ou outras definidas em `LAN_HTTP_PORT` e
+  `LAN_HTTPS_PORT`;
+- um hostname ou IP definido em `DELTA_LAN_HOST` e resolvido pelos dispositivos
+  da LAN. A escolha entre hostname e IP permanece pendente para análise; o
+  certificado será emitido para o valor configurado.
 
 Não é necessário instalar Java, Node.js, PostgreSQL ou Maven.
 
@@ -20,6 +24,7 @@ Não é necessário instalar Java, Node.js, PostgreSQL ou Maven.
 delta-finance-<versao>/
 ├── compose.yaml
 ├── .env.example
+├── export-ca.sh
 ├── VERSION
 ├── README.md
 ├── release.json
@@ -51,8 +56,8 @@ cd delta-finance-<versao>
 cp .env.example .env
 ```
 
-Edite `.env` e troque pelo menos `DELTA_DB_PASSWORD`. Para gerar uma senha
-adequada:
+Edite `.env` e troque pelo menos `DELTA_DB_PASSWORD` e `DELTA_LAN_HOST`. Para
+gerar uma senha adequada:
 
 ```bash
 openssl rand -hex 24
@@ -83,6 +88,12 @@ Descubra o grupo do arquivo e ajuste `DELTA_KEYRING_GID` no `.env`:
 stat -c %g secrets/crypto-keys.json
 ```
 
+Antes de subir, garanta que `DELTA_LAN_HOST` resolve para o IP do host em todos
+os dispositivos que usarão a aplicação. O Caddy usa uma CA interna e emite o
+certificado para esse nome/IP na primeira subida. Se você usa hostname, cadastre
+o registro no DNS do roteador ou nos arquivos `hosts`; se usa IP, reserve o
+endereço no DHCP.
+
 Depois:
 
 ```bash
@@ -99,7 +110,7 @@ cd delta-finance-<versao>
 Copy-Item .env.example .env
 ```
 
-Edite `.env` e troque `DELTA_DB_PASSWORD`. Gere o key ring:
+Edite `.env` e troque `DELTA_DB_PASSWORD` e `DELTA_LAN_HOST`. Gere o key ring:
 
 ```powershell
 function New-Key {
@@ -130,26 +141,47 @@ docker compose ps
 
 ## Acesso
 
-Descubra o IP do host:
-
-```bash
-# Linux
-hostname -I
-```
-
-```powershell
-# Windows
-ipconfig
-```
-
 Abra em outro dispositivo da LAN:
 
 ```text
-http://IP-DO-HOST:8080
+https://DELTA_LAN_HOST
 ```
 
-No próprio host, use `http://localhost:8080`. Recomenda-se reservar o IP no DHCP
-do roteador para que ele não mude.
+O valor precisa ser exatamente o configurado em `DELTA_LAN_HOST`, sem esquema e
+sem porta. O HTTP na porta `80` redireciona para HTTPS. Se `LAN_HTTPS_PORT` não
+for `443`, a URL incluirá a porta e o HSTS não deve ser usado.
+
+No próprio host, use `https://DELTA_LAN_HOST` (ou o IP configurado). O navegador
+mostrará aviso de certificado até a CA interna ser instalada.
+
+### Confiar na CA interna
+
+Exporte o certificado raiz:
+
+```bash
+bash export-ca.sh
+```
+
+No Windows sem Bash, o equivalente é:
+
+```powershell
+docker compose cp client:/data/caddy/pki/authorities/local/root.crt delta-finance-ca.crt
+```
+
+O script gera `delta-finance-ca.crt` e mostra o fingerprint SHA-256. Instale
+esse arquivo como Autoridade Certificadora de confiança nos dispositivos:
+
+- **Windows:** `certutil -addstore -f Root delta-finance-ca.crt`
+- **macOS:** instale no Keychain e marque como confiável
+- **iPhone/iPad:** instale o perfil e habilite a confiança total em Ajustes
+- **Android:** instale como certificado de CA
+- **Linux:** copie para `/usr/local/share/ca-certificates/` e execute
+  `update-ca-certificates`
+- **Firefox:** pode ser necessário importar separadamente nas preferências
+
+A CA privada fica no volume `delta-finance-prod_caddy_data`. Faça backup desse
+volume ou, no mínimo, guarde o `delta-finance-ca.crt`. Se a CA for perdida, será
+preciso instalar uma nova CA em todos os dispositivos.
 
 ## Operação diária
 
@@ -162,7 +194,8 @@ docker compose down
 ```
 
 `docker compose down` não remove volumes. **Nunca use `docker compose down -v`**
-em uma instalação com dados.
+em uma instalação com dados: isso apaga o banco e também a CA/certificados do
+Caddy.
 
 ## Atualização
 
@@ -206,6 +239,8 @@ O backup mínimo inclui:
 - dump do PostgreSQL;
 - `secrets/crypto-keys.json`;
 - `.env`;
+- certificado `delta-finance-ca.crt`; para preservar a mesma CA, faça backup do
+  volume `delta-finance-prod_caddy_data`;
 - versão atual (`VERSION` ou `DELTA_VERSION`);
 - `compose.yaml` (recomendado).
 
@@ -251,30 +286,38 @@ campos cifrados do dump são ilegíveis.
 
 ## Segurança
 
-- O acesso é HTTP sem criptografia. Use apenas em uma LAN confiável.
+- O acesso é HTTPS com certificado emitido pela CA interna do Caddy.
+- Instale a CA apenas nos dispositivos da família; remover a confiança depois é
+  possível.
 - Não configure port forwarding no roteador.
 - Não use Wi-Fi público ou rede de convidados.
 - Prefira WPA2/WPA3 e mantenha o host atualizado.
-- Restrinja `secrets/` e `.env` ao usuário que administra a instalação.
-- Faça backup do key ring separadamente do banco.
+- Restrinja `secrets/`, `.env` e o volume `delta-finance-prod_caddy_data` ao
+  usuário que administra a instalação.
+- Faça backup do key ring e da CA separadamente do banco.
+- HSTS exige HTTPS na porta padrão `443`; não use HSTS com `LAN_HTTPS_PORT`
+  diferente de `443`.
 
-## Migração de uma instalação com TLS/proxy
+## Migração de uma instalação HTTP
 
-Se você já usa a stack antiga com `proxy` e HTTPS:
+Se você já usa a stack de release com HTTP:
 
-1. faça backup e copie `.env` e `secrets/crypto-keys.json`;
+1. faça backup do banco, do `.env`, do key ring e do certificado da CA;
 2. pare a stack com `docker compose down` (sem `-v`);
 3. extraia o kit novo e preserve `DELTA_DB_NAME`, `DELTA_DB_USER`,
    `DELTA_DB_PASSWORD` e o key ring;
-4. defina `DELTA_VERSION`, `LAN_PORT` e `DELTA_KEYRING_GID`;
+4. defina `DELTA_VERSION`, `DELTA_LAN_HOST`, `LAN_HTTP_PORT=80`,
+   `LAN_HTTPS_PORT=443` e `DELTA_KEYRING_GID`;
 5. execute `docker compose pull` e `docker compose up -d --remove-orphans`;
-6. para levar os dados antigos, restaure o backup no novo banco usando o mesmo
+6. exporte a nova CA com `bash export-ca.sh` e instale-a nos dispositivos;
+7. para levar os dados antigos, restaure o backup no novo banco usando o mesmo
    key ring.
 
-O kit de release usa o volume `delta-finance-prod_pgdata`, separado do volume
-de desenvolvimento. Ele não reutiliza automaticamente o volume da stack antiga;
-sem restauração, o banco novo começa vazio. O acesso passa a ser
-`http://IP:8080`; o antigo endereço HTTPS deixa de existir.
+O kit de release usa os volumes `delta-finance-prod_pgdata` e
+`delta-finance-prod_caddy_data`, separados do ambiente de desenvolvimento. Ele
+não reutiliza automaticamente o volume da stack antiga; sem restauração, o banco
+novo começa vazio. O antigo endereço `http://IP:8080` deixa de existir; o novo
+acesso é `https://DELTA_LAN_HOST`, com redirect HTTP na porta `80`.
 
 ## Problemas comuns
 
@@ -284,6 +327,8 @@ sem restauração, o banco novo começa vazio. O acesso passa a ser
 | Container `server` unhealthy  | `docker compose logs server`; verifique key ring e banco.        |
 | Erro de permissão no key ring | Ajuste `DELTA_KEYRING_GID` no Linux ou a ACL no Windows.         |
 | `pull access denied` no GHCR  | O pacote precisa ser público ou faça `docker login ghcr.io`.     |
-| Porta 8080 ocupada            | Troque `LAN_PORT` no `.env` e execute `docker compose up -d`.    |
+| Porta 80/443 ocupada          | Ajuste `LAN_HTTP_PORT`/`LAN_HTTPS_PORT`; HSTS exige HTTPS em 443. |
+| Aviso de certificado          | Execute `bash export-ca.sh` e confie na CA nos dispositivos.      |
+| Host não resolve               | Confira `DELTA_LAN_HOST` no `.env`, DNS do roteador ou `hosts`.  |
 | Outro dispositivo não acessa  | Verifique firewall do host e se está na mesma LAN.               |
-| Login não mantém a sessão     | Confirme `DELTA_DEPLOYMENT_MODE=lan-http` no Compose de release. |
+| Login não mantém a sessão     | Confirme `DELTA_DEPLOYMENT_MODE=tls` no Compose de release.      |

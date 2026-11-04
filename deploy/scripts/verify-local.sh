@@ -77,6 +77,19 @@ run_compose() {
     -f "${ROOT_DIR}/compose.release.yaml" config --quiet
 }
 
+run_caddy_validate() {
+  if ! have docker; then
+    warn "docker não encontrado; Caddyfile de release não foi validado."
+    return 0
+  fi
+  step "Caddyfile de release (TLS)"
+  docker run --rm \
+    -e "DELTA_LAN_HOST=${DELTA_LAN_HOST:-delta.local}" \
+    -v "${ROOT_DIR}/deploy/client-tls.Caddyfile:/etc/caddy/Caddyfile:ro" \
+    caddy:2.11.7-alpine \
+    caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+}
+
 run_gitleaks() {
   step "Gitleaks (histórico completo)"
   if have gitleaks; then
@@ -206,6 +219,7 @@ run_quick() {
   run_whitespace
   run_frontend_format
   run_compose
+  run_caddy_validate
   run_gitleaks
   run_actionlint "${allow_docker_actionlint}"
 }

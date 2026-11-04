@@ -55,6 +55,7 @@ mkdir -p "${staging}"
 cp "${ROOT_DIR}/compose.release.yaml" "${staging}/compose.yaml"
 cp "${ROOT_DIR}/deploy/release/.env.example" "${staging}/.env.example"
 cp "${ROOT_DIR}/deploy/release/README.md" "${staging}/README.md"
+cp "${ROOT_DIR}/deploy/release/export-ca.sh" "${staging}/export-ca.sh"
 cp "${ROOT_DIR}/VERSION" "${staging}/VERSION"
 
 sed -i "s/^DELTA_VERSION=.*/DELTA_VERSION=${VERSION}/" "${staging}/.env.example"
@@ -76,7 +77,7 @@ EOF
 
 (
   cd "${staging}"
-  sha256sum compose.yaml .env.example README.md VERSION release.json >SHA256SUMS
+  sha256sum compose.yaml .env.example README.md export-ca.sh VERSION release.json >SHA256SUMS
 )
 
 rm -f "${OUTPUT_DIR}/${archive_zip}" "${OUTPUT_DIR}/${archive_tar}" \

@@ -43,8 +43,8 @@ HTTP por cookie e proteção contra abuso.
   username/IP armazenados apenas como HMAC.
 - **Logout** (`POST /api/v1/auth/logout`): invalida a sessão e limpa o cookie CSRF.
 - **Sessão** (`GET /api/v1/auth/me`): retorna o usuário autenticado; sessão por
-  cookie HttpOnly `__Host-delta_session` em TLS ou `delta_session` no modo
-  `lan-http`, 30 min de inatividade + 12 h absolutas.
+  cookie HttpOnly `__Host-delta_session` na release TLS ou `delta_session` no
+  modo de compatibilidade `lan-http`, 30 min de inatividade + 12 h absolutas.
 - **Alteração de senha** (`PUT /api/v1/auth/password`): exige senha atual,
   aplica a política e encerra as demais sessões do usuário.
 - **Recuperação assistida de senha** (`AssistedPasswordResetService` +
