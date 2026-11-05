@@ -97,8 +97,11 @@ git push --no-verify origin main v<ver>
 Acompanhe em **Actions → Release** (ou `gh run list --workflow=release.yml`):
 
 ```text
-version → backend/frontend/e2e → images (GHCR) → release (kit + GitHub Release)
+version → backend/frontend/e2e + container-scan (Trivy) → images (GHCR) → release (kit + GitHub Release)
 ```
+
+O job `container-scan` roda antes da publicação: se o Trivy encontrar
+HIGH/CRITICAL, as imagens **não** são enviadas ao GHCR e o release não acontece.
 
 ## 6. Validar o artefato publicado
 
