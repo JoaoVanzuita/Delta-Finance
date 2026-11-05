@@ -107,6 +107,9 @@ p95 ≤ 1 s; sincronização ≤ 60 s. Anexar resumo (sem dados financeiros).
 
 ## 6. Promoção da RC para final
 
+O passo a passo completo, incluindo pré-releases `-beta`, está em
+[`runbooks/release.md`](runbooks/release.md).
+
 Depois dos gates manuais e da instalação real, prepare a versão final localmente:
 
 ```bash

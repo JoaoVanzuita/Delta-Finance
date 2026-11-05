@@ -11,6 +11,7 @@ os arquivos abaixo são criados quando o procedimento correspondente é validado
 | `backup.md` | rotina diária de backup, verificação e retenção de 30 dias | disponível |
 | `restore.md` | restaurar em banco limpo após incidente ou perda | disponível |
 | `update-rollback.md` | atualizar o stack e reverter com segurança | disponível |
+| `release.md` | preparar, validar e publicar uma versão (final, `-rc` ou `-beta`) | disponível |
 | `incident.md` | indisponibilidade, vazamento suspeito ou falha de sync | disponível |
 | `deletion.md` | exclusão de conta, retenção e tombstone | disponível |
 | `password-reset.md` | recuperação assistida de senha (sem e-mail transacional) | disponível |
