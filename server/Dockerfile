@@ -17,8 +17,10 @@ RUN --mount=type=cache,target=/root/.m2 \
 # ---------- Runtime ----------
 FROM eclipse-temurin:25.0.4.1_1-jre@sha256:78f1f183913482ef390c2722f46c3f0ce76ada341d69590e7c482ec943ee72d5 AS runtime
 
-# curl é necessário apenas para o healthcheck do Compose.
+# curl é necessário apenas para o healthcheck do Compose. O upgrade aplica os
+# pacotes de segurança da base Ubuntu, equivalente ao apk upgrade do client.
 RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
