@@ -13,7 +13,7 @@
 
   <groupId>com.deltafinance</groupId>
   <artifactId>delta-finance-server</artifactId>
-  <version>0.2.0-beta.1</version>
+  <version>0.2.0-beta.2</version>
   <name>delta-finance-server</name>
   <description>Delta Finance backend (modular monolith)</description>
 
