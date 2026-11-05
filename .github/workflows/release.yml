@@ -204,7 +204,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Delta Finance ${{ needs.images.outputs.version }}
-          prerelease: ${{ contains(github.ref_name, '-rc.') }}
+          prerelease: ${{ contains(github.ref_name, '-rc.') || contains(github.ref_name, '-beta') }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
