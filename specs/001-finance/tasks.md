@@ -2,7 +2,7 @@
 description: "Task list for the Delta Finance MVP implementation"
 ---
 
-# Tasks: MVP de Finanças Pessoais Familiares
+# Tasks: MVP de Finanças Pessoais
 
 > **Nota de 2026-10-25/26:** registros de webhooks (T074/T085 e testes
 > relacionados), de Bills experimentais (T123/T133), da revisão manual
@@ -112,7 +112,7 @@ observabilidade funcionam, e as histórias podem começar.
 
 ---
 
-## Phase 3: User Story 1 - Conta pessoal e isolamento entre familiares (Priority: P1)
+## Phase 3: User Story 1 - Conta pessoal e isolamento entre usuários (Priority: P1)
 
 **Goal**: cadastro, login, logout, troca de senha, sessão segura e isolamento
 total entre usuários.

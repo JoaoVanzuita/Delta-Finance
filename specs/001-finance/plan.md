@@ -1,4 +1,4 @@
-# Implementation Plan: MVP de Finanças Pessoais Familiares
+# Implementation Plan: MVP de Finanças Pessoais
 
 **Branch**: `001-finance` | **Date**: 2026-10-22 | **Spec**: [spec.md](./spec.md)
 
@@ -462,7 +462,7 @@ Bills do provedor.
 - Documentar runbooks de conexão, reconexão, rotação de chaves, backup,
   restauração, atualização, incidentes e recuperação assistida de senha.
 
-**Saída**: MVP pronto para operação familiar, com critérios de conclusão
+**Saída**: MVP pronto para operação, com critérios de conclusão
 demonstrados.
 
 ### Etapa 12 — Fase secundária: investimentos
@@ -536,7 +536,7 @@ demonstrados.
 
 ### Direção visual
 
-Ferramenta financeira familiar, sóbria e confiável: tipografia legível, números
+Ferramenta financeira pessoal, sóbria e confiável: tipografia legível, números
 tabulares, contraste alto, hierarquia clara e cores semânticas para receita,
 despesa, alerta e sincronização. Evitar estética de trading, excesso de
 gradientes, gráficos decorativos e densidade que sacrifique leitura. As skills

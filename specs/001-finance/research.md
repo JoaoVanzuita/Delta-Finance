@@ -1,4 +1,4 @@
-# Research: MVP de Finanças Pessoais Familiares
+# Research: MVP de Finanças Pessoais
 
 **Data**: 2026-10-22
 
@@ -65,7 +65,7 @@ implementação.
   com ArchUnit, sem mais uma dependência de runtime.
 - **Redis**: preterido; cache de API Key é local e a fila de jobs usa PostgreSQL.
 - **Broker externo (RabbitMQ/Kafka)**: preterido; fila transacional no PostgreSQL
-  com `FOR UPDATE SKIP LOCKED` é suficiente para o porte familiar.
+  com `FOR UPDATE SKIP LOCKED` é suficiente para o porte.
 
 ## 2. Meu Pluggy: fluxo pessoal confirmado
 
@@ -375,7 +375,7 @@ do dashboard com dados sintéticos.
 
 ### Direção visual
 
-Produto financeiro familiar, confiável e sóbrio: tipografia legível, números
+Produto financeiro pessoal, confiável e sóbrio: tipografia legível, números
 tabulares, contraste alto, hierarquia clara, densidade moderada e cores
 semânticas para receita/despesa/alerta. Evitar estética de trading, excesso de
 gradientes e gráficos decorativos. O dashboard deve parecer uma ferramenta de

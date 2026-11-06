@@ -1,4 +1,4 @@
-# Quickstart: MVP de Finanças Pessoais Familiares
+# Quickstart: MVP de Finanças Pessoais
 
 **Data**: 2026-10-22
 

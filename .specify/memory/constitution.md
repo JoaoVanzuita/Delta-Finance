@@ -111,7 +111,7 @@ complexidade operacional desnecessária DEVEM ser evitadas. O modelo financeiro
 DEVE ser compatível com a evolução para patrimônio, metas e investimentos, sem
 antecipar essas fases no MVP.
 
-**Racional:** o sistema será operado por uma família em infraestrutura própria.
+**Racional:** o sistema será operado em infraestrutura própria.
 A simplicidade reduz custo de manutenção, superfície de falha e esforço de
 operação sem sacrificar a correção financeira.
 
@@ -164,8 +164,7 @@ para entregar o valor principal do gerenciamento bancário. A indisponibilidade
 de fontes externas NÃO DEVE impedir a operação local com os dados já
 armazenados.
 
-**Racional:** o produto precisa ser recuperável e operável pelo próprio grupo
-familiar, sem serviços proprietários de terceiros nem conhecimento implícito na
+**Racional:** o produto precisa ser recuperável e operável pelo próprio usuário, sem serviços proprietários de terceiros nem conhecimento implícito na
 máquina de desenvolvimento.
 
 ### IX. Integração de Investimentos com Escopo Controlado
@@ -227,9 +226,7 @@ DEVE usar Docker e Docker Compose. O repositório DEVE ser único, com aplicaç�
 separadas em `server/` e `client/`. Essas escolhas são restrições do projeto e só
 podem ser alteradas por emenda constitucional.
 
-**Uso pretendido.** O sistema é uma instalação self-hosted privada, destinada a
-um grupo familiar, sem finalidade comercial. Ele NÃO DEVE ser oferecido como
-serviço a terceiros nem comercializado sem emenda constitucional e validação
+**Uso pretendido.** O sistema é uma instalação self-hosted privada, sem finalidade comercial. Ele NÃO DEVE ser oferecido como serviço a terceiros nem comercializado sem emenda constitucional e validação
 legal e contratual específica. Cada usuário DEVE usar credenciais e conexões
 próprias; o sistema NÃO DEVE contornar a configuração da integração nem os
 limites da modalidade Meu Pluggy.

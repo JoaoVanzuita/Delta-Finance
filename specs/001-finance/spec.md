@@ -1,4 +1,4 @@
-# Feature Specification: MVP de Finanças Pessoais Familiares
+# Feature Specification: MVP de Finanças Pessoais
 
 **Feature Branch**: `001-finance`
 
@@ -8,7 +8,7 @@
 
 **Nota editorial**: Requisitos funcionais renumerados para FR-001–FR-139; sem alteração semântica. (2026-10-23)
 
-**Input**: User description: "Sistema web self-hosted de finanças pessoais para um grupo familiar, com usuários isolados, integração bancária automática via Meu Pluggy, lançamentos manuais complementares e investimentos de prioridade secundária; patrimônio e metas pertencem a uma fase posterior ao MVP."
+**Input**: User description: "Sistema web self-hosted de finanças pessoais para um grupo pequeno, com usuários isolados, integração bancária automática via Meu Pluggy, lançamentos manuais complementares e investimentos de prioridade secundária; patrimônio e metas pertencem a uma fase posterior ao MVP."
 
 ## Clarifications
 
@@ -39,17 +39,17 @@
 
 ## User Scenarios & Testing *(mandatory)*
 
-O MVP entrega um espaço financeiro privado por familiar, alimentado principalmente
+O MVP entrega um espaço financeiro privado por usuário, alimentado principalmente
 pela importação automática das conexões bancárias pessoais de cada usuário no
 Meu Pluggy. Lançamentos manuais complementam a importação, mas não a substituem.
 Investimentos, patrimônio e metas são evoluções posteriores e não podem atrasar
 o núcleo bancário.
 
-### User Story 1 - Conta pessoal e isolamento entre familiares (Priority: P1)
+### User Story 1 - Conta pessoal e isolamento entre usuários (Priority: P1)
 
-Como membro da família, quero criar minha conta, entrar no sistema e acessar
+Como usuário, quero criar minha conta, entrar no sistema e acessar
 somente o meu espaço financeiro, para que meus dados não sejam vistos nem
-alterados por outro familiar.
+alterados por outro usuário.
 
 **Why this priority**: sem autenticação e isolamento, nenhum dado financeiro pode
 ser armazenado com segurança. Essa história é a base de privacidade de todo o
@@ -86,7 +86,7 @@ tentativas cruzadas devem ser negadas sem revelar conteúdo ou existência.
 
 ### User Story 2 - Configurar o Meu Pluggy pessoal e importar dados bancários (Priority: P1)
 
-Como membro da família, quero configurar minha própria aplicação pessoal do Meu
+Como usuário, quero configurar minha própria aplicação pessoal do Meu
 Pluggy e informar minhas conexões, para que minhas contas, cartões e transações
 sejam importados automaticamente sem compartilhar credenciais com ninguém.
 
@@ -125,7 +125,7 @@ a integração nem revelar segredos.
 
 ### User Story 3 - Sincronizar com segurança e recuperar conexões (Priority: P1)
 
-Como membro da família, quero acompanhar o estado da sincronização e resolver
+Como usuário, quero acompanhar o estado da sincronização e resolver
 credenciais inválidas ou autorizações expiradas, para continuar confiando nos
 dados sem perder o histórico já importado.
 
@@ -169,7 +169,7 @@ após a reconexão.
 
 ### User Story 4 - Visualizar dashboard e relatórios consolidados (Priority: P2)
 
-Como membro da família, quero visualizar receitas, despesas, resultado do
+Como usuário, quero visualizar receitas, despesas, resultado do
 período, saldo atual das contas e distribuição de despesas por período, conta,
 cartão e categoria, para entender minha situação financeira e conferir os
 lançamentos que compõem cada total.
@@ -207,7 +207,7 @@ transações filtradas.
 
 ### User Story 5 - Gerenciar contas, lançamentos manuais e correções de transações importadas (Priority: P2)
 
-Como membro da família, quero criar contas manuais para dinheiro e carteira,
+Como usuário, quero criar contas manuais para dinheiro e carteira,
 registrar nelas receitas, despesas, transferências, estornos e reembolsos, além
 de criar categorias, classificar e corrigir transações importadas, para cobrir
 operações ausentes e manter meus dados organizados.
@@ -259,7 +259,7 @@ sincronizações e verificar persistência, filtros e atualização dos relatór
 
 ### User Story 6 - Gerenciar faturas de cartão (Priority: P2)
 
-Como membro da família, quero configurar o ciclo dos meus cartões e acompanhar
+Como usuário, quero configurar o ciclo dos meus cartões e acompanhar
 faturas, parcelas, pagamentos parciais, juros e encargos, para saber exatamente
 quanto devo em cada fatura sem duplicar despesas.
 
@@ -298,7 +298,7 @@ conferir totais, status, saldo devedor e ausência de duplicação.
 
 ### User Story 7 - Controlar conta, exportar dados e encerrar vínculos (Priority: P2)
 
-Como membro da família, quero exportar meus dados, desconectar minha integração
+Como usuário, quero exportar meus dados, desconectar minha integração
 e excluir minha conta, para manter controle sobre minhas informações e sobre o
 encerramento do uso do sistema.
 
@@ -331,7 +331,7 @@ sincronização e que a exclusão remove o acesso sem afetar o outro usuário.
 
 ### User Story 8 - Acompanhar investimentos importados e manuais (Priority: P3 - fase secundária)
 
-Como membro da família, quero importar automaticamente as posições de
+Como usuário, quero importar automaticamente as posições de
 investimento compartilhadas pelo Meu Pluggy e, quando o provedor não entregar
 algum dado, complementar com posições e proventos manuais, para acompanhar
 alocação, dividendos e rendimento sem recomendações.
@@ -379,7 +379,7 @@ recomendação é exibida.
 
 ### User Story 9 - Acompanhar patrimônio consolidado (Priority: P4 - pós-MVP)
 
-Como membro da família, quero visualizar patrimônio bruto, passivos e patrimônio
+Como usuário, quero visualizar patrimônio bruto, passivos e patrimônio
 líquido ao longo do tempo, para acompanhar minha evolução patrimonial com dados
 datados e sem dupla contagem.
 
@@ -411,7 +411,7 @@ ausência de dupla contagem.
 
 ### User Story 10 - Planejar metas financeiras (Priority: P4 - pós-MVP)
 
-Como membro da família, quero criar metas financeiras com valor-alvo, prazo
+Como usuário, quero criar metas financeiras com valor-alvo, prazo
 opcional e regra de progresso transparente, para acompanhar objetivos como
 reserva de emergência, viagem ou patrimônio líquido sem movimentar dinheiro.
 
@@ -553,7 +553,7 @@ ausência de movimentação financeira.
 - **FR-006**: Tentativas de acesso cruzado DEVEM ser negadas sem revelar a
   existência, o conteúdo ou os metadados do recurso alheio.
 - **FR-007**: Nenhum perfil, tela ou função do produto DEVE conceder a um
-  familiar acesso aos dados financeiros de outro; a separação não pode ser
+  usuário acesso aos dados financeiros de outro; a separação não pode ser
   contornada por um administrador funcional.
 - **FR-008**: O sistema DEVE limitar tentativas de autenticação a 5 falhas por
   15 minutos por combinação de usuário e IP e bloquear novas tentativas por 15
@@ -1260,7 +1260,7 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
 **Fora de escopo do MVP**:
 
 - uso comercial, oferta como serviço a terceiros ou compartilhamento de dados
-  entre familiares;
+  entre usuários;
 - sincronização em tempo real ou promessa de atualização imediata da instituição;
 - execução de pagamentos, transferências bancárias, ordens de investimento e
   aconselhamento financeiro;
@@ -1379,13 +1379,13 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
 
 ## Assumptions
 
-- O cenário de referência é um grupo familiar de aproximadamente 5 usuários, com
+- O cenário de referência é um grupo pequeno de aproximadamente 5 usuários, com
   até 5 conexões por usuário, conforme o limite vigente documentado e
   configurado, e cerca de 10.000 transações por usuário; o produto pode crescer
   sem alterar os princípios de isolamento.
 - Cada usuário possui conta própria no Meu Pluggy, aplicação pessoal no
   Dashboard e conexões autorizadas; o responsável pelo projeto confirmou a
-  viabilidade do cenário familiar não comercial.
+  viabilidade do cenário não comercial.
 - Os usuários acessam o sistema por navegador web moderno em desktop e celular;
   não há aplicativo nativo no MVP.
 - A sincronização programada diária é suficiente para o MVP; notificações de
@@ -1398,7 +1398,7 @@ nenhum campo financeiro sensível DEVE ser usado como filtro SQL em texto claro.
   BRL devem ser sinalizados e não entram em totais consolidados sem regra
   definida.
 - Não há compartilhamento de contas, transações, categorias ou relatórios entre
-  familiares; cada usuário vê somente os próprios dados.
+  usuários; cada usuário vê somente os próprios dados.
 - O cadastro é aberto na instância self-hosted privada; não há fluxo de convite
   ou aprovação no MVP, e o operador controla o acesso à rede.
 - A recuperação de senha por e-mail ou autoatendimento não faz parte do MVP; um

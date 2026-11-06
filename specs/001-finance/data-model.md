@@ -1,4 +1,4 @@
-# Data Model: MVP de Finanças Pessoais Familiares
+# Data Model: MVP de Finanças Pessoais
 
 **Data**: 2026-10-22
 

@@ -1,4 +1,4 @@
-# Specification Quality Checklist: MVP de Finanças Pessoais Familiares
+# Specification Quality Checklist: MVP de Finanças Pessoais
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-10-22
