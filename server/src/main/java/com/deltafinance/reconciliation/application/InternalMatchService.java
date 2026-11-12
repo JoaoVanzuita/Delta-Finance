@@ -195,41 +195,33 @@ public class InternalMatchService {
         }
         FinancialAccount debitAccount = accounts.get(debit.getAccountId());
         FinancialAccount creditAccount = accounts.get(credit.getAccountId());
-        if (debitAccount == null || creditAccount == null) {
-          continue;
-        }
-        InternalMatchKind kind = kindOf(debitAccount, creditAccount);
-        if (kind == null) {
-          continue;
-        }
-        int window =
-            kind == InternalMatchKind.CARD_PAYMENT
-                ? CARD_PAYMENT_WINDOW_DAYS
-                : TRANSFER_WINDOW_DAYS;
-        long dayDiff =
-            Math.abs(
-                Duration.between(
-                        debit.getPostedOn().atStartOfDay(), credit.getPostedOn().atStartOfDay())
-                    .toDays());
-        if (dayDiff > window) {
-          continue;
-        }
-        BigDecimal debitAbs = debitAmount.abs();
-        BigDecimal maxAbs = debitAbs.max(creditAmount);
-        BigDecimal tolerance = maxAbs.multiply(TOLERANCE_RATE).max(MIN_TOLERANCE);
-        BigDecimal valueDiff = debitAbs.subtract(creditAmount).abs();
-        if (valueDiff.compareTo(tolerance) > 0) {
-          continue;
-        }
-        BigDecimal score = score(valueDiff, tolerance, dayDiff, window);
-        if (score.compareTo(THRESHOLD) < 0) {
+        PairEvaluation evaluation =
+            evaluatePair(debit, credit, debitAccount, creditAccount, debitAmount, creditAmount);
+        if (evaluation == null) {
           continue;
         }
         int nameScore =
             nameOverlap(
                 descriptionTokens.get(debit.getId()), descriptionTokens.get(credit.getId()));
+        BigDecimal score =
+            score(
+                evaluation.valueDiff(),
+                evaluation.tolerance(),
+                evaluation.dayDiff(),
+                evaluation.window());
+        if (score.compareTo(THRESHOLD) < 0) {
+          continue;
+        }
         candidates.add(
-            new Candidate(kind, debit, credit, score, nameScore, dayDiff, valueDiff, window));
+            new Candidate(
+                evaluation.kind(),
+                debit,
+                credit,
+                score,
+                nameScore,
+                evaluation.dayDiff(),
+                evaluation.valueDiff(),
+                evaluation.window()));
       }
     }
 
@@ -342,6 +334,57 @@ public class InternalMatchService {
   }
 
   /**
+   * Aplica os mesmos critérios na sugestão e na revalidação de pares confirmados.
+   *
+   * <p>Retorna {@code null} quando o par deixa de atender a algum critério: contas distintas, mesma
+   * moeda, sinais opostos, tipo compatível, janela e tolerância de valor.
+   */
+  private PairEvaluation evaluatePair(
+      Transaction debit,
+      Transaction credit,
+      FinancialAccount debitAccount,
+      FinancialAccount creditAccount,
+      BigDecimal debitAmount,
+      BigDecimal creditAmount) {
+    if (debitAccount == null
+        || creditAccount == null
+        || debit.getAccountId().equals(credit.getAccountId())
+        || !sameCurrency(debitAccount, creditAccount)) {
+      return null;
+    }
+    InternalMatchKind kind = kindOf(debitAccount, creditAccount);
+    if (kind == null || debitAmount.signum() >= 0 || creditAmount.signum() <= 0) {
+      return null;
+    }
+    int window =
+        kind == InternalMatchKind.CARD_PAYMENT ? CARD_PAYMENT_WINDOW_DAYS : TRANSFER_WINDOW_DAYS;
+    long dayDiff =
+        Math.abs(
+            Duration.between(
+                    debit.getPostedOn().atStartOfDay(), credit.getPostedOn().atStartOfDay())
+                .toDays());
+    if (dayDiff > window) {
+      return null;
+    }
+    BigDecimal debitAbs = debitAmount.abs();
+    BigDecimal maxAbs = debitAbs.max(creditAmount);
+    BigDecimal tolerance = maxAbs.multiply(TOLERANCE_RATE).max(MIN_TOLERANCE);
+    BigDecimal valueDiff = debitAbs.subtract(creditAmount).abs();
+    if (valueDiff.compareTo(tolerance) > 0) {
+      return null;
+    }
+    return new PairEvaluation(kind, dayDiff, valueDiff, tolerance, window);
+  }
+
+  private static boolean sameCurrency(FinancialAccount debit, FinancialAccount credit) {
+    String debitCurrency = debit.getCurrency();
+    String creditCurrency = credit.getCurrency();
+    return debitCurrency == null
+        || creditCurrency == null
+        || debitCurrency.equalsIgnoreCase(creditCurrency);
+  }
+
+  /**
    * Revalida correspondências automáticas confirmadas após uma atualização dos dados importados
    * (sinal, valor ou tipo das pernas).
    *
@@ -371,11 +414,8 @@ public class InternalMatchService {
         BigDecimal debitAmount = effectiveAmount(debit);
         BigDecimal creditAmount = effectiveAmount(credit);
         invalid =
-            debitAccount == null
-                || creditAccount == null
-                || debitAmount.signum() >= 0
-                || creditAmount.signum() <= 0
-                || kindOf(debitAccount, creditAccount) == null;
+            evaluatePair(debit, credit, debitAccount, creditAccount, debitAmount, creditAmount)
+                == null;
       }
       if (!invalid) {
         ensureMatchedState(debit);
@@ -479,5 +519,12 @@ public class InternalMatchService {
       int nameScore,
       long dayDiff,
       BigDecimal valueDiff,
+      int window) {}
+
+  private record PairEvaluation(
+      InternalMatchKind kind,
+      long dayDiff,
+      BigDecimal valueDiff,
+      BigDecimal tolerance,
       int window) {}
 }

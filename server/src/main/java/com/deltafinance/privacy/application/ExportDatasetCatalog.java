@@ -810,13 +810,15 @@ class ExportDatasetCatalog {
                 "total",
                 "minimumPayment",
                 "paymentsTotal",
+                "financeCharges",
                 "currency",
                 "syncedAt",
                 "createdAt",
                 "updatedAt"),
             "select id, user_id, card_account_id, closing_date, due_date, total_enc,"
-                + " minimum_payment_enc, payments_total_enc, currency, synced_at, created_at,"
-                + " updated_at from provider_bill where user_id = ? order by due_date, id",
+                + " minimum_payment_enc, payments_total_enc, finance_charges_total_enc, currency,"
+                + " synced_at, created_at, updated_at from provider_bill"
+                + " where user_id = ? order by due_date, id",
             rs -> {
               UUID id = uuid(rs, "id");
               UUID userId = rs.getObject("user_id", UUID.class);
@@ -843,6 +845,14 @@ class ExportDatasetCatalog {
                       "payments_total",
                       id,
                       rs.getBytes("payments_total_enc")));
+              row.put(
+                  "financeCharges",
+                  decrypt(
+                      userId,
+                      "provider_bill",
+                      "finance_charges_total",
+                      id,
+                      rs.getBytes("finance_charges_total_enc")));
               row.put("currency", rs.getString("currency"));
               row.put("syncedAt", instant(rs, "synced_at"));
               row.put("createdAt", instant(rs, "created_at"));

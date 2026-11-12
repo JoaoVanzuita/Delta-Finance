@@ -78,6 +78,7 @@ public class KeyRotationJob {
           new Field("provider_bill", "total"),
           new Field("provider_bill", "minimum_payment"),
           new Field("provider_bill", "payments_total"),
+          new Field("provider_bill", "finance_charges_total"),
           new Field("provider_bill_payment", "amount"),
           new Field("provider_investment", "external_investment_id"),
           new Field("provider_investment", "name"),

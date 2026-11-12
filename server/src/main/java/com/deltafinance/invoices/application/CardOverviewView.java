@@ -31,7 +31,7 @@ public record CardOverviewView(
       String usedAmount,
       String outstanding,
       String invoicedOutstanding,
-      String unbilledAmount,
+      String providerDifference,
       String utilization,
       LocalDate nextDueDate,
       InvoiceView currentInvoice,

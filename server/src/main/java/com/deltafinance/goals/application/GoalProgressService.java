@@ -354,6 +354,10 @@ public class GoalProgressService {
         }
         case INVESTMENT -> {
           InvestmentHoldingView holding = investmentQueryService.holding(userId, key.sourceId());
+          if (holding.currency() != null && !"BRL".equalsIgnoreCase(holding.currency())) {
+            throw new ValidationException(
+                "allocations", "Investimentos em moeda diferente de BRL não podem compor metas.");
+          }
           if (holding.balance() == null || holding.balance().isBlank()) {
             throw new ValidationException("allocations", "Valor da fonte não disponível.");
           }

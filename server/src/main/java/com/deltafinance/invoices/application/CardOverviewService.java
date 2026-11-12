@@ -85,10 +85,25 @@ public class CardOverviewService {
 
   private CardOverviewView.CardItem cardItem(UUID userId, AccountView account) {
     List<InvoiceView> invoices = invoicesFor(userId, account);
-    InvoiceView currentInvoice =
+    InvoiceView latestInvoice =
         invoices.stream()
             .max(Comparator.comparing(InvoiceView::cycleStart).thenComparing(InvoiceView::id))
             .orElse(null);
+    // A fatura em acompanhamento não pode ser uma fatura já paga: nesse caso os indicadores
+    // passariam a olhar para um ciclo encerrado. Faturas CLOSED/OVERDUE seguem válidas porque
+    // ainda têm saldo em aberto; a lista prioriza uma OPEN quando existir.
+    InvoiceView currentInvoice =
+        invoices.stream()
+            .filter(invoice -> "OPEN".equals(invoice.status()))
+            .max(Comparator.comparing(InvoiceView::cycleStart).thenComparing(InvoiceView::id))
+            .orElseGet(
+                () ->
+                    invoices.stream()
+                        .filter(invoice -> !"PAID".equals(invoice.status()))
+                        .max(
+                            Comparator.comparing(InvoiceView::cycleStart)
+                                .thenComparing(InvoiceView::id))
+                        .orElse(latestInvoice));
     InvoiceView nextDueInvoice =
         invoices.stream()
             .filter(invoice -> !"PAID".equals(invoice.status()))
@@ -105,19 +120,35 @@ public class CardOverviewService {
             .map(invoice -> parse(invoice.outstanding(), ZERO))
             .reduce(ZERO, BigDecimal::add)
             .max(ZERO);
-    CardDebtService.CardDebt debt = cardDebtService.byAccount(account, outstanding);
+    BigDecimal currentInvoiceOutstanding =
+        invoices.stream()
+            .filter(invoice -> !"PAID".equals(invoice.status()))
+            .filter(invoice -> parse(invoice.outstanding(), ZERO).signum() > 0)
+            .max(
+                Comparator.comparing(InvoiceView::cycleStart)
+                    .thenComparing(InvoiceView::dueDate)
+                    .thenComparing(InvoiceView::id))
+            .map(invoice -> parse(invoice.outstanding(), ZERO))
+            .orElse(ZERO);
+    CardDebtService.CardDebt debt =
+        cardDebtService.byAccount(account, outstanding, currentInvoiceOutstanding);
     BigDecimal invoicedOutstanding = debt.invoicedOutstanding();
-    BigDecimal unbilledAmount = debt.unbilledAmount();
+    BigDecimal providerDifference = debt.providerDifference();
     outstanding = debt.outstanding();
-    BigDecimal used = parse(account.currentBalance(), null);
-    if (used == null || used.signum() <= 0) {
-      // O provedor usa valor positivo para dívida; saldo neutro/negativo sem dívida vira 0.
-      used = outstanding.signum() > 0 ? outstanding : ZERO;
-    }
-    used = used.max(ZERO);
 
     BigDecimal limit =
         account.cardProfile() == null ? null : parse(account.cardProfile().creditLimit(), null);
+    BigDecimal availableLimit =
+        account.cardProfile() == null
+            ? null
+            : parse(account.cardProfile().availableCreditLimit(), null);
+    // O limite disponível oficial reflete o uso total. O saldo da conta isolado representa apenas
+    // a fatura corrente e não serve como "utilizado" quando há faturas anteriores em aberto.
+    BigDecimal used =
+        limit != null && availableLimit != null && limit.signum() > 0
+            ? limit.subtract(availableLimit).max(ZERO)
+            : outstanding;
+    used = used.max(ZERO);
     LocalDate nextDueDate = nextDueInvoice == null ? null : nextDueInvoice.dueDate();
     if (nextDueDate == null && currentInvoice != null && "OPEN".equals(currentInvoice.status())) {
       nextDueDate = currentInvoice.dueDate();
@@ -143,7 +174,7 @@ public class CardOverviewService {
         format(used),
         format(outstanding),
         format(invoicedOutstanding),
-        format(unbilledAmount),
+        format(providerDifference),
         utilization(used, limit),
         nextDueDate,
         currentInvoice,

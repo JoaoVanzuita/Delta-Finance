@@ -33,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Itens espelho compõem o total uma única vez. {@code EXPENSE_DECREASE} sem transação reduz no
  * máximo o total corrente da fatura; o excedente vira crédito para faturas futuras. O crédito
  * acumulado é aplicado à primeira fatura não paga em ordem de vencimento, nunca reabrindo faturas
- * pagas. Pagamentos não criam despesas.
+ * pagas. Pagamentos não criam despesas. A evidência oficial de pagamento da Bill seguinte é
+ * combinada com os pagamentos locais pela maior evidência, sem duplicar o mesmo evento.
  */
 @Service
 public class InvoiceBalanceService {
@@ -90,17 +91,23 @@ public class InvoiceBalanceService {
             .thenComparing(Invoice::getId));
     BigDecimal creditPool = ZERO;
     LocalDate today = clock.today();
-    Map<UUID, BigDecimal> providerTotals =
-        providerBillService.totalsByInvoice(userId, cardAccountId, invoices);
+    Map<UUID, ProviderBillService.InvoiceSettlement> settlements =
+        providerBillService.settlementsByInvoice(userId, cardAccountId, invoices);
 
     for (Invoice invoice : invoices) {
       List<InvoiceItem> items =
           itemRepository.findByUserIdAndInvoiceIdAndRemovedAtIsNullOrderByOccurredOnAscCreatedAtAsc(
               userId, invoice.getId());
       Totals totals = totals(items);
-      BigDecimal payments = paymentsTotal(userId, invoice.getId());
+      BigDecimal localPayments = paymentsTotal(userId, invoice.getId());
+      ProviderBillService.InvoiceSettlement settlement = settlements.get(invoice.getId());
+      BigDecimal officialApplied =
+          settlement == null ? ZERO : settlement.appliedToInvoice().min(totals.total()).max(ZERO);
+      // Pagamentos locais e evidência oficial podem descrever o mesmo evento; usa-se a maior
+      // evidência em vez de somar as duas e duplicar o valor.
+      BigDecimal payments = localPayments.max(officialApplied);
       BigDecimal applied = decryptInvoice(invoice, "applied_credit");
-      BigDecimal providerTotal = providerTotals.get(invoice.getId());
+      BigDecimal providerTotal = settlement == null ? null : settlement.providerTotal();
       // O provedor pode confirmar um total maior que o local (compras ausentes). O excedente de
       // pagamento só vira crédito sobre a maior obrigação conhecida, nunca sobre dados parciais.
       BigDecimal effectiveTotal =

@@ -65,9 +65,13 @@ tem acesso.
   de 7 dias com sobreposição (`DAILY_WINDOW_DAYS=7`); reconciliação mensal de 12
   meses (`RECONCILIATION_WINDOW_MONTHS=12`) no dia
   `RECONCILIATION_DAY=1`. O scheduler roda a cada `SCHEDULER_INTERVAL=1m` com
-  jitter de até `JITTER=60s`.
-- **Contrato da Pluggy**: em `GET /v2/transactions` use `dateFrom`/`dateTo` e o
-  cursor `next` como query string (o `after` deve ser extraído e decodificado).
+  jitter de até `JITTER=60s`. Além da janela diária, cartões releem a partir da
+  compra `PENDING` mais antiga (limitada à janela de reconciliação) para capturar
+  mudanças de estado fora dos 7 dias.
+- **Contrato da Pluggy**: em `GET /v2/transactions` use `dateFrom`/`dateTo` e
+  reutilize a query `next` exatamente como recebida na página seguinte; ela já
+  contém os filtros e o cursor. Valores fora desse formato são tratados como
+  leitura inconclusiva.
   **Não envie `pageSize`**: a API responde `400 property pageSize should not
 exist`; o tamanho padrão é 500. Um `400` de parâmetro é registrado no log como
   `Falha do provedor: endpoint=... status=400` e não significa,
@@ -100,7 +104,9 @@ exist`; o tamanho padrão é 500. Um `400` de parâmetro é registrado no log co
   a importação para antes do próximo lote; o worker atrasado não sobrescreve o
   job. Vale para instância única.
 - **Sugestões de movimento interno** são geradas ao concluir uma sincronização,
-  a carga inicial e a reconexão, mantendo o dashboard coerente.
+  a carga inicial e a reconexão, mantendo o dashboard coerente. Pares confirmados
+  são reavaliados com os mesmos critérios; se valor, data ou moeda deixarem de
+  atender, a correspondência volta para decisão.
 - **Webhooks:** removidos em 2026-10-25 (S-04). A atualização continua pela
   sincronização programada e pela consulta manual.
 - **Painel** `/settings/integration` mostra estado, última tentativa, último
@@ -156,16 +162,19 @@ exist`; o tamanho padrão é 500. Um `400` de parâmetro é registrado no log co
   bruto; `payments_total` mostra o pago e `outstanding` o saldo restante. Itens
   espelho antigos de pagamento são convertidos na primeira geração da fatura.
 - Bills oficiais do provedor são persistidas em `provider_bill` e
-  `provider_bill_payment` durante a importação de contas. Elas são referência de
-  conciliação: guardam total, pagamento mínimo, vencimento e pagamentos oficiais,
-  mas **não** alteram totais, status ou saldo devedor locais. Falhas de leitura de
-  Bills não interrompem a sincronização.
-- A conciliação é por ciclo (fechamento; vencimento como fallback). Cada Bill
-  informa os pagamentos feitos contra ela; pagamentos muito distantes do ciclo
+  `provider_bill_payment` durante a importação de contas. Elas guardam total,
+  pagamento mínimo, vencimento, pagamentos e encargos financeiros. A Bill não
+  reescreve compras locais, mas os pagamentos da Bill N+1 e os encargos desse ciclo
+  são evidência de quitação da Bill N e participam de `paymentsTotal`,
+  `outstanding` e status locais. Falhas de leitura de Bills não interrompem a
+  sincronização.
+- A conciliação é por ciclo (fechamento; vencimento como fallback). A quitação da
+  Bill N usa os pagamentos da Bill N+1; pagamentos muito distantes do ciclo
   (dados antigos repetidos pelo conector) são descartados da comparação e
   contados em `ignoredPayments`. A API expõe `providerBill` com
-  `totalDifference` e `paymentsDifference` (`local - provedor`) e `reconciled`,
-  verdadeiro somente quando total e pagamentos coincidem.
+  `totalDifference`, `paymentsDifference` (`local - aplicado`), `financeCharges`,
+  `settled` e `reconciled`, verdadeiro somente quando total e pagamentos
+  coincidem.
 - O pagamento mínimo exibido na fatura vem de `invoice.minimum_payment_enc`
   quando preenchido; caso contrário, da Bill oficial conciliada.
 - Pagamento confirmado acima da obrigação da fatura vira crédito para as próximas
@@ -227,7 +236,9 @@ exist`; o tamanho padrão é 500. Um `400` de parâmetro é registrado no log co
   pode não enviar `INTEREST`, `amountProfit`, `amountOriginal` ou taxas de
   rentabilidade. Nesses casos o painel mostra "não informado" e **não deriva**
   rentabilidade de histórico incompleto. `rate`/`rateType` são remuneração
-  contratada, não desempenho.
+  contratada, não desempenho. Quando a Pluggy envia `netAmount`, as `expenses` já
+  estão incluídas nele; o relatório de aportes só soma `expenses` à parte no
+  payload sem `netAmount`.
 - O usuário pode registrar provento manual e custo informado para uma posição
   importada. Esses dados aparecem como manuais/estimados, não
   sobrescrevem o provedor e são auditados. O provento manual não é somado

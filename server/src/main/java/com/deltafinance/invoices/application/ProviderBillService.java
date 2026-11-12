@@ -25,9 +25,9 @@ import org.springframework.stereotype.Service;
  * Associa as Bills oficiais às faturas locais para conciliação.
  *
  * <p>O vínculo é por ciclo: primeiro pela data de fechamento e, quando o provedor não a envia, pelo
- * vencimento. As Bills nunca alteram a fatura local. Seguindo a semântica do Pluggy, os pagamentos
- * de uma Bill liquidam a fatura anterior; por isso a conciliação de uma fatura usa os pagamentos da
- * Bill seguinte quando ela existe.
+ * vencimento. As Bills nunca reescrevem compras locais. Seguindo a semântica do Pluggy, os
+ * pagamentos de uma Bill liquidam a fatura anterior; por isso a conciliação de uma fatura usa os
+ * pagamentos da Bill seguinte, acrescidos dos encargos financeiros desse ciclo.
  */
 @Service
 public class ProviderBillService {
@@ -36,6 +36,7 @@ public class ProviderBillService {
   private static final String PAYMENT_TABLE = "provider_bill_payment";
   private static final String INVOICE_TABLE = "invoice";
   private static final ZoneId ZONE = ZoneId.of("America/Sao_Paulo");
+  private static final BigDecimal ZERO = Money.scaled(BigDecimal.ZERO);
 
   private final ProviderBillRepository billRepository;
   private final ProviderBillPaymentRepository paymentRepository;
@@ -50,6 +51,22 @@ public class ProviderBillService {
     this.encryptedValueReader = encryptedValueReader;
   }
 
+  /**
+   * Quitação oficial de uma fatura local.
+   *
+   * <p>{@code officialPayments} é o total pago no ciclo seguinte; {@code appliedToInvoice} limita
+   * esse total ao valor da Bill anterior, porque os encargos do ciclo seguinte não pagam compras da
+   * fatura anterior. {@code settled} segue a regra documentada pelo provedor.
+   */
+  public record InvoiceSettlement(
+      BigDecimal providerTotal,
+      BigDecimal officialPayments,
+      BigDecimal appliedToInvoice,
+      BigDecimal financeCharges,
+      boolean settled,
+      List<ProviderBillPayment> payments,
+      int ignoredPayments) {}
+
   /** Bills do cartão em ordem crescente de vencimento. */
   public List<ProviderBill> bills(UUID userId, UUID cardAccountId) {
     List<ProviderBill> bills =
@@ -62,31 +79,34 @@ public class ProviderBillService {
   /** Mapeia cada fatura local para a Bill oficial correspondente, quando existir. */
   public Map<UUID, ProviderBillView> views(
       UUID userId, UUID cardAccountId, List<Invoice> invoices) {
-    Map<UUID, ProviderBill> matches = matches(userId, cardAccountId, invoices);
+    List<ProviderBill> bills = bills(userId, cardAccountId);
+    Map<UUID, ProviderBill> matches = matches(invoices, bills);
     Map<UUID, ProviderBillView> result = new HashMap<>();
     for (Invoice invoice : invoices) {
       ProviderBill bill = matches.get(invoice.getId());
       if (bill != null) {
-        result.put(invoice.getId(), view(userId, invoice, bill));
+        result.put(invoice.getId(), view(userId, invoice, bill, bills));
       }
     }
     return result;
   }
 
-  /** Totais oficiais por fatura local, usados no cálculo de crédito por pagamento excedente. */
-  public Map<UUID, BigDecimal> totalsByInvoice(
+  /** Quitação oficial por fatura local, usada pelo cálculo de saldo e status. */
+  public Map<UUID, InvoiceSettlement> settlementsByInvoice(
       UUID userId, UUID cardAccountId, List<Invoice> invoices) {
-    Map<UUID, BigDecimal> totals = new HashMap<>();
-    for (Map.Entry<UUID, ProviderBill> entry :
-        matches(userId, cardAccountId, invoices).entrySet()) {
-      totals.put(
-          entry.getKey(), decryptBill(entry.getValue(), "total", entry.getValue().getTotalEnc()));
+    List<ProviderBill> bills = bills(userId, cardAccountId);
+    Map<UUID, ProviderBill> matches = matches(invoices, bills);
+    Map<UUID, InvoiceSettlement> result = new HashMap<>();
+    for (Invoice invoice : invoices) {
+      ProviderBill bill = matches.get(invoice.getId());
+      if (bill != null) {
+        result.put(invoice.getId(), settlement(userId, bill, bills));
+      }
     }
-    return totals;
+    return result;
   }
 
-  private Map<UUID, ProviderBill> matches(UUID userId, UUID cardAccountId, List<Invoice> invoices) {
-    List<ProviderBill> bills = bills(userId, cardAccountId);
+  private Map<UUID, ProviderBill> matches(List<Invoice> invoices, List<ProviderBill> bills) {
     Map<UUID, ProviderBill> result = new HashMap<>();
     if (bills.isEmpty() || invoices.isEmpty()) {
       return result;
@@ -103,51 +123,88 @@ public class ProviderBillService {
     return result;
   }
 
-  private ProviderBillView view(UUID userId, Invoice invoice, ProviderBill bill) {
+  private ProviderBillView view(
+      UUID userId, Invoice invoice, ProviderBill bill, List<ProviderBill> bills) {
     BigDecimal localTotal = decryptInvoice(invoice, "total", invoice.getTotalEnc());
     BigDecimal localPayments =
         decryptInvoice(invoice, "payments_total", invoice.getPaymentsTotalEnc());
-    BigDecimal providerTotal = decryptBill(bill, "total", bill.getTotalEnc());
     BigDecimal providerMinimum =
         bill.getMinimumPaymentEnc() == null
             ? null
             : decryptBill(bill, "minimum_payment", bill.getMinimumPaymentEnc());
+    InvoiceSettlement settlement = settlement(userId, bill, bills);
 
+    BigDecimal totalDifference = localTotal.subtract(settlement.providerTotal());
+    BigDecimal paymentsDifference = localPayments.subtract(settlement.appliedToInvoice());
+    List<ProviderBillPaymentView> paymentViews =
+        settlement.payments().stream().map(this::paymentView).toList();
+
+    return new ProviderBillView(
+        bill.getClosingDate(),
+        bill.getDueDate(),
+        format(settlement.providerTotal()),
+        providerMinimum == null ? null : format(providerMinimum),
+        format(settlement.appliedToInvoice()),
+        format(settlement.financeCharges()),
+        settlement.settled(),
+        format(totalDifference),
+        format(paymentsDifference),
+        totalDifference.signum() == 0 && paymentsDifference.signum() == 0,
+        settlement.ignoredPayments(),
+        bill.getSyncedAt().atZone(ZONE).toLocalDate(),
+        paymentViews);
+  }
+
+  private InvoiceSettlement settlement(UUID userId, ProviderBill bill, List<ProviderBill> bills) {
+    BigDecimal providerTotal = decryptBill(bill, "total", bill.getTotalEnc());
+    ProviderBill next = nextBill(bills, bill);
+    OfficialPayments official =
+        next == null ? new OfficialPayments(List.of(), 0) : officialPayments(userId, next);
+    BigDecimal officialPayments =
+        official.payments().stream()
+            .map(payment -> decryptPayment(payment))
+            .reduce(ZERO, BigDecimal::add);
+    BigDecimal financeCharges =
+        next == null
+            ? ZERO
+            : decryptBill(next, "finance_charges_total", next.getFinanceChargesTotalEnc());
+    BigDecimal required = providerTotal.add(financeCharges);
+    BigDecimal appliedToInvoice = officialPayments.min(providerTotal).max(ZERO);
+    boolean settled =
+        next != null && required.signum() > 0 && officialPayments.compareTo(required) >= 0;
+    return new InvoiceSettlement(
+        providerTotal,
+        officialPayments,
+        appliedToInvoice,
+        financeCharges,
+        settled,
+        official.payments(),
+        official.ignored());
+  }
+
+  private OfficialPayments officialPayments(UUID userId, ProviderBill bill) {
     List<ProviderBillPayment> allPayments =
         paymentRepository.findByUserIdAndProviderBillIdOrderByPaymentDateAscCreatedAtAsc(
             userId, bill.getId());
     LocalDate windowStart =
         (bill.getClosingDate() == null ? bill.getDueDate() : bill.getClosingDate()).minusMonths(2);
     LocalDate windowEnd = bill.getDueDate().plusMonths(1);
-    List<ProviderBillPayment> officialPayments =
+    List<ProviderBillPayment> filtered =
         allPayments.stream()
             .filter(
                 payment ->
                     !payment.getPaymentDate().isBefore(windowStart)
                         && !payment.getPaymentDate().isAfter(windowEnd))
             .toList();
-    BigDecimal providerPayments =
-        officialPayments.stream()
-            .map(payment -> decryptPayment(payment))
-            .reduce(Money.scaled(BigDecimal.ZERO), BigDecimal::add);
+    return new OfficialPayments(filtered, allPayments.size() - filtered.size());
+  }
 
-    BigDecimal totalDifference = localTotal.subtract(providerTotal);
-    BigDecimal paymentsDifference = localPayments.subtract(providerPayments);
-    List<ProviderBillPaymentView> paymentViews =
-        officialPayments.stream().map(payment -> paymentView(payment)).toList();
-
-    return new ProviderBillView(
-        bill.getClosingDate(),
-        bill.getDueDate(),
-        format(providerTotal),
-        providerMinimum == null ? null : format(providerMinimum),
-        format(providerPayments),
-        format(totalDifference),
-        format(paymentsDifference),
-        totalDifference.signum() == 0 && paymentsDifference.signum() == 0,
-        allPayments.size() - officialPayments.size(),
-        bill.getSyncedAt().atZone(ZONE).toLocalDate(),
-        paymentViews);
+  private static ProviderBill nextBill(List<ProviderBill> bills, ProviderBill bill) {
+    int index = bills.indexOf(bill);
+    if (index < 0 || index + 1 >= bills.size()) {
+      return null;
+    }
+    return bills.get(index + 1);
   }
 
   private ProviderBill match(Invoice invoice, List<ProviderBill> bills, Set<UUID> used) {
@@ -200,6 +257,9 @@ public class ProviderBillService {
   }
 
   private BigDecimal decryptBill(ProviderBill bill, String column, byte[] value) {
+    if (value == null) {
+      return ZERO;
+    }
     return encryptedValueReader.readMoney(
         bill.getUserId(), BILL_TABLE, column, bill.getId(), value);
   }
@@ -212,4 +272,6 @@ public class ProviderBillService {
   private static String format(BigDecimal value) {
     return Money.plain(value);
   }
+
+  private record OfficialPayments(List<ProviderBillPayment> payments, int ignored) {}
 }

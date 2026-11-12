@@ -59,6 +59,7 @@ class ProviderBillIT extends PostgresTestBase {
 
   private AuthTestClient alice;
   private String cardId;
+  private String officialCardId;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -83,11 +84,48 @@ class ProviderBillIT extends PostgresTestBase {
         CARD, new BillFixture("bill-2026-09", "2026-09-05", "2026-09-15", "100.00", "10.00"));
     PLUGGY.addBill(
         CARD, new BillFixture("bill-2026-10", "2026-10-05", "2026-10-15", "0.00", "0.00"));
-    // Cada Bill informa os pagamentos feitos contra ela.
+    PLUGGY.addAccount(
+        ITEM,
+        new AccountFixture(
+            "acc-providerbill-official",
+            "CREDIT",
+            "CREDIT_CARD",
+            "Cartão só Bill",
+            "0.00",
+            Map.of(
+                "balanceCloseDate", "2026-08-05",
+                "balanceDueDate", "2026-08-15",
+                "creditLimit", "1000.00")));
+    PLUGGY.addBill(
+        "acc-providerbill-official",
+        new BillFixture("official-2026-08", "2026-08-05", "2026-08-15", "50.00", "5.00"));
+    PLUGGY.addBill(
+        "acc-providerbill-official",
+        new BillFixture("official-2026-09", "2026-09-05", "2026-09-15", "0.00", "0.00"));
+    PLUGGY.addBillPayment(
+        "acc-providerbill-official",
+        "official-2026-09",
+        new BillPaymentFixture("official-payment", "2026-09-10", "50.00", "PIX", "FULL_PAYMENT"));
+    PLUGGY.addTransaction(
+        "acc-providerbill-official",
+        new TransactionFixture(
+            "tx-official-purchase",
+            "acc-providerbill-official",
+            "Compra só Bill",
+            "50.00",
+            "2026-07-10",
+            "POSTED",
+            "Groceries"));
+    PLUGGY.setCreditCardMetadata("tx-official-purchase", Map.of("billForecastDate", "2026-08"));
+    // Pela regra da Pluggy, os pagamentos da Bill seguinte quitam a Bill anterior.
     PLUGGY.addBillPayment(
         CARD,
-        "bill-2026-09",
-        new BillPaymentFixture("bill-payment-1", "2026-09-10", "100.00", "PIX", "FULL_PAYMENT"));
+        "bill-2026-10",
+        new BillPaymentFixture("bill-payment-1", "2026-09-10", "112.50", "PIX", "FULL_PAYMENT"));
+    PLUGGY.setBillFinanceCharges(
+        CARD,
+        "bill-2026-10",
+        List.of(new PluggyStub.BillFinanceChargeFixture("charge-1", "IOF", "12.50")));
 
     PLUGGY.addTransaction(
         CARD,
@@ -125,8 +163,12 @@ class ProviderBillIT extends PostgresTestBase {
       if ("Cartão conciliação".equals(account.path("alias").asString())) {
         cardId = account.path("id").asString();
       }
+      if ("Cartão só Bill".equals(account.path("alias").asString())) {
+        officialCardId = account.path("id").asString();
+      }
     }
     assertThat(cardId).isNotBlank();
+    assertThat(officialCardId).isNotBlank();
   }
 
   @Test
@@ -143,12 +185,24 @@ class ProviderBillIT extends PostgresTestBase {
     assertThat(bill.path("total").asString()).isEqualTo("100.00");
     assertThat(bill.path("minimumPayment").asString()).isEqualTo("10.00");
     assertThat(bill.path("paymentsTotal").asString()).isEqualTo("100.00");
+    assertThat(bill.path("financeCharges").asString()).isEqualTo("12.50");
+    assertThat(bill.path("settled").asBoolean()).isTrue();
     assertThat(bill.path("totalDifference").asString()).isEqualTo("0.00");
     assertThat(bill.path("paymentsDifference").asString()).isEqualTo("0.00");
     assertThat(bill.path("reconciled").asBoolean()).isTrue();
     assertThat(bill.path("payments")).hasSize(1);
-    assertThat(bill.path("payments").get(0).path("amount").asString()).isEqualTo("100.00");
+    assertThat(bill.path("payments").get(0).path("amount").asString()).isEqualTo("112.50");
     assertThat(bill.path("payments").get(0).path("paymentMode").asString()).isEqualTo("PIX");
+  }
+
+  @Test
+  void pagamentoOficialDaBillSeguinteQuitaFaturaSemPagamentoLocal() throws Exception {
+    JsonNode invoice = invoiceForCycle(officialCardId, "2026-07-06");
+    assertThat(invoice.path("total").asString()).isEqualTo("50.00");
+    assertThat(invoice.path("paymentsTotal").asString()).isEqualTo("50.00");
+    assertThat(invoice.path("outstanding").asString()).isEqualTo("0.00");
+    assertThat(invoice.path("status").asString()).isEqualTo("PAID");
+    assertThat(invoice.path("providerBill").path("settled").asBoolean()).isTrue();
   }
 
   @Test
@@ -161,7 +215,8 @@ class ProviderBillIT extends PostgresTestBase {
         List.of(
             new BillFixture("bill-2026-09", "2026-09-05", "2026-09-15", "90.00", "9.00"),
             new BillFixture("bill-2026-10", "2026-10-05", "2026-10-15", "0.00", "0.00")));
-    PLUGGY.setBillPayments(CARD, "bill-2026-09", List.of());
+    PLUGGY.setBillPayments(CARD, "bill-2026-10", List.of());
+    PLUGGY.setBillFinanceCharges(CARD, "bill-2026-10", List.of());
 
     String connectionId = firstConnectionId();
     alice
@@ -180,10 +235,14 @@ class ProviderBillIT extends PostgresTestBase {
   }
 
   private JsonNode invoiceForCycle(String cycleStart) throws Exception {
+    return invoiceForCycle(cardId, cycleStart);
+  }
+
+  private JsonNode invoiceForCycle(String cardAccountId, String cycleStart) throws Exception {
     JsonNode invoices =
         json(
             alice
-                .get("/api/v1/cards/" + cardId + "/invoices")
+                .get("/api/v1/cards/" + cardAccountId + "/invoices")
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()

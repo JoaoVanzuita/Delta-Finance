@@ -12,9 +12,7 @@ import com.deltafinance.transactions.domain.TransactionRepository;
 import com.deltafinance.transactions.domain.TransactionStatus;
 import com.deltafinance.transactions.domain.TransactionType;
 import java.math.BigDecimal;
-import java.text.Normalizer;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -135,12 +133,6 @@ public class PendingDuplicateCleanupService {
   }
 
   private static boolean looksLikeCardPayment(String description) {
-    String normalized =
-        Normalizer.normalize(description == null ? "" : description, Normalizer.Form.NFD)
-            .replaceAll("\\p{M}", "")
-            .toLowerCase(Locale.ROOT);
-    return normalized.contains("pagamento")
-        || normalized.contains("payment")
-        || normalized.contains("boleto");
+    return CardPaymentDescription.looksLikePayment(description);
   }
 }

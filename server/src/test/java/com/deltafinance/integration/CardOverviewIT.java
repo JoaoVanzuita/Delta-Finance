@@ -150,6 +150,61 @@ class CardOverviewIT extends PostgresTestBase {
   }
 
   @Test
+  void faturaPagaNaoEhUsadaComoFaturaAtualDosIndicadores() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-card",
+        new TransactionFixture(
+            "tx-next-cycle",
+            "acc-card",
+            "Compra do próximo ciclo",
+            "50.00",
+            "2026-10-20",
+            "POSTED",
+            null));
+    alice
+        .post("/api/v1/connections/" + connectionId + "/sync", null)
+        .andExpect(status().isAccepted());
+    syncJobService.processNext("card-overview", "paid-invoice");
+
+    JsonNode invoices =
+        json(
+            alice
+                .get("/api/v1/cards/" + cardWithCycleId + "/invoices")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    JsonNode latest = invoices.path("items").get(0);
+    JsonNode previous = invoices.path("items").get(1);
+    assertThat(latest.path("status").asString()).isNotEqualTo("PAID");
+
+    String bankId = null;
+    for (JsonNode account : accounts().path("items")) {
+      if ("BANK".equals(account.path("type").asString())) {
+        bankId = account.path("id").asString();
+      }
+    }
+    assertThat(bankId).isNotBlank();
+    alice
+        .post(
+            "/api/v1/invoices/" + latest.path("id").asString() + "/payments",
+            Map.of(
+                "paymentAccountId",
+                bankId,
+                "amount",
+                latest.path("total").asString(),
+                "paidOn",
+                "2026-11-10"))
+        .andExpect(status().isCreated());
+
+    JsonNode card = item(overview(), cardWithCycleId);
+    assertThat(card.path("currentInvoice").path("id").asString())
+        .isEqualTo(previous.path("id").asString());
+    assertThat(card.path("nextDueInvoice").path("id").asString())
+        .isEqualTo(previous.path("id").asString());
+  }
+
+  @Test
   void visaoGeralNaoExpoeCartoesDeOutroUsuario() throws Exception {
     AuthTestClient bob = new AuthTestClient(mockMvc, jsonMapper).csrf();
     bob.register("bob.cartoes", PASSWORD).login("bob.cartoes", PASSWORD);

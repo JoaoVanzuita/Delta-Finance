@@ -93,6 +93,8 @@ const OVERVIEW = {
       last4: '1234',
       usedAmount: '180.00',
       outstanding: '50.00',
+      invoicedOutstanding: '50.00',
+      providerDifference: '0.00',
       utilization: '3.60',
       nextDueDate: '2026-11-15',
       currentInvoice: OPEN_INVOICE,

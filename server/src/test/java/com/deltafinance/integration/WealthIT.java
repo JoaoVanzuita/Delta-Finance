@@ -232,6 +232,35 @@ class WealthIT extends PostgresTestBase {
     assertThat(closedFound).isFalse();
   }
 
+  @Test
+  void excluiInvestimentoEmMoedaEstrangeiraExplicitamente() throws Exception {
+    PLUGGY.addItem("item-invest-usd", "MeuPluggy USD", "UPDATED");
+    PLUGGY.setInvestmentResources(
+        "item-invest-usd",
+        List.of(Map.of("resourceId", "r-usd", "type", "VARIABLE_INCOME", "status", "AVAILABLE")));
+    Map<String, Object> usd = investment("inv-usd-wealth", "Stock USD", "USD1", "ACTIVE", "500.00");
+    usd.put("currencyCode", "USD");
+    PLUGGY.addInvestment("item-invest-usd", usd);
+    alice
+        .post("/api/v1/connections", Map.of("itemId", "item-invest-usd"))
+        .andExpect(status().isCreated());
+
+    JsonNode overview = overview(alice);
+    assertThat(overview.path("grossAssets").asString()).isEqualTo("1000.00");
+    assertThat(overview.path("liabilities").asString()).isEqualTo("100.00");
+    assertThat(overview.path("netWorth").asString()).isEqualTo("900.00");
+
+    boolean usdFound = false;
+    for (JsonNode item : overview.path("items")) {
+      if ("Stock USD (USD1)".equals(item.path("description").asString())) {
+        usdFound = true;
+        assertThat(item.path("included").asBoolean()).isFalse();
+        assertThat(item.path("exclusionReason").asString()).contains("Moeda diferente de BRL");
+      }
+    }
+    assertThat(usdFound).isTrue();
+  }
+
   private static Map<String, Object> investment(
       String id, String name, String code, String status, String balance) {
     Map<String, Object> value = new LinkedHashMap<>();

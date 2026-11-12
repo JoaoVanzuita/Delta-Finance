@@ -1185,11 +1185,15 @@ class InvoiceIT extends PostgresTestBase {
     PLUGGY.addBill(
         "acc-card",
         new BillFixture("bill-reconcile-paid", "2026-10-05", "2026-10-15", "120.00", "12.00"));
+    PLUGGY.addBill(
+        "acc-card",
+        new BillFixture("bill-reconcile-next", "2026-11-05", "2026-11-15", "0.00", "0.00"));
+    // A Bill seguinte é a evidência de pagamento da Bill anterior.
     PLUGGY.addBillPayment(
         "acc-card",
-        "bill-reconcile-paid",
+        "bill-reconcile-next",
         new BillPaymentFixture(
-            "pay-reconcile-paid", "2026-10-04", "100.00", "PIX", "PARTIAL_PAYMENT"));
+            "pay-reconcile-next", "2026-10-04", "100.00", "PIX", "PARTIAL_PAYMENT"));
     PLUGGY.addTransaction(
         "acc-card",
         new TransactionFixture(

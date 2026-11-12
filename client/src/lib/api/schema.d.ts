@@ -1512,12 +1512,12 @@ export interface components {
             level?: string | null;
             last4?: string | null;
             usedAmount: string;
-            /** @description Dívida total do cartão, considerando faturas não pagas e saldo do provedor. */
+            /** @description Dívida total do cartão, somando faturas não pagas e a diferença do saldo do provedor em relação à fatura corrente. */
             outstanding: string;
             /** @description Parte da dívida já faturada (faturas não pagas). */
             invoicedOutstanding: string;
-            /** @description Parte da dívida ainda não faturada, segundo o saldo do provedor. */
-            unbilledAmount: string;
+            /** @description Diferença entre o saldo do provedor e a fatura corrente local; não representa compras a faturar. */
+            providerDifference: string;
             /** @description Percentual utilizado do limite, com duas casas decimais. */
             utilization: string | null;
             /** Format: date */
@@ -1676,7 +1676,7 @@ export interface components {
             hasAdjustments: boolean;
             /** @description Quantidade de ajustes manuais. */
             adjustmentCount: number;
-            /** @description Bill oficial do provedor para conciliação; ausente quando o conector não a retorna. Não altera os totais locais. */
+            /** @description Bill oficial do provedor para conciliação; ausente quando o conector não a retorna. Não reescreve compras, mas a evidência de pagamento participa do saldo e do status locais. */
             providerBill?: components["schemas"]["ProviderBill"];
             /** @description Verdadeiro quando há pagamento confirmado sem compras locais no ciclo; indica lacuna no histórico do conector. */
             missingPurchases: boolean;
@@ -1688,15 +1688,19 @@ export interface components {
             dueDate: string;
             total: string;
             minimumPayment?: string;
-            /** @description Soma dos pagamentos oficiais informados na Bill e dentro da janela do ciclo. */
+            /** @description Pagamentos da Bill seguinte aplicados a esta fatura, limitados ao total oficial. */
             paymentsTotal: string;
+            /** @description Encargos financeiros da Bill seguinte usados na verificação de quitação. */
+            financeCharges: string;
+            /** @description Verdadeiro quando os pagamentos da Bill seguinte cobrem o total desta Bill e os encargos do ciclo. */
+            settled: boolean;
             /** @description total local menos total oficial. */
             totalDifference: string;
-            /** @description pagamentos locais menos pagamentos oficiais. */
+            /** @description pagamentos locais menos pagamentos oficiais aplicados. */
             paymentsDifference: string;
-            /** @description Verdadeiro quando total e pagamentos oficiais coincidem com os locais. */
+            /** @description Verdadeiro quando total e pagamentos oficiais aplicados coincidem com os locais. */
             reconciled: boolean;
-            /** @description Pagamentos da Bill descartados por estarem fora da janela do ciclo (dados antigos do conector). */
+            /** @description Pagamentos da Bill seguinte descartados por estarem fora da janela do ciclo (dados antigos do conector). */
             ignoredPayments: number;
             /** Format: date */
             syncedOn: string;

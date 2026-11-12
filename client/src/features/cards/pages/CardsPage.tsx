@@ -203,7 +203,7 @@ function CardTile({ card }: { readonly card: CardOverviewItem }) {
           </p>
           <p className="mt-1 text-caption text-ink-muted">
             {formatMoney(card.invoicedOutstanding, card.currency)} faturado ·{' '}
-            {formatMoney(card.unbilledAmount, card.currency)} a faturar
+            {formatMoney(card.providerDifference, card.currency)} de diferença do provedor
           </p>
         </div>
       ) : (

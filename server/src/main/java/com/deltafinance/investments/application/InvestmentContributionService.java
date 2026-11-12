@@ -429,7 +429,8 @@ public class InvestmentContributionService {
       }
       YearMonth month = YearMonth.from(date);
       String type = transaction.getType();
-      BigDecimal amount = decimal(decryptTransaction(userId, transaction, "net_amount"));
+      BigDecimal netAmount = decimal(decryptTransaction(userId, transaction, "net_amount"));
+      BigDecimal amount = netAmount;
       if (amount == null) {
         amount = decimal(decryptTransaction(userId, transaction, "amount"));
       }
@@ -492,7 +493,10 @@ public class InvestmentContributionService {
                 "PROVIDER"));
       }
 
-      BigDecimal expenses = decimal(decryptTransaction(userId, transaction, "expenses"));
+      // A Pluggy define netAmount como o valor já incluindo as despesas. Quando ele existe, as
+      // taxas não podem ser somadas de novo; apenas o valor bruto (sem netAmount) as expõe à parte.
+      BigDecimal expenses =
+          netAmount == null ? decimal(decryptTransaction(userId, transaction, "expenses")) : null;
       if (expenses != null && expenses.signum() > 0) {
         expensesByMonth.merge(month, expenses, BigDecimal::add);
         flows.add(

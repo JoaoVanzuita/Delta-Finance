@@ -99,7 +99,9 @@ public class WealthService {
       }
     }
 
-    for (InvestmentHoldingView holding : investmentQueryService.holdings(userId, "ACTIVE", null)) {
+    // A leitura inclui também posições fora do filtro BRL para que moeda estrangeira apareça como
+    // exclusão explícita, em vez de desaparecer silenciosamente do patrimônio.
+    for (InvestmentHoldingView holding : investmentQueryService.holdings(userId, "ALL", null)) {
       addProviderInvestment(accumulator, holding, today);
     }
 
@@ -355,6 +357,11 @@ public class WealthService {
 
   private void addProviderInvestment(
       Accumulator accumulator, InvestmentHoldingView holding, LocalDate today) {
+    // Posições encerradas ou indisponíveis continuam fora do consolidado, como antes. A moeda é
+    // tratada separadamente para permanecer observável na lista de exclusões.
+    if (holding.unavailableAt() != null || "CLOSED".equals(holding.status())) {
+      return;
+    }
     String name =
         holding.name() == null || holding.name().isBlank()
             ? "Posição de investimento importada"

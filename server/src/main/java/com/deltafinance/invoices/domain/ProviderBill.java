@@ -12,8 +12,9 @@ import java.util.UUID;
 /**
  * Bill oficial do provedor, guardada como referência de conciliação.
  *
- * <p>A fatura local continua sendo a fonte de verdade: esta entidade nunca altera totais nem saldo
- * devedor. Ela permite comparar total, pagamento mínimo, vencimento e pagamentos oficiais.
+ * <p>Esta entidade não reescreve compras locais. Ela guarda total, pagamento mínimo, vencimento,
+ * pagamentos e encargos financeiros; a evidência de quitação da Bill anterior participa do cálculo
+ * de pagamentos, saldo devedor e status da fatura local.
  */
 @Entity
 @Table(name = "provider_bill")
@@ -43,6 +44,9 @@ public class ProviderBill extends BaseEntity {
   @Column(name = "payments_total_enc", nullable = false, columnDefinition = "bytea")
   private byte[] paymentsTotalEnc;
 
+  @Column(name = "finance_charges_total_enc", columnDefinition = "bytea")
+  private byte[] financeChargesTotalEnc;
+
   @Column(name = "currency", nullable = false, length = 3)
   private String currency;
 
@@ -63,6 +67,7 @@ public class ProviderBill extends BaseEntity {
       byte[] totalEnc,
       byte[] minimumPaymentEnc,
       byte[] paymentsTotalEnc,
+      byte[] financeChargesTotalEnc,
       String currency,
       Instant syncedAt) {
     super(id);
@@ -74,6 +79,7 @@ public class ProviderBill extends BaseEntity {
     this.totalEnc = Objects.requireNonNull(totalEnc, "totalEnc");
     this.minimumPaymentEnc = minimumPaymentEnc;
     this.paymentsTotalEnc = Objects.requireNonNull(paymentsTotalEnc, "paymentsTotalEnc");
+    this.financeChargesTotalEnc = financeChargesTotalEnc;
     this.currency = Objects.requireNonNull(currency, "currency");
     this.syncedAt = Objects.requireNonNull(syncedAt, "syncedAt");
   }
@@ -84,6 +90,7 @@ public class ProviderBill extends BaseEntity {
       byte[] totalEnc,
       byte[] minimumPaymentEnc,
       byte[] paymentsTotalEnc,
+      byte[] financeChargesTotalEnc,
       String currency,
       Instant syncedAt) {
     this.closingDate = closingDate;
@@ -91,6 +98,7 @@ public class ProviderBill extends BaseEntity {
     this.totalEnc = Objects.requireNonNull(totalEnc, "totalEnc");
     this.minimumPaymentEnc = minimumPaymentEnc;
     this.paymentsTotalEnc = Objects.requireNonNull(paymentsTotalEnc, "paymentsTotalEnc");
+    this.financeChargesTotalEnc = financeChargesTotalEnc;
     this.currency = Objects.requireNonNull(currency, "currency");
     this.syncedAt = Objects.requireNonNull(syncedAt, "syncedAt");
   }
@@ -125,6 +133,10 @@ public class ProviderBill extends BaseEntity {
 
   public byte[] getPaymentsTotalEnc() {
     return paymentsTotalEnc;
+  }
+
+  public byte[] getFinanceChargesTotalEnc() {
+    return financeChargesTotalEnc;
   }
 
   public String getCurrency() {

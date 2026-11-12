@@ -259,6 +259,8 @@ describe('detalhe da fatura', () => {
         total: '118.00',
         minimumPayment: '24.00',
         paymentsTotal: '20.00',
+        financeCharges: '0.00',
+        settled: false,
         totalDifference: '2.00',
         paymentsDifference: '0.00',
         reconciled: false,
@@ -280,7 +282,7 @@ describe('detalhe da fatura', () => {
     expect(screen.getByText('Divergente')).toBeInTheDocument()
     expect(screen.getByText('Total oficial')).toBeInTheDocument()
     expect(screen.getByText('Pagamento mínimo')).toBeInTheDocument()
-    expect(screen.getByText('Pagamentos oficiais')).toBeInTheDocument()
+    expect(screen.getByText('Pagamentos aplicados (Bill seguinte)')).toBeInTheDocument()
     expect(screen.getByText('Diferença de total (local − oficial)')).toBeInTheDocument()
     expect(screen.getByText('20/10/2026 · Pix · Pagamento parcial')).toBeInTheDocument()
     expect(screen.getByText(/O ajuste de conciliação é sempre explícito/)).toBeInTheDocument()
@@ -296,6 +298,8 @@ describe('detalhe da fatura', () => {
         total: '140.00',
         minimumPayment: '24.00',
         paymentsTotal: '20.00',
+        financeCharges: '0.00',
+        settled: false,
         totalDifference: '-20.00',
         paymentsDifference: '0.00',
         reconciled: false,

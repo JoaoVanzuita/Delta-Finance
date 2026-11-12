@@ -3,6 +3,8 @@ package com.deltafinance.reporting.application;
 import com.deltafinance.categories.domain.CategoryKind;
 import com.deltafinance.reporting.application.ReportEntry.Direction;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,9 +54,34 @@ class ReportCategoryAggregator {
       }
       aggregate.count++;
     }
-    // Nenhuma categoria pode exibir despesa negativa: a redução é limitada ao que entrou nela.
+    // Nenhuma categoria pode exibir despesa negativa. Quando as reduções de uma categoria superam
+    // suas despesas (por exemplo, um ajuste de fatura sem categoria), o excedente é transportado
+    // para as demais categorias em ordem decrescente de valor. Assim a soma das categorias continua
+    // igual ao resumo, à série temporal e ao drill-down, em vez de a redução desaparecer.
+    BigDecimal excess = BigDecimal.ZERO;
     for (CategoryAggregate aggregate : aggregates.values()) {
-      aggregate.amount = aggregate.amount.max(BigDecimal.ZERO);
+      if (aggregate.amount.signum() < 0) {
+        excess = excess.add(aggregate.amount.negate());
+        aggregate.amount = BigDecimal.ZERO;
+      }
+    }
+    if (excess.signum() > 0) {
+      List<CategoryAggregate> positives =
+          new ArrayList<>(
+              aggregates.values().stream()
+                  .filter(aggregate -> aggregate.amount.signum() > 0)
+                  .sorted(
+                      Comparator.comparing((CategoryAggregate aggregate) -> aggregate.amount)
+                          .reversed())
+                  .toList());
+      for (CategoryAggregate aggregate : positives) {
+        if (excess.signum() <= 0) {
+          break;
+        }
+        BigDecimal applied = excess.min(aggregate.amount);
+        aggregate.amount = aggregate.amount.subtract(applied);
+        excess = excess.subtract(applied);
+      }
     }
     return aggregates;
   }

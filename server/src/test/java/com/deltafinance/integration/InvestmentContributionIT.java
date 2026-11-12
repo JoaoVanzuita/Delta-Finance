@@ -214,6 +214,44 @@ class InvestmentContributionIT extends PostgresTestBase {
   }
 
   @Test
+  void taxasNaoSaoSomadasQuandoNetAmountJaAsInclui() throws Exception {
+    String investmentAccountId = accountIdByName("XP Investimentos");
+    alice
+        .put(
+            "/api/v1/accounts/" + investmentAccountId + "/investment",
+            Map.of("investmentAccount", true))
+        .andExpect(status().isOk());
+
+    String today = LocalDate.now().toString();
+    Map<String, Object> buyWithFees = buy(today);
+    buyWithFees.put("amount", "1000.00");
+    // A Pluggy define netAmount como o valor já líquido de despesas: 1000 de aplicação + 10 de
+    // taxa.
+    buyWithFees.put("netAmount", "1010.00");
+    buyWithFees.put("expenses", new java.math.BigDecimal("10.00"));
+    PLUGGY.setInvestmentTransactions("inv-1", List.of(buyWithFees));
+
+    alice
+        .post("/api/v1/connections/" + connectionIdByName("XP") + "/sync", null)
+        .andExpect(status().isAccepted());
+    syncJobService.processNext("worker", "contribution-fees");
+
+    JsonNode report =
+        json(
+            alice
+                .get("/api/v1/investments/contributions")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+    assertThat(report.path("applied").asString()).isEqualTo("1010.00");
+    assertThat(report.path("fees").asString()).isEqualTo("0.00");
+    assertThat(report.path("idleCash").asString()).isEqualTo("0.00");
+    assertThat(report.path("reconciliationDifference").asString()).isEqualTo("0.00");
+  }
+
+  @Test
   void fluxosDePosicaoEmOutraMoedaNaoEntramNoRelatorioEmBrl() throws Exception {
     String investmentAccountId = accountIdByName("XP Investimentos");
     alice

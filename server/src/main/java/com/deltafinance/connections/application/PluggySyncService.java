@@ -1,6 +1,7 @@
 package com.deltafinance.connections.application;
 
 import com.deltafinance.accounts.application.AccountImportService;
+import com.deltafinance.accounts.domain.AccountType;
 import com.deltafinance.connections.config.SyncProperties;
 import com.deltafinance.connections.domain.ConnectionStatus;
 import com.deltafinance.connections.domain.PluggyConnection;
@@ -193,8 +194,7 @@ public class PluggySyncService {
             exception.getClass().getSimpleName());
       }
       cancellationRegistry.checkpoint();
-      LocalDate from = windowFrom == null ? defaultWindowFrom(connection) : windowFrom;
-      stats = transactionImportService.importRange(integration, connection.getId(), from);
+      stats = importTransactions(integration, connection, windowFrom);
       cancellationRegistry.checkpoint();
 
       Instant finishedAt = clock.now();
@@ -274,6 +274,35 @@ public class PluggySyncService {
           previousConnectionStatus,
           previousIntegrationStatus);
     }
+  }
+
+  private ImportStats importTransactions(
+      PluggyIntegration integration, PluggyConnection connection, LocalDate windowFrom) {
+    if (windowFrom != null) {
+      return transactionImportService.importRange(integration, connection.getId(), windowFrom);
+    }
+    LocalDate dailyFrom = defaultWindowFrom(connection);
+    ImportStats nonCards =
+        transactionImportService.importRange(
+            integration,
+            connection.getId(),
+            dailyFrom,
+            false,
+            account -> !AccountType.CREDIT.equals(account.getType()));
+    LocalDate floor = clock.today().minusMonths(properties.getReconciliationWindowMonths());
+    LocalDate pendingFrom =
+        transactionImportService.earliestPendingCreditCardDate(
+            integration.getUserId(), connection.getId(), floor);
+    LocalDate cardFrom =
+        pendingFrom != null && pendingFrom.isBefore(dailyFrom) ? pendingFrom : dailyFrom;
+    ImportStats cards =
+        transactionImportService.importRange(
+            integration,
+            connection.getId(),
+            cardFrom,
+            false,
+            account -> AccountType.CREDIT.equals(account.getType()));
+    return nonCards.plus(cards);
   }
 
   private SyncResult interrupted(

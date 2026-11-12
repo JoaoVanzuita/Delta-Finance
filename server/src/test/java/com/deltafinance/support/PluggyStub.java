@@ -77,6 +77,8 @@ public final class PluggyStub {
   public record BillPaymentFixture(
       String externalId, String paymentDate, String amount, String paymentMode, String valueType) {}
 
+  public record BillFinanceChargeFixture(String externalId, String type, String amount) {}
+
   private final MockWebServer server = new MockWebServer();
   private final Map<String, String> clients = new ConcurrentHashMap<>();
   private final Map<String, ItemFixture> items = new ConcurrentHashMap<>();
@@ -87,6 +89,8 @@ public final class PluggyStub {
       new ConcurrentHashMap<>();
   private final Map<String, List<BillFixture>> billsByAccount = new ConcurrentHashMap<>();
   private final Map<String, List<BillPaymentFixture>> billPaymentsByBill =
+      new ConcurrentHashMap<>();
+  private final Map<String, List<BillFinanceChargeFixture>> billFinanceChargesByBill =
       new ConcurrentHashMap<>();
   private final Map<String, Map<String, Object>> installmentMetadataByTransaction =
       new ConcurrentHashMap<>();
@@ -291,6 +295,12 @@ public final class PluggyStub {
     billPaymentsByBill
         .computeIfAbsent(accountId + "|" + billExternalId, ignored -> new CopyOnWriteArrayList<>())
         .add(payment);
+  }
+
+  public void setBillFinanceCharges(
+      String accountId, String billExternalId, List<BillFinanceChargeFixture> charges) {
+    billFinanceChargesByBill.put(
+        accountId + "|" + billExternalId, new CopyOnWriteArrayList<>(charges));
   }
 
   /** Adiciona uma posição de investimento ao item. */
@@ -630,6 +640,18 @@ public final class PluggyStub {
           paymentResults.add(paymentBody);
         }
         body.put("payments", paymentResults);
+        List<BillFinanceChargeFixture> charges =
+            billFinanceChargesByBill.getOrDefault(accountId + "|" + bill.externalId(), List.of());
+        List<Map<String, Object>> chargeResults = new ArrayList<>();
+        for (BillFinanceChargeFixture charge : charges) {
+          Map<String, Object> chargeBody = new LinkedHashMap<>();
+          chargeBody.put("id", charge.externalId());
+          chargeBody.put("type", charge.type());
+          chargeBody.put("amount", charge.amount());
+          chargeBody.put("currencyCode", "BRL");
+          chargeResults.add(chargeBody);
+        }
+        body.put("financeCharges", chargeResults);
         results.add(body);
       }
       return response(

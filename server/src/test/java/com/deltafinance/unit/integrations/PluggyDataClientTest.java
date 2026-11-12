@@ -21,9 +21,9 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Contrato do cliente de transações da Pluggy.
  *
- * <p>Regressão: o cursor retornado em {@code next} é uma query string pronta; enviá-lo inteiro como
- * {@code after} faz a segunda página retornar 400. O filtro de data também deve usar {@code
- * dateFrom}, não {@code from}.
+ * <p>Regressão: o cursor retornado em {@code next} é uma query string pronta; ela deve ser
+ * reutilizada como recebida na página seguinte, preservando filtros e codificação. O filtro de data
+ * também deve usar {@code dateFrom}, não {@code from}.
  */
 class PluggyDataClientTest {
 
@@ -62,7 +62,7 @@ class PluggyDataClientTest {
                      "amount": -10.00, "date": "2026-10-01", "status": "POSTED",
                      "currencyCode": "BRL"}
                   ],
-                  "next": "?accountId=acc-1&after=YWJjPT0%3D"
+                  "next": "?accountId=acc-1&dateFrom=2026-10-01&after=YWJjPT0%3D"
                 }
                 """));
     server.enqueue(
@@ -93,9 +93,38 @@ class PluggyDataClientTest {
     assertThat(first.getRequestUrl().queryParameter("pageSize")).isNull();
 
     RecordedRequest second = server.takeRequest();
-    // O valor é decodificado e reencodado como parâmetro normal da requisição.
+    // A query "next" é reutilizada exatamente como recebida, incluindo filtros e codificação.
+    assertThat(second.getPath())
+        .isEqualTo("/v2/transactions?accountId=acc-1&dateFrom=2026-10-01&after=YWJjPT0%3D");
     assertThat(second.getRequestUrl().queryParameter("after")).isEqualTo("YWJjPT0=");
     assertThat(second.getRequestUrl().queryParameter("dateFrom")).isEqualTo("2026-10-01");
+  }
+
+  @Test
+  void cursorInvalidoInterrompeComoLeituraInconclusiva() {
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                """
+                {
+                  "results": [
+                    {"id": "tx-1", "accountId": "acc-1", "description": "Primeira",
+                     "amount": -10.00, "date": "2026-10-01", "status": "POSTED",
+                     "currencyCode": "BRL"}
+                  ],
+                  "next": "http://[cursor-invalido"
+                }
+                """));
+
+    PluggyModels.PluggyTransactionPage page =
+        client.listTransactions("api-key", "acc-1", LocalDate.of(2026, 10, 1), null);
+
+    assertThat(page.items())
+        .extracting(PluggyModels.PluggyTransaction::externalId)
+        .containsExactly("tx-1");
+    assertThat(page.complete()).isFalse();
+    assertThat(server.getRequestCount()).isEqualTo(1);
   }
 
   @Test

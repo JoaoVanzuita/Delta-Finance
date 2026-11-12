@@ -22,9 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Persiste as Bills oficiais do provedor como referência de conciliação.
  *
- * <p>Não altera a fatura local. O upsert é por {@code (card, external_bill_id_hash)} e os
+ * <p>Não reescreve compras locais. O upsert é por {@code (card, external_bill_id_hash)} e os
  * pagamentos oficiais são atualizados em conjunto, removendo apenas os que deixaram de existir na
- * Bill. Identificadores externos nunca são gravados em claro.
+ * Bill. A evidência de quitação da Bill seguinte participa do recálculo de pagamentos, saldo e
+ * status da fatura local. Identificadores externos nunca são gravados em claro.
  */
 @Service
 public class ProviderBillImportService {
@@ -83,6 +84,12 @@ public class ProviderBillImportService {
               : bill.payments().stream()
                   .map(payment -> scale(payment.amount()))
                   .reduce(Money.scaled(BigDecimal.ZERO), BigDecimal::add);
+      BigDecimal financeChargesTotal =
+          bill.financeCharges() == null
+              ? Money.scaled(BigDecimal.ZERO)
+              : bill.financeCharges().stream()
+                  .map(charge -> scale(charge.amount()))
+                  .reduce(Money.scaled(BigDecimal.ZERO), BigDecimal::add);
       String currency =
           bill.currency() == null || bill.currency().isBlank() ? "BRL" : bill.currency();
 
@@ -101,6 +108,8 @@ public class ProviderBillImportService {
                     ? null
                     : encryptBill(billId, userId, "minimum_payment", minimum.toPlainString()),
                 encryptBill(billId, userId, "payments_total", paymentsTotal.toPlainString()),
+                encryptBill(
+                    billId, userId, "finance_charges_total", financeChargesTotal.toPlainString()),
                 currency,
                 now);
       } else {
@@ -112,6 +121,11 @@ public class ProviderBillImportService {
                 ? null
                 : encryptBill(entity.getId(), userId, "minimum_payment", minimum.toPlainString()),
             encryptBill(entity.getId(), userId, "payments_total", paymentsTotal.toPlainString()),
+            encryptBill(
+                entity.getId(),
+                userId,
+                "finance_charges_total",
+                financeChargesTotal.toPlainString()),
             currency,
             now);
       }

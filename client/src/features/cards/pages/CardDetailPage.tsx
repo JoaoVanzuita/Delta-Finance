@@ -211,12 +211,12 @@ export function CardDetailPage() {
                 {formatMoney(card.outstanding, currency)}
               </p>
               <p className="mt-1 text-body-sm text-ink-muted">
-                Soma das faturas não pagas e das compras ainda não faturadas deste cartão. Não é
-                saldo em conta.
+                Soma das faturas não pagas. A diferença informada pelo provedor aparece separada e
+                não representa compras ainda não faturadas.
               </p>
               <p className="mt-2 text-caption text-ink-muted">
                 {formatMoney(card.invoicedOutstanding, currency)} faturado ·{' '}
-                {formatMoney(card.unbilledAmount, currency)} a faturar
+                {formatMoney(card.providerDifference, currency)} de diferença do provedor
               </p>
             </Card>
 

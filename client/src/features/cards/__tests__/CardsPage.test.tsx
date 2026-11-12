@@ -28,6 +28,8 @@ const OVERVIEW = {
       last4: '1234',
       usedAmount: '180.00',
       outstanding: '180.00',
+      invoicedOutstanding: '180.00',
+      providerDifference: '0.00',
       utilization: '3.60',
       nextDueDate: '2026-11-15',
       currentInvoice: {
@@ -79,6 +81,8 @@ const OVERVIEW = {
       creditBalance: null,
       usedAmount: '30.00',
       outstanding: '0.00',
+      invoicedOutstanding: '0.00',
+      providerDifference: '0.00',
       utilization: null,
       nextDueDate: null,
       currentInvoice: null,

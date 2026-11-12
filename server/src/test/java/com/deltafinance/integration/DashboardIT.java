@@ -253,8 +253,9 @@ class DashboardIT extends PostgresTestBase {
 
     JsonNode summary = summary(alice, "from=2026-10-01&to=2026-10-31&period=MONTH");
     assertThat(summary.path("income").asString()).isEqualTo("1000.00");
-    // O crédito de 50 entrou depois do fechamento e vira crédito para o próximo ciclo.
-    assertThat(summary.path("expenses").asString()).isEqualTo("600.00");
+    // O crédito de 50 entrou depois do fechamento e vira crédito para o próximo ciclo. No
+    // relatório ele continua reduzindo a despesa de outubro, como a série e o drill-down já faziam.
+    assertThat(summary.path("expenses").asString()).isEqualTo("560.00");
     // O crédito entrou depois do fechamento: vira crédito para o próximo ciclo, não reduz a
     // fatura já fechada.
     assertThat(summary.path("cardOutstandingBalance").asString()).isEqualTo("310.00");
@@ -327,6 +328,53 @@ class DashboardIT extends PostgresTestBase {
         .get("/api/v1/dashboard/summary?from=2020-01-01&to=2026-12-31")
         .andExpect(status().isUnprocessableEntity())
         .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+  }
+
+  @Test
+  void reducaoSemCategoriaMantemResumoCategoriasSerieEDrillDownIguais() throws Exception {
+    String invoiceId = invoices().path("items").get(0).path("id").asString();
+    addInvoiceItem(
+        invoiceId, "CREDIT", "EXPENSE_DECREASE", "Ajuste sem categoria", "50.00", "2026-10-09");
+
+    JsonNode summary = summary(alice, "from=2026-10-01&to=2026-10-31&period=MONTH");
+    assertThat(summary.path("expenses").asString()).isEqualTo("560.00");
+
+    JsonNode categories =
+        json(
+            alice
+                .get("/api/v1/dashboard/categories?from=2026-10-01&to=2026-10-31&period=MONTH")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    BigDecimal categoryTotal = BigDecimal.ZERO;
+    for (JsonNode category : categories) {
+      categoryTotal = categoryTotal.add(new BigDecimal(category.path("amount").asString()));
+    }
+    assertThat(categoryTotal.setScale(2)).isEqualByComparingTo("560.00");
+
+    JsonNode series =
+        json(
+            alice
+                .get("/api/v1/dashboard/timeseries?from=2026-10-01&to=2026-10-31&period=MONTH")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    BigDecimal seriesExpenses = BigDecimal.ZERO;
+    for (JsonNode bucket : series) {
+      seriesExpenses = seriesExpenses.add(new BigDecimal(bucket.path("expenses").asString()));
+    }
+    assertThat(seriesExpenses.setScale(2)).isEqualByComparingTo("560.00");
+
+    JsonNode entries = entries(alice, "from=2026-10-01&to=2026-10-31&limit=100");
+    BigDecimal entrySum = BigDecimal.ZERO;
+    for (JsonNode entry : entries.path("items")) {
+      entrySum = entrySum.add(new BigDecimal(entry.path("amount").asString()));
+    }
+    // Sem filtro de direção, o drill-down soma receitas e despesas: deve bater com periodResult.
+    assertThat(entrySum.setScale(2))
+        .isEqualByComparingTo(new BigDecimal(summary.path("periodResult").asString()));
   }
 
   @Test

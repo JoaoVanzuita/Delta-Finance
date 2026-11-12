@@ -4,9 +4,9 @@ import com.deltafinance.categories.domain.Category;
 import com.deltafinance.categories.domain.CategoryKind;
 import com.deltafinance.categories.domain.CategoryRepository;
 import com.deltafinance.shared.crypto.EncryptedValueReader;
+import com.deltafinance.transactions.application.CardPaymentDescription;
 import com.deltafinance.transactions.domain.Transaction;
 import com.deltafinance.transactions.domain.TransactionType;
-import java.text.Normalizer;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -27,6 +27,10 @@ class CardPaymentClassifier {
   }
 
   boolean isCardPayment(Transaction transaction, Set<UUID> transferCategoryIds) {
+    // O metadado estruturado do provedor tem precedência sobre qualquer heurística de texto.
+    if (isProviderCardPayment(transaction)) {
+      return true;
+    }
     if (transaction.getType() != TransactionType.REFUND) {
       return false;
     }
@@ -35,6 +39,18 @@ class CardPaymentClassifier {
       return true;
     }
     return isPaymentDescription(transaction);
+  }
+
+  /** {@code PAGAMENTO_FATURA} é o sinal canônico do provedor para pagamento de cartão. */
+  private static boolean isProviderCardPayment(Transaction transaction) {
+    String operationType = transaction.getOperationType();
+    if (operationType == null || operationType.isBlank()) {
+      return false;
+    }
+    String normalized = operationType.trim().toUpperCase(Locale.ROOT);
+    return normalized.equals("PAGAMENTO_FATURA")
+        || normalized.equals("CREDIT_CARD_PAYMENT")
+        || normalized.contains("PAGAMENTO_FATURA");
   }
 
   boolean isPaymentDescription(Transaction transaction) {
@@ -46,11 +62,7 @@ class CardPaymentClassifier {
               "description_effective",
               transaction.getId(),
               transaction.getDescriptionEffectiveEnc());
-      String normalized =
-          Normalizer.normalize(description, Normalizer.Form.NFD)
-              .replaceAll("\\p{M}", "")
-              .toLowerCase(Locale.ROOT);
-      return normalized.contains("pagamento") || normalized.contains("payment");
+      return CardPaymentDescription.looksLikePayment(description);
     } catch (RuntimeException exception) {
       return false;
     }

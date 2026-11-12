@@ -341,6 +341,55 @@ class InternalMatchIT extends PostgresTestBase {
   }
 
   @Test
+  void reabreCorrespondenciaQuandoValorSaiDaToleranciaOuDataSaiDaJanela() throws Exception {
+    PLUGGY.addTransaction(
+        "acc-alice",
+        new TransactionFixture(
+            "tx-bank-out",
+            "acc-alice",
+            "Transferência enviada",
+            "-150.00",
+            "2026-10-22",
+            "POSTED",
+            null));
+    PLUGGY.addTransaction(
+        "card-alice",
+        new TransactionFixture(
+            "tx-card-in",
+            "card-alice",
+            "Pagamento recebido",
+            "-150.00",
+            "2026-10-22",
+            "POSTED",
+            null));
+    sync();
+
+    JsonNode match = internalMatches("PENDING").path("items").get(0);
+    alice
+        .post("/api/v1/internal-matches/" + match.path("id").asString() + "/confirm", null)
+        .andExpect(status().isOk());
+    assertThat(internalMatches("CONFIRMED").path("items")).hasSize(1);
+
+    // A perna do cartão muda de valor para fora da tolerância: o par confirmado deve ser reaberto.
+    PLUGGY.setTransactions(
+        "card-alice",
+        java.util.List.of(
+            new TransactionFixture(
+                "tx-card-in",
+                "card-alice",
+                "Pagamento recebido",
+                "-140.00",
+                "2026-10-22",
+                "POSTED",
+                null)));
+    sync();
+
+    assertThat(internalMatches("CONFIRMED").path("items")).isEmpty();
+    JsonNode card = findTransactionByDescription(transactions(alice), "Pagamento recebido");
+    assertThat(card.path("reconciliationState").asString()).isEqualTo("NONE");
+  }
+
+  @Test
   void aplicaToleranciaJanelaEIgnoraMesmaConta() throws Exception {
     String wallet = createAccount("CASH", "Carteira");
 
@@ -365,6 +414,15 @@ class InternalMatchIT extends PostgresTestBase {
     // Mesma conta: não é transferência interna.
     createTransaction("DEBIT", bankAccountId, "-100.00", "2026-10-22");
     createTransaction("CREDIT", bankAccountId, "100.00", "2026-10-22");
+    assertThat(internalMatches("PENDING").path("items")).isEmpty();
+  }
+
+  @Test
+  void naoSugereMovimentoInternoEntreMoedasDiferentes() throws Exception {
+    String usdWallet = createAccount("CASH", "Carteira USD", "USD");
+    createTransaction("DEBIT", bankAccountId, "-100.00", "2026-10-22");
+    createTransaction("CREDIT", usdWallet, "100.00", "2026-10-22");
+
     assertThat(internalMatches("PENDING").path("items")).isEmpty();
   }
 
@@ -514,6 +572,10 @@ class InternalMatchIT extends PostgresTestBase {
   }
 
   private String createAccount(String type, String alias) throws Exception {
+    return createAccount(type, alias, "BRL");
+  }
+
+  private String createAccount(String type, String alias, String currency) throws Exception {
     String body =
         alice
             .post(
@@ -523,7 +585,7 @@ class InternalMatchIT extends PostgresTestBase {
                     "alias", alias,
                     "referenceBalance", "0.00",
                     "referenceDate", "2026-10-23T12:00:00Z",
-                    "currency", "BRL"))
+                    "currency", currency))
             .andExpect(status().isCreated())
             .andReturn()
             .getResponse()

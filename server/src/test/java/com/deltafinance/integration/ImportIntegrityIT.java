@@ -186,6 +186,44 @@ class ImportIntegrityIT extends PostgresTestBase {
     assertThat(summary.path("expenses").asString()).isEqualTo("120.00");
   }
 
+  @Test
+  void reembolsoImportadoAntesDaDespesaOriginalEhVinculadoNoMesmoLote() throws Exception {
+    addItem("item-c08", "acc-c08", "BANK", "Conta C08", "1000.00");
+    // A ordem reflete o provedor entregando o reembolso antes da compra correspondente.
+    PLUGGY.addTransaction(
+        "acc-c08",
+        new TransactionFixture(
+            "tx-c08-refund",
+            "acc-c08",
+            "Estorno Mercado",
+            "30.00",
+            "2026-10-20",
+            "POSTED",
+            "Mercado"));
+    PLUGGY.addTransaction(
+        "acc-c08",
+        new TransactionFixture(
+            "tx-c08-purchase", "acc-c08", "Mercado", "-50.00", "2026-10-10", "POSTED", "Mercado"));
+
+    connect("item-c08");
+
+    JsonNode transactions = transactions();
+    JsonNode purchase = find(transactions, "Mercado");
+    JsonNode refund = find(transactions, "Estorno Mercado");
+    assertThat(refund.path("relatedTransactionId").asString())
+        .isEqualTo(purchase.path("id").asString());
+
+    JsonNode summary =
+        json(
+            alice
+                .get("/api/v1/dashboard/summary?from=2026-10-01&to=2026-10-31")
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(summary.path("expenses").asString()).isEqualTo("20.00");
+  }
+
   private void addItem(String itemId, String accountId, String type, String alias, String balance) {
     PLUGGY.addItem(itemId, "Banco Teste", "UPDATED");
     PLUGGY.addAccount(

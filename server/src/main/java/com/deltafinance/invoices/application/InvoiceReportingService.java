@@ -5,6 +5,7 @@ import com.deltafinance.invoices.domain.InvoiceItem;
 import com.deltafinance.invoices.domain.InvoiceItemKind;
 import com.deltafinance.invoices.domain.InvoiceItemRepository;
 import com.deltafinance.invoices.domain.InvoiceRepository;
+import com.deltafinance.invoices.domain.InvoiceStatus;
 import com.deltafinance.invoices.domain.ReportingEffect;
 import com.deltafinance.shared.crypto.EncryptedValueReader;
 import com.deltafinance.shared.money.Money;
@@ -159,11 +160,60 @@ public class InvoiceReportingService {
    */
   public Map<UUID, BigDecimal> outstandingByCard(UUID userId) {
     Map<UUID, BigDecimal> result = new HashMap<>();
+    outstandingDetailByCard(userId)
+        .forEach((cardId, detail) -> result.put(cardId, detail.totalOutstanding()));
+    return result;
+  }
+
+  /**
+   * Saldo devedor total e o saldo da fatura mais recente ainda aberta.
+   *
+   * <p>O saldo da conta no provedor representa a fatura corrente. Para não duplicar essa fatura nem
+   * esconder faturas anteriores, o total local é mantido e apenas a diferença do provedor em
+   * relação à fatura corrente é somada.
+   */
+  public Map<UUID, OutstandingByCard> outstandingDetailByCard(UUID userId) {
+    Map<UUID, BigDecimal> totals = new HashMap<>();
+    Map<UUID, BigDecimal> currentOutstanding = new HashMap<>();
+    Map<UUID, Invoice> currentInvoice = new HashMap<>();
     for (Invoice invoice : invoiceRepository.findByUserIdOrderByDueDateAsc(userId)) {
       BigDecimal value = decryptOutstanding(invoice);
-      result.merge(invoice.getCardAccountId(), value, BigDecimal::add);
+      UUID cardId = invoice.getCardAccountId();
+      totals.merge(cardId, value, BigDecimal::add);
+      if (invoice.getStatus() == InvoiceStatus.PAID || value.signum() <= 0) {
+        continue;
+      }
+      Invoice existing = currentInvoice.get(cardId);
+      if (existing == null || moreRecent(invoice, existing)) {
+        currentInvoice.put(cardId, invoice);
+        currentOutstanding.put(cardId, value);
+      }
+    }
+    Map<UUID, OutstandingByCard> result = new HashMap<>();
+    for (Map.Entry<UUID, BigDecimal> entry : totals.entrySet()) {
+      result.put(
+          entry.getKey(),
+          new OutstandingByCard(
+              entry.getValue(),
+              currentOutstanding.getOrDefault(entry.getKey(), Money.scaled(BigDecimal.ZERO))));
     }
     return result;
+  }
+
+  public record OutstandingByCard(
+      BigDecimal totalOutstanding, BigDecimal currentInvoiceOutstanding) {}
+
+  private static boolean moreRecent(Invoice candidate, Invoice current) {
+    LocalDate candidateStart =
+        candidate.getCycleStart() == null ? candidate.getDueDate() : candidate.getCycleStart();
+    LocalDate currentStart =
+        current.getCycleStart() == null ? current.getDueDate() : current.getCycleStart();
+    int comparison = candidateStart.compareTo(currentStart);
+    if (comparison != 0) {
+      return comparison > 0;
+    }
+    comparison = candidate.getDueDate().compareTo(current.getDueDate());
+    return comparison != 0 ? comparison > 0 : candidate.getId().compareTo(current.getId()) > 0;
   }
 
   private BigDecimal decryptOutstanding(Invoice invoice) {

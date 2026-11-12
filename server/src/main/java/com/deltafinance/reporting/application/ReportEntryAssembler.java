@@ -227,8 +227,72 @@ class ReportEntryAssembler {
         throw new ValidationException("direction", "Direção deve ser EXPENSE ou INCOME.");
       }
     }
+    // Filtros por tipo (ex.: apenas REFUND) são visões do tipo, não o indicador geral: neles o
+    // drill-down mostra o estorno mesmo sem despesa no período. Nos demais recortes, a redução é
+    // limitada às despesas para manter resumo, categorias, série e drill-down iguais.
+    if (resolved.type() == null) {
+      capExpenseReductions(entries);
+    }
     entries.sort(Comparator.comparing(ReportEntry::occurredOn).thenComparing(ReportEntry::id));
     return entries;
+  }
+
+  /**
+   * Impede que reduções de despesa superem as despesas do período.
+   *
+   * <p>Um reembolso pode estar vinculado a uma compra de período anterior; sem esse limite o
+   * drill-down ficaria negativo enquanto o resumo e a série são limitados a zero. O corte é feito
+   * nas maiores reduções primeiro, de forma determinística, e mantém a soma do drill-down igual ao
+   * indicador.
+   */
+  private static void capExpenseReductions(List<ReportEntry> entries) {
+    BigDecimal gross = BigDecimal.ZERO;
+    BigDecimal reductions = BigDecimal.ZERO;
+    for (ReportEntry entry : entries) {
+      if (entry.direction() == Direction.EXPENSE) {
+        gross = gross.add(entry.amount().abs());
+      } else if (entry.direction() == Direction.EXPENSE_REDUCTION) {
+        reductions = reductions.add(entry.amount().abs());
+      }
+    }
+    BigDecimal excess = reductions.subtract(gross);
+    if (excess.signum() <= 0) {
+      return;
+    }
+    List<Integer> indexes = new ArrayList<>();
+    for (int index = 0; index < entries.size(); index++) {
+      if (entries.get(index).direction() == Direction.EXPENSE_REDUCTION) {
+        indexes.add(index);
+      }
+    }
+    indexes.sort(Comparator.comparing((Integer index) -> entries.get(index).amount()).reversed());
+    for (Integer index : indexes) {
+      if (excess.signum() <= 0) {
+        break;
+      }
+      ReportEntry entry = entries.get(index);
+      BigDecimal applied = excess.min(entry.amount().abs());
+      BigDecimal remaining = entry.amount().abs().subtract(applied);
+      excess = excess.subtract(applied);
+      entries.set(
+          index,
+          new ReportEntry(
+              entry.id(),
+              entry.source(),
+              entry.sourceId(),
+              entry.origin(),
+              entry.occurredOn(),
+              remaining,
+              entry.description(),
+              entry.categoryId(),
+              entry.accountId(),
+              entry.invoiceId(),
+              entry.transactionId(),
+              entry.type(),
+              entry.direction()));
+    }
+    entries.removeIf(
+        entry -> entry.direction() == Direction.EXPENSE_REDUCTION && entry.amount().signum() == 0);
   }
 
   private Map<UUID, BigDecimal> grossCardExpenses(

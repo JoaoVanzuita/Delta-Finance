@@ -123,12 +123,6 @@ final class ImportTransactionRules {
   }
 
   static boolean looksLikeCardPayment(String description) {
-    String normalized =
-        Normalizer.normalize(description == null ? "" : description, Normalizer.Form.NFD)
-            .replaceAll("\\p{M}", "")
-            .toLowerCase(Locale.ROOT);
-    return normalized.contains("pagamento")
-        || normalized.contains("payment")
-        || normalized.contains("boleto");
+    return CardPaymentDescription.looksLikePayment(description);
   }
 }

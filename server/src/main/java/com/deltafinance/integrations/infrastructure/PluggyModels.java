@@ -74,7 +74,8 @@ public final class PluggyModels {
       BigDecimal totalAmount,
       BigDecimal minimumPaymentAmount,
       String currency,
-      List<PluggyBillPayment> payments) {}
+      List<PluggyBillPayment> payments,
+      List<PluggyBillFinanceCharge> financeCharges) {}
 
   /**
    * Pagamento oficial de uma Bill.
@@ -89,6 +90,10 @@ public final class PluggyModels {
       String paymentMode,
       String valueType,
       String currency) {}
+
+  /** Encargo financeiro da Bill, somado ao total da Bill anterior na verificação de quitação. */
+  public record PluggyBillFinanceCharge(
+      String externalId, String type, BigDecimal amount, String currency) {}
 
   public record PluggyInvestment(
       String externalId,

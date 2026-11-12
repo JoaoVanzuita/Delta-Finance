@@ -3113,7 +3113,7 @@ components:
       - usedAmount
       - outstanding
       - invoicedOutstanding
-      - unbilledAmount
+      - providerDifference
       - utilization
       - nextDueDate
       - currentInvoice
@@ -3169,13 +3169,13 @@ components:
           type: string
         outstanding:
           type: string
-          description: Dívida total do cartão, considerando faturas não pagas e saldo do provedor.
+          description: Dívida total do cartão, somando faturas não pagas e a diferença do saldo do provedor em relação à fatura corrente.
         invoicedOutstanding:
           type: string
           description: Parte da dívida já faturada (faturas não pagas).
-        unbilledAmount:
+        providerDifference:
           type: string
-          description: Parte da dívida ainda não faturada, segundo o saldo do provedor.
+          description: Diferença entre o saldo do provedor e a fatura corrente local; não representa compras a faturar.
         utilization:
           type: [string, 'null']
           description: Percentual utilizado do limite, com duas casas decimais.
@@ -3522,7 +3522,7 @@ components:
         providerBill:
           allOf:
           - $ref: '#/components/schemas/ProviderBill'
-          description: Bill oficial do provedor para conciliação; ausente quando o conector não a retorna. Não altera os totais locais.
+          description: Bill oficial do provedor para conciliação; ausente quando o conector não a retorna. Não reescreve compras, mas a evidência de pagamento participa do saldo e do status locais.
         missingPurchases:
           type: boolean
           description: Verdadeiro quando há pagamento confirmado sem compras locais no ciclo; indica lacuna no histórico do conector.
@@ -3532,6 +3532,8 @@ components:
       - dueDate
       - total
       - paymentsTotal
+      - financeCharges
+      - settled
       - totalDifference
       - paymentsDifference
       - reconciled
@@ -3551,20 +3553,26 @@ components:
           type: string
         paymentsTotal:
           type: string
-          description: Soma dos pagamentos oficiais informados na Bill e dentro da janela do ciclo.
+          description: Pagamentos da Bill seguinte aplicados a esta fatura, limitados ao total oficial.
+        financeCharges:
+          type: string
+          description: Encargos financeiros da Bill seguinte usados na verificação de quitação.
+        settled:
+          type: boolean
+          description: Verdadeiro quando os pagamentos da Bill seguinte cobrem o total desta Bill e os encargos do ciclo.
         totalDifference:
           type: string
           description: total local menos total oficial.
         paymentsDifference:
           type: string
-          description: pagamentos locais menos pagamentos oficiais.
+          description: pagamentos locais menos pagamentos oficiais aplicados.
         reconciled:
           type: boolean
-          description: Verdadeiro quando total e pagamentos oficiais coincidem com os locais.
+          description: Verdadeiro quando total e pagamentos oficiais aplicados coincidem com os locais.
         ignoredPayments:
           type: integer
           minimum: 0
-          description: Pagamentos da Bill descartados por estarem fora da janela do ciclo (dados antigos do conector).
+          description: Pagamentos da Bill seguinte descartados por estarem fora da janela do ciclo (dados antigos do conector).
         syncedOn:
           type: string
           format: date

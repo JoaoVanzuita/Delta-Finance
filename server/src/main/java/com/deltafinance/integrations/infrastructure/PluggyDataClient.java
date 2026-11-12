@@ -1,6 +1,7 @@
 package com.deltafinance.integrations.infrastructure;
 
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -16,7 +17,6 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
-import org.springframework.web.util.UriUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -373,7 +373,8 @@ public class PluggyDataClient {
                 PluggyModels.decimal(node, "totalAmount"),
                 PluggyModels.decimal(node, "minimumPaymentAmount"),
                 firstText(node, "totalAmountCurrencyCode", "currencyCode", "BRL"),
-                billPayments(node.path("payments"))));
+                billPayments(node.path("payments")),
+                billFinanceCharges(node.path("financeCharges"))));
       }
       totalPages = root.path("totalPages").asInt(1);
       if (totalPages < 1) {
@@ -390,17 +391,24 @@ public class PluggyDataClient {
     String cursor = after;
     String next = null;
     for (int page = 0; page < MAX_PAGES; page++) {
-      MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-      params.add("accountId", accountId);
-      if (from != null) {
-        // A API v2 usa dateFrom/dateTo; "from" era ignorado e fazia cada sincronização
-        // percorrer todo o histórico disponível.
-        params.add("dateFrom", from.toString());
+      JsonNode root;
+      if (next == null || next.isBlank()) {
+        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+        params.add("accountId", accountId);
+        if (from != null) {
+          // A API v2 usa dateFrom/dateTo; "from" era ignorado e fazia cada sincronização
+          // percorrer todo o histórico disponível.
+          params.add("dateFrom", from.toString());
+        }
+        if (cursor != null && !cursor.isBlank()) {
+          params.add("after", cursor);
+        }
+        root = getJson("/v2/transactions", null, params, apiKey);
+      } else {
+        // "next" já é a query completa do próximo lote. Reutilizá-la como recebida preserva
+        // filtros e o formato de continuação sem reconstruir o cursor manualmente.
+        root = getJsonWithQuery("/v2/transactions", next, apiKey);
       }
-      if (cursor != null && !cursor.isBlank()) {
-        params.add("after", cursor);
-      }
-      JsonNode root = getJson("/v2/transactions", null, params, apiKey);
       JsonNode results = root.isArray() ? root : root.path("results");
       if (!results.isArray()) {
         throw new PluggyException("Resposta de transações inválida.");
@@ -433,10 +441,8 @@ public class PluggyDataClient {
       if (next == null || next.isBlank()) {
         break;
       }
-      // "next" é uma query string pronta (ex.: "?accountId=...&after=..."); enviar o
-      // valor inteiro em "after" gera 400. Extraímos somente o cursor opaco.
-      cursor = extractAfter(next);
-      if (cursor == null || cursor.isBlank()) {
+      if (!isValidNextQuery(next)) {
+        // Cursor ilegível: interrompe como leitura inconclusiva, sem marcar ausências.
         break;
       }
     }
@@ -444,34 +450,46 @@ public class PluggyDataClient {
         transactions, next, next == null || next.isBlank());
   }
 
-  private static String extractAfter(String next) {
+  private static boolean isValidNextQuery(String rawQuery) {
+    // A continuação documentada pela Pluggy é uma query string iniciada por "?". Valores que não
+    // seguem esse formato são tratados como cursor ilegível.
+    if (!rawQuery.startsWith("?")) {
+      return false;
+    }
     try {
-      String encoded =
-          UriComponentsBuilder.fromUriString(next).build().getQueryParams().getFirst("after");
-      // A documentação pede o valor de "after" já decodificado; o builder da requisição
-      // volta a codificá-lo como parâmetro normal.
-      return encoded == null
-          ? null
-          : UriUtils.decode(encoded, java.nio.charset.StandardCharsets.UTF_8);
-    } catch (RuntimeException exception) {
-      return null;
+      URI.create("/v2/transactions" + rawQuery);
+      return true;
+    } catch (IllegalArgumentException exception) {
+      return false;
     }
   }
 
   private JsonNode getJson(
       String path, String itemId, MultiValueMap<String, String> params, String apiKey) {
-    String endpoint = endpointKey(path);
-    rateLimiter.acquire(endpoint);
     String uri =
         UriComponentsBuilder.fromPath(path)
             .queryParams(params)
             .buildAndExpand(itemId == null ? java.util.Map.of() : java.util.Map.of("id", itemId))
             .toUriString();
+    return executeGet(path, uri, apiKey);
+  }
+
+  private JsonNode getJsonWithQuery(String path, String rawQuery, String apiKey) {
+    String query =
+        rawQuery == null || rawQuery.isBlank()
+            ? ""
+            : rawQuery.startsWith("?") ? rawQuery : "?" + rawQuery;
+    return executeGet(path, path + query, apiKey);
+  }
+
+  private JsonNode executeGet(String path, String uri, String apiKey) {
+    String endpoint = endpointKey(path);
+    rateLimiter.acquire(endpoint);
     try {
       String body =
           restClient
               .get()
-              .uri(uri)
+              .uri(URI.create(uri))
               .header("X-API-KEY", apiKey)
               .accept(MediaType.APPLICATION_JSON)
               .retrieve()
@@ -536,6 +554,26 @@ public class PluggyDataClient {
               firstText(payment, "currencyCode", "totalAmountCurrencyCode", "BRL")));
     }
     return payments;
+  }
+
+  private static List<PluggyModels.PluggyBillFinanceCharge> billFinanceCharges(JsonNode node) {
+    if (node == null || !node.isArray()) {
+      return List.of();
+    }
+    List<PluggyModels.PluggyBillFinanceCharge> charges = new ArrayList<>();
+    for (JsonNode charge : node) {
+      BigDecimal amount = PluggyModels.decimal(charge, "amount");
+      if (amount == null) {
+        continue;
+      }
+      charges.add(
+          new PluggyModels.PluggyBillFinanceCharge(
+              charge.path("id").asString(null),
+              charge.path("type").asString(null),
+              amount,
+              firstText(charge, "currencyCode", "totalAmountCurrencyCode", "BRL")));
+    }
+    return charges;
   }
 
   private static String firstText(JsonNode node, String first, String second, String fallback) {

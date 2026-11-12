@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -147,11 +148,27 @@ public class TransactionImportService {
 
   public ImportStats importRange(
       PluggyIntegration integration, UUID connectionId, LocalDate from, boolean reconcileIdentity) {
+    return importRange(integration, connectionId, from, reconcileIdentity, account -> true);
+  }
+
+  /**
+   * Importa a janela informada apenas para as contas aceitas pelo filtro.
+   *
+   * <p>O filtro permite separar a janela diária das contas comuns da janela de reconciliação dos
+   * cartões, que pode ser maior para capturar compras que mudaram de {@code PENDING} para {@code
+   * POSTED} depois da data original.
+   */
+  public ImportStats importRange(
+      PluggyIntegration integration,
+      UUID connectionId,
+      LocalDate from,
+      boolean reconcileIdentity,
+      Predicate<FinancialAccount> accountFilter) {
     List<FinancialAccount> accounts =
         accountRepository.findByConnectionIdOrderByCreatedAtAsc(connectionId);
     ImportStats total = ImportStats.empty();
     for (FinancialAccount account : accounts) {
-      if (account.getStatus() == AccountStatus.UNAVAILABLE) {
+      if (account.getStatus() == AccountStatus.UNAVAILABLE || !accountFilter.test(account)) {
         // Conta não retornada pela origem não deve voltar a ser consultada até reaparecer.
         continue;
       }
@@ -160,6 +177,40 @@ public class TransactionImportService {
           total.plus(importAccount(integration, connectionId, account, from, reconcileIdentity));
     }
     return total;
+  }
+
+  /**
+   * Data da compra de cartão mais antiga ainda pendente na conexão.
+   *
+   * <p>A sincronização diária usa essa data para refazer a leitura de cartões quando existe compra
+   * antiga aguardando efetivação. O piso evita consultar um histórico sem limite quando o provedor
+   * deixa uma transação presa.
+   */
+  public LocalDate earliestPendingCreditCardDate(UUID userId, UUID connectionId, LocalDate floor) {
+    LocalDate earliest = null;
+    for (FinancialAccount account :
+        accountRepository.findByConnectionIdOrderByCreatedAtAsc(connectionId)) {
+      if (account.getType() != AccountType.CREDIT
+          || account.getStatus() == AccountStatus.UNAVAILABLE) {
+        continue;
+      }
+      LocalDate candidate =
+          transactionRepository
+              .findFirstByUserIdAndAccountIdAndStatusAndReconciliationStateNotOrderByPostedOnAsc(
+                  userId,
+                  account.getId(),
+                  TransactionStatus.PENDING,
+                  ReconciliationState.SOURCE_REMOVED)
+              .map(Transaction::getPostedOn)
+              .orElse(null);
+      if (candidate != null && (earliest == null || candidate.isBefore(earliest))) {
+        earliest = candidate;
+      }
+    }
+    if (earliest != null && earliest.isBefore(floor)) {
+      return floor;
+    }
+    return earliest;
   }
 
   private ImportStats importAccount(
@@ -218,6 +269,12 @@ public class TransactionImportService {
         }
       }
 
+      // O provedor pode entregar o reembolso antes da despesa original. Depois de processar o
+      // lote, reavalia os reembolsos ainda sem vínculo para que a ordem das linhas não importe.
+      if (read > 0) {
+        linkPendingRefunds(integration.getUserId(), account);
+      }
+
       // Lista vazia é inconclusiva: não marque ausências a partir dela (FR-040/FR-046).
       // Leitura truncada/cursor inválido também é inconclusiva.
       if (read > 0 && page.complete()) {
@@ -232,6 +289,39 @@ public class TransactionImportService {
             new CardRecalculationRequestedEvent(integration.getUserId(), dirty));
       }
     }
+  }
+
+  /**
+   * Vincula reembolsos/chargebacks sem original que passaram a ter candidato após o lote.
+   *
+   * <p>A operação é idempotente: só atua quando o reembolso ainda não tem vínculo e a busca
+   * determinística encontra uma única despesa compatível. A categoria da despesa é herdada quando o
+   * usuário ainda não corrigiu a categoria do reembolso.
+   */
+  private int linkPendingRefunds(UUID userId, FinancialAccount account) {
+    int linked = 0;
+    for (Transaction refund :
+        transactionRepository.findByUserIdAndAccountIdOrderByPostedOnDescIdDesc(
+            userId, account.getId())) {
+      if (refund.getSource() != TransactionSource.IMPORTED
+          || (refund.getType() != TransactionType.REFUND
+              && refund.getType() != TransactionType.CHARGEBACK)
+          || refund.getRelatedTransactionId() != null) {
+        continue;
+      }
+      Transaction original = refundMatcher.findOriginalFor(refund).orElse(null);
+      if (original == null) {
+        continue;
+      }
+      refund.linkRelatedTransaction(original.getId());
+      if (!refund.hasEdited("category") && original.getCategoryId() != null) {
+        refund.setCategoryId(original.getCategoryId());
+      }
+      transactionRepository.save(refund);
+      eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, refund.getId()));
+      linked++;
+    }
+    return linked;
   }
 
   private int markMissingAsSourceRemoved(
@@ -340,7 +430,7 @@ public class TransactionImportService {
                 transaction,
                 categoryCache);
     UUID relatedId =
-        transaction == null
+        transaction == null || transaction.getRelatedTransactionId() == null
             ? refundMatcher
                 .findOriginal(userId, account.getId(), type, amount, postedOn, description)
                 .map(Transaction::getId)

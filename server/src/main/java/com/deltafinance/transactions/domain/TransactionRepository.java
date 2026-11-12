@@ -26,6 +26,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
   List<Transaction> findByUserIdAndAccountIdAndPostedOn(
       UUID userId, UUID accountId, LocalDate postedOn);
 
+  Optional<Transaction>
+      findFirstByUserIdAndAccountIdAndStatusAndReconciliationStateNotOrderByPostedOnAsc(
+          UUID userId, UUID accountId, TransactionStatus status, ReconciliationState state);
+
   long countByUserIdAndAccountIdAndInvoiceIdIsNullAndStatusIn(
       UUID userId, UUID accountId, Collection<TransactionStatus> statuses);
 

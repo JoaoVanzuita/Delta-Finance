@@ -104,6 +104,25 @@ public class RefundMatcher {
   }
 
   /**
+   * Reavalia o vínculo de um reembolso já importado que ainda está sem despesa original.
+   *
+   * <p>É usado nos upserts seguintes e ao final de cada lote: o provedor pode entregar o reembolso
+   * antes da compra original, e sem essa reavaliação o vínculo nunca seria tentado novamente.
+   */
+  public Optional<Transaction> findOriginalFor(Transaction refund) {
+    if (refund.getRelatedTransactionId() != null) {
+      return Optional.empty();
+    }
+    return findOriginal(
+        refund.getUserId(),
+        refund.getAccountId(),
+        refund.getType(),
+        effectiveAmount(refund),
+        refund.getPostedOn(),
+        decryptDescription(refund));
+  }
+
+  /**
    * Reembolsos com descrição apenas genérica ("Reembolso parcial") caem no critério de valor. Se a
    * descrição tem um comerciante, exige ao menos um token em comum com a despesa.
    */

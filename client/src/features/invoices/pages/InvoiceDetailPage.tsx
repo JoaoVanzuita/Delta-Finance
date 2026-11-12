@@ -478,7 +478,7 @@ function ProviderReconciliation({
           </dd>
         </div>
         <div className="rounded-card border border-line bg-surface-muted p-3">
-          <dt className="text-xs text-ink-muted">Pagamentos oficiais</dt>
+          <dt className="text-xs text-ink-muted">Pagamentos aplicados (Bill seguinte)</dt>
           <dd className="numeric mt-1 text-sm font-semibold text-ink">
             {formatMoney(bill.paymentsTotal, currency)}
           </dd>
@@ -488,6 +488,19 @@ function ProviderReconciliation({
           <dd className="mt-1 text-sm font-semibold text-ink">{formatDate(bill.dueDate)}</dd>
         </div>
       </dl>
+
+      {Number(bill.financeCharges) > 0 ? (
+        <p className="text-xs leading-relaxed text-ink-muted">
+          Encargos do ciclo seguinte usados na quitação:{' '}
+          {formatMoney(bill.financeCharges, currency)}.
+        </p>
+      ) : null}
+
+      {bill.settled ? (
+        <p className="text-xs leading-relaxed text-ink-muted">
+          Quitada pelos pagamentos da Bill seguinte.
+        </p>
+      ) : null}
 
       {hasDifference ? (
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
@@ -509,7 +522,7 @@ function ProviderReconciliation({
       {bill.payments.length > 0 ? (
         <div>
           <h3 className="text-xs font-semibold tracking-[0.12em] text-ink-muted uppercase">
-            Pagamentos informados pelo provedor
+            Pagamentos da Bill seguinte
           </h3>
           <ul className="mt-2 divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
             {bill.payments.map((payment, index) => (
@@ -535,7 +548,7 @@ function ProviderReconciliation({
         </div>
       ) : (
         <p className="text-xs text-ink-muted">
-          Nenhum pagamento oficial informado para esta fatura.
+          Nenhum pagamento da Bill seguinte informado para esta fatura.
         </p>
       )}
 

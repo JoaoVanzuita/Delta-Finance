@@ -115,7 +115,8 @@ credenciais e desconexão.
   apenas em cache em memória (`ApiKeyCache`, TTL 110 min) — nunca persistida nem
   retornada.
 - **`PluggyDataClient`**: leitura de itens, recursos, contas, cartões, faturas
-  (bills), transações (`/v2/transactions`) e investimentos; paginação (pageSize 500) e tratamento de erros sanitizado.
+  (bills), transações (`/v2/transactions`) e investimentos; paginação (pageSize 500), reutilização
+  da query `next` como recebida e tratamento de erros sanitizado.
 - **`PluggyRateLimiter`**: token bucket por endpoint (240/min) com backoff
   exponencial.
 - **`IntegrationExceptionHandler`**: mapeia falhas do provedor para `502`
@@ -269,7 +270,8 @@ Movimentos financeiros de contas e cartões, importados ou manuais.
 - **Exclusão** (`DELETE /api/v1/transactions/{id}`): apenas lançamentos manuais.
 - **`RefundMatcher`**: vincula reembolso/chargeback à despesa original (mesma
   conta, ≤90 dias, magnitude compatível, tokens de descrição; ambiguidade ⇒ sem
-  vínculo automático).
+  vínculo automático). O vínculo é reavaliado em updates e ao final de cada lote,
+  cobrindo reembolso importado antes da despesa original.
 - **Idempotência**: `POST`/`PATCH`/`DELETE` de transações usam `Idempotency-Key`.
 
 **Telas:** [Transações](screens.md#transações), [Novo lançamento](screens.md#novo-lançamento-manual).
@@ -348,12 +350,26 @@ Ciclos, itens, parcelas, pagamentos e conciliação com a Bill oficial do proved
   fatura; reduz saldo devedor sem criar despesa; excedente vira crédito para
   faturas futuras. O servidor valida a compatibilidade mesmo que a UI já filtre
   as contas.
+- **Classificação de pagamento** (`CardPaymentClassifier`): o `operationType`
+  do provedor (`PAGAMENTO_FATURA`) tem precedência; categoria de transferência e
+  descrição são contingências. A mesma heurística de descrição é usada pela
+  importação e pela limpeza de duplicatas.
 - **Conciliação com a Bill** (`POST /api/v1/invoices/{id}/reconcile-provider`):
-  ajuste manual auditado para alinhar total local ao oficial; a Bill nunca altera
-  a fatura local.
+  ajuste manual auditado para alinhar total local ao oficial. A Bill não reescreve
+  compras; os pagamentos da Bill N+1, acrescidos dos encargos desse ciclo, são
+  evidência de quitação da Bill N e participam de `paymentsTotal`, `outstanding` e
+  status locais.
 - **`InvoiceBalanceService`**: recalcula total/saldo devedor/crédito aplicado e
   status (`OPEN`, `CLOSED`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`); fatura paga não
-  é reaberta; crédito aplicado à primeira fatura não paga.
+  é reaberta; crédito aplicado à primeira fatura não paga. Pagamentos locais e
+  evidência oficial são combinados pela maior evidência, sem duplicar o mesmo
+  pagamento.
+- **Saldo devedor** (`CardDebtService`): soma as faturas locais não pagas e apenas
+  a diferença do saldo do provedor em relação à fatura corrente. A diferença é
+  uma divergência de sincronização, não uma estimativa de compras “a faturar”.
+- **Sincronização de cartões**: a leitura diária refaz a janela de cartões a
+  partir da compra pendente mais antiga, para capturar `PENDING → POSTED` fora da
+  janela genérica de sete dias.
 - **`CardCycleService`** e **`InstallmentService`**: cálculo de ciclo local e
   chave de plano de parcelamento.
 
@@ -370,9 +386,11 @@ Detecção assistida de transferências entre contas próprias e pagamentos de
 fatura, com confirmação explícita do usuário.
 
 - **Sugestões** (`GET /api/v1/internal-matches?status=`): critérios
-  determinísticos (contas diferentes, sinais opostos, tolerância
+  determinísticos (contas diferentes, mesma moeda, sinais opostos, tolerância
   `max(R$0,01, 0,5%)`, janela ±3 dias transferência / ±7 dias pagamento, score
-  50/30/20, limiar 80, `criteriaVersion`).
+  50/30/20, limiar 80, `criteriaVersion`). Os mesmos critérios são reaplicados
+  aos pares confirmados; valor, data ou moeda que deixem de atender reabrem a
+  decisão.
 - **Confirmação/rejeição** (`POST /api/v1/internal-matches/{id}/confirm|reject`):
   confirmar marca ambos os lados como `MATCHED` e publica
   `InternalMatchConfirmedEvent`; somente confirmados saem de receitas/despesas.
@@ -417,7 +435,10 @@ Consolidação financeira com totais, categorias, série temporal e drill-down.
   transferências e matches internos confirmados excluídos; itens espelho não
   contados em duplicidade; reembolsos reduzem despesa até o valor original
   (excedente vira crédito); períodos calendário America/Sao_Paulo com semana
-  iniciada na segunda; filtros `from`/`to` incluem o dia final.
+  iniciada na segunda; filtros `from`/`to` incluem o dia final. Reduções de
+  despesa são globais: o excesso de uma categoria é transportado para as demais e
+  o total nunca fica negativo, de modo que resumo, categorias, série e drill-down
+  fecham no mesmo valor.
 - **`MoneyAggregator`** e **`DrillDownService`**: agregação em string decimal e
   drill-down paginado.
 
@@ -458,7 +479,8 @@ custo informado. Sem recomendação de investimento.
   e o relatório sinaliza `NOT_CONFIGURED`. A aba `Aportes` mostra o relatório
   por período, conciliação do caixa, perímetro incluído e lançamentos; o mesmo
   endpoint alimenta o indicador do Dashboard, que não trata aporte como receita
-  nem despesa.
+  nem despesa. Quando o provedor envia `netAmount`, as `expenses` já estão
+  incluídas nele e não são somadas novamente aos custos.
 - **Classificação** (`InvestmentClassification`): user override → type/subtype do
   provedor → heurística por código → `OUTRO`.
 - **Alocação**: `overview.allocation` agrega valor, quantidade e percentual por
@@ -493,12 +515,13 @@ mensais imutáveis.
 - **Itens manuais** (`GET/POST/PATCH/DELETE /api/v1/wealth/manual-items`): ativo ou
   passivo com tipo, descrição, valor de referência, data e observações.
 - **Regras** (`WealthService`): contas ativas `BANK`/`CASH`/`WALLET` em BRL são
-  ativos; cartões em BRL entram como passivo pelo saldo devedor das faturas
-  (nunca por compra, sem dupla contagem); cartões em outra moeda ficam fora do
+  ativos; cartões em BRL entram como passivo pelo saldo devedor apurado
+  (`CardDebtService`, nunca por compra, sem dupla contagem); cartões em outra moeda ficam fora do
   consolidado com motivo explícito; investimentos importados + itens manuais
   contados uma única vez; lacunas e moeda estrangeira explicitadas; referência
-  > 30 dias marcada `ESTIMATED`. Investimentos em moeda diferente de BRL não
-  > compõem o consolidado.
+  > 30 dias marcada `ESTIMATED`. Investimentos em moeda diferente de BRL aparecem
+  na lista como exclusão explícita e não compõem o consolidado; posições
+  encerradas ou indisponíveis permanecem fora do patrimônio.
 - **Saldos reservados** (`WealthSourceType.RESERVED_BALANCE`): só entram como
   ativo separado quando o tratamento efetivo da conta é `SEPARATE_ASSET` e a
   conta está ativa em BRL. Com `INCLUDED_IN_BALANCE`, a reserva é apenas
@@ -528,7 +551,8 @@ movimenta dinheiro.
 - **Alocações** (`GoalProgressService`): modo `FIXED_AMOUNT` (exato) ou
   `PERCENTAGE` (com arredondamento `floor` e resíduo na última parcela); soma das
   alocações de uma fonte entre metas não excede o saldo da fonte; fontes:
-  `MANUAL`, `ACCOUNT`, `INVESTMENT`, `MANUAL_ASSET`.
+  `MANUAL`, `ACCOUNT`, `INVESTMENT`, `MANUAL_ASSET`. Fontes `ACCOUNT` e
+  `INVESTMENT` em moeda diferente de BRL são recusadas.
 - **Histórico**: um snapshot de progresso por meta/dia (`goal_progress_snapshot`),
   lido por `GET /api/v1/goals/{id}/progress?cursor&limit` em páginas de até 100
   (padrão 50), mais recente primeiro. A resposta da meta não carrega o histórico.

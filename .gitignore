@@ -35,6 +35,9 @@ dist/
 *.sha256
 *.age
 
+# Revisões locais (não versionadas)
+docs/reviews/
+
 # Logs
 *.log
 logs/
