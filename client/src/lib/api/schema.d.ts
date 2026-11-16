@@ -333,6 +333,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{id}/inclusion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Define se a conta soma no saldo consolidado
+         * @description Afeta apenas o consolidado (dashboard, patrimônio e resumo de contas). Relatórios por conta, filtros e histórico permanecem inalterados.
+         */
+        put: operations["putAccountsIdInclusion"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{id}/reserved-balances": {
         parameters: {
             query?: never;
@@ -467,6 +489,28 @@ export interface paths {
         head?: never;
         /** Corrige uma transação importada ou manual */
         patch: operations["patchTransactionsId"];
+        trace?: never;
+    };
+    "/transactions/{id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Efetiva um lançamento pendente
+         * @description Move PENDING para POSTED uma única vez (idempotente). O lançamento passa a compor saldo e relatórios e dispara os mesmos eventos de mudança financeira da importação.
+         */
+        post: operations["postTransactionsIdSettle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/categories": {
@@ -1343,6 +1387,8 @@ export interface components {
             nameCustomized?: boolean;
             /** @description true quando a conta é a fronteira de caixa do perímetro de investimento. Créditos nessa conta são aportes; débitos de corretagem são aplicações, não resgates. */
             investmentAccount?: boolean;
+            /** @description Quando falso, a conta não soma no saldo consolidado (dashboard, patrimônio e resumo de contas). Relatórios por conta, filtros e histórico não são afetados. */
+            includeInTotal?: boolean;
             /** @description true quando o provedor sinalizou saldo reservado ativo nesta conta. */
             hasReservedBalance?: boolean;
             /** @description Soma dos saldos reservados ativos na moeda da conta. Não é somada automaticamente ao saldo disponível. */
@@ -1400,6 +1446,10 @@ export interface components {
             notes?: string;
             /** @enum {string} */
             status?: "ACTIVE" | "INACTIVE";
+        };
+        AccountInclusionRequest: {
+            /** @description Quando falso, a conta permanece visível, com histórico e relatórios próprios, mas não soma no saldo consolidado (dashboard, patrimônio e resumo de contas). */
+            includeInTotal: boolean;
         };
         AccountDisplayNameRequest: {
             /** @description Nome local exibido para a conta ou cartão importado. Não é enviado ao Pluggy e não altera o nome original. */
@@ -1474,6 +1524,11 @@ export interface components {
             creditLimit?: string;
             /** @description Crédito acumulado do cartão para faturas futuras, inclusive excedente de pagamento; não compõe income, expenses nem currentBalance. */
             creditBalance: string;
+            /**
+             * Format: uuid
+             * @description Conta bancária padrão para pagar as faturas deste cartão.
+             */
+            paymentAccountId?: string | null;
             /** @description Bandeira informada pelo provedor (ex.: VISA). */
             brand?: string;
             /** @description Nível informado pelo provedor (ex.: PLATINUM). */
@@ -1540,6 +1595,11 @@ export interface components {
             closingDay: number;
             dueDay: number;
             creditLimit?: string;
+            /**
+             * Format: uuid
+             * @description Conta bancária padrão para pagar as faturas deste cartão. Pré-seleciona o pagamento e serve apenas como desempate na classificação de pagamentos importados.
+             */
+            paymentAccountId?: string | null;
         };
         Transaction: {
             /** Format: uuid */
@@ -1616,6 +1676,24 @@ export interface components {
             /** @description Obrigatório para ADJUSTMENT; nunca inferido automaticamente. */
             adjustmentReason?: string;
             notes?: string;
+            /**
+             * @description PENDING agenda o lançamento sem afetar saldo nem relatórios até ser efetivado. Data futura exige PENDING.
+             * @default POSTED
+             * @enum {string}
+             */
+            status: "PENDING" | "POSTED";
+            /**
+             * Format: date
+             * @description Data de vencimento/efetivação prevista; aceita apenas com status=PENDING. Quando ausente, vale postedOn.
+             */
+            dueDate?: string;
+        };
+        SettleTransactionRequest: {
+            /**
+             * Format: date
+             * @description Data efetiva da efetivação; padrão é a data atual. Não aceita data futura.
+             */
+            postedOn?: string;
         };
         TransactionCorrectionRequest: {
             description?: string;
@@ -3239,6 +3317,35 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
+    putAccountsIdInclusion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountInclusionRequest"];
+            };
+        };
+        responses: {
+            /** @description Conta com a inclusão atualizada. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     getAccountsIdReservedBalances: {
         parameters: {
             query?: never;
@@ -3518,6 +3625,46 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    postTransactionsIdSettle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Chave de idempotência por operação, aceita apenas em transações, itens de fatura e pagamentos de fatura. Repetições com o mesmo método, caminho, query string e corpo recebem a resposta original por 24 h; corpo divergente retorna 409 IDEMPOTENCY_KEY_REUSED. Nas demais mutações o cabeçalho é ignorado. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: components["parameters"]["PathId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SettleTransactionRequest"];
+            };
+        };
+        responses: {
+            /** @description Lançamento efetivado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description A transação já está efetivada ou não está pendente. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             422: components["responses"]["UnprocessableEntity"];
         };
     };

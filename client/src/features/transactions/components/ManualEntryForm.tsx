@@ -63,6 +63,8 @@ export function ManualEntryForm({
   const [categoryId, setCategoryId] = useState('')
   const [amount, setAmount] = useState('')
   const [postedOn, setPostedOn] = useState(today())
+  const [status, setStatus] = useState<'POSTED' | 'PENDING'>('POSTED')
+  const [dueDate, setDueDate] = useState('')
   const [description, setDescription] = useState('')
   const [adjustmentReason, setAdjustmentReason] = useState('')
   const [notes, setNotes] = useState('')
@@ -153,6 +155,8 @@ export function ManualEntryForm({
         needsOriginal && relatedTransactionId ? relatedTransactionId : undefined,
       adjustmentReason: isAdjustment ? adjustmentReason.trim() : undefined,
       notes: notes.trim() || undefined,
+      status,
+      dueDate: status === 'PENDING' && dueDate ? dueDate : undefined,
     })
   }
 
@@ -256,14 +260,49 @@ export function ManualEntryForm({
             />
           </Field>
 
-          <Field id="manual-entry-date" label="Data">
+          <Field
+            id="manual-entry-date"
+            label="Data"
+            hint={
+              status === 'PENDING'
+                ? 'Data prevista da movimentação.'
+                : 'Lançamentos efetivados não podem ter data futura.'
+            }
+          >
             <Input
               id="manual-entry-date"
               type="date"
+              max={status === 'POSTED' ? today() : undefined}
               value={postedOn}
               onChange={(event) => setPostedOn(event.target.value)}
             />
           </Field>
+
+          <Field
+            id="manual-entry-status"
+            label="Situação"
+            hint="Pendente agenda a movimentação sem afetar saldo nem relatórios até ser efetivada."
+          >
+            <Select
+              id="manual-entry-status"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as 'POSTED' | 'PENDING')}
+            >
+              <option value="POSTED">Efetivado</option>
+              <option value="PENDING">Pendente (agendar)</option>
+            </Select>
+          </Field>
+
+          {status === 'PENDING' ? (
+            <Field id="manual-entry-due-date" label="Vencimento (opcional)">
+              <Input
+                id="manual-entry-due-date"
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+              />
+            </Field>
+          ) : null}
 
           <Field id="manual-entry-description" label="Descrição">
             <Input

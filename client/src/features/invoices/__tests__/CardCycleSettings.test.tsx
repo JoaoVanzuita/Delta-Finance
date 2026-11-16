@@ -59,7 +59,12 @@ describe('configuração do ciclo do cartão', () => {
   })
 
   it('valida dia 1–31 e limite não negativo antes de chamar a API', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
+      if (url.includes('/accounts')) {
+        return jsonResponse({ items: [] })
+      }
+      return jsonResponse({}, 404)
+    })
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
 
@@ -78,7 +83,8 @@ describe('configuração do ciclo do cartão', () => {
     await user.click(screen.getByRole('button', { name: 'Salvar ciclo' }))
     expect(await screen.findByText('O limite deve ser maior ou igual a zero.')).toBeInTheDocument()
 
-    expect(fetchMock).not.toHaveBeenCalled()
+    // Nenhuma gravação foi enviada; a consulta de contas para a conta padrão é esperada.
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false)
   })
 
   it('pré-carrega o perfil existente', () => {

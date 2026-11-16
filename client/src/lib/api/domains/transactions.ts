@@ -45,5 +45,7 @@ export const transactionsApi = {
     api.post<Transaction>('/transactions', input),
   correctTransaction: (id: string, input: TransactionCorrectionInput) =>
     api.patch<Transaction>(`/transactions/${id}`, input),
+  settleTransaction: (id: string, postedOn?: string) =>
+    api.post<Transaction>(`/transactions/${id}/settle`, postedOn ? { postedOn } : {}),
   deleteTransaction: (id: string) => api.delete<void>(`/transactions/${id}`),
 }

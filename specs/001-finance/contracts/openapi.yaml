@@ -666,6 +666,39 @@ paths:
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
       operationId: putAccountsIdInvestment
+  /accounts/{id}/inclusion:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    put:
+      tags:
+      - Accounts
+      summary: Define se a conta soma no saldo consolidado
+      description: Afeta apenas o consolidado (dashboard, patrimônio e resumo de
+        contas). Relatórios por conta, filtros e histórico permanecem
+        inalterados.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountInclusionRequest'
+      responses:
+        '200':
+          description: Conta com a inclusão atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: putAccountsIdInclusion
   /accounts/{id}/reserved-balances:
     parameters:
     - $ref: '#/components/parameters/PathId'
@@ -930,6 +963,45 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: deleteTransactionsId
+  /transactions/{id}/settle:
+    parameters:
+    - $ref: '#/components/parameters/PathId'
+    post:
+      tags:
+      - Transactions
+      summary: Efetiva um lançamento pendente
+      description: Move PENDING para POSTED uma única vez (idempotente). O
+        lançamento passa a compor saldo e relatórios e dispara os mesmos eventos
+        de mudança financeira da importação.
+      security:
+      - sessionCookie: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettleTransactionRequest'
+      responses:
+        '200':
+          description: Lançamento efetivado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: A transação já está efetivada ou não está pendente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+      operationId: postTransactionsIdSettle
   /categories:
     get:
       tags:
@@ -2773,6 +2845,11 @@ components:
           description: true quando a conta é a fronteira de caixa do perímetro
             de investimento. Créditos nessa conta são aportes; débitos de
             corretagem são aplicações, não resgates.
+        includeInTotal:
+          type: boolean
+          description: Quando falso, a conta não soma no saldo consolidado
+            (dashboard, patrimônio e resumo de contas). Relatórios por conta,
+            filtros e histórico não são afetados.
         hasReservedBalance:
           type: boolean
           description: true quando o provedor sinalizou saldo reservado ativo
@@ -2885,6 +2962,16 @@ components:
           enum:
           - ACTIVE
           - INACTIVE
+    AccountInclusionRequest:
+      type: object
+      required:
+      - includeInTotal
+      properties:
+        includeInTotal:
+          type: boolean
+          description: Quando falso, a conta permanece visível, com histórico e
+            relatórios próprios, mas não soma no saldo consolidado (dashboard,
+            patrimônio e resumo de contas).
     AccountDisplayNameRequest:
       type: object
       required:
@@ -3059,6 +3146,12 @@ components:
         creditBalance:
           type: string
           description: Crédito acumulado do cartão para faturas futuras, inclusive excedente de pagamento; não compõe income, expenses nem currentBalance.
+        paymentAccountId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Conta bancária padrão para pagar as faturas deste cartão.
         brand:
           type: string
           description: "Bandeira informada pelo provedor (ex.: VISA)."
@@ -3230,6 +3323,14 @@ components:
           maximum: 31
         creditLimit:
           type: string
+        paymentAccountId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Conta bancária padrão para pagar as faturas deste cartão.
+            Pré-seleciona o pagamento e serve apenas como desempate na
+            classificação de pagamentos importados.
     Transaction:
       type: object
       required:
@@ -3380,6 +3481,27 @@ components:
         notes:
           type: string
           maxLength: 2000
+        status:
+          type: string
+          enum:
+          - PENDING
+          - POSTED
+          default: POSTED
+          description: PENDING agenda o lançamento sem afetar saldo nem
+            relatórios até ser efetivado. Data futura exige PENDING.
+        dueDate:
+          type: string
+          format: date
+          description: Data de vencimento/efetivação prevista; aceita apenas com
+            status=PENDING. Quando ausente, vale postedOn.
+    SettleTransactionRequest:
+      type: object
+      properties:
+        postedOn:
+          type: string
+          format: date
+          description: Data efetiva da efetivação; padrão é a data atual. Não
+            aceita data futura.
     TransactionCorrectionRequest:
       type: object
       properties:

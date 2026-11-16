@@ -1,13 +1,15 @@
-import { cardsApi, type CardProfile } from '@/lib/api/finance'
+import { accountsApi, cardsApi, type CardProfile } from '@/lib/api/finance'
 import { useEffect, useRef, useState } from 'react'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { ApiError } from '@/lib/api/problem'
 import { normalizeMoneyInput, parseMoneyInput } from '@/lib/format'
+import { queryKeys } from '@/lib/query-keys'
 
 import { invalidateCardViews } from '@/lib/invalidation'
 
@@ -27,9 +29,14 @@ export function CardCycleSettings({
   const [closingDay, setClosingDay] = useState(String(profile?.closingDay ?? 1))
   const [dueDay, setDueDay] = useState(String(profile?.dueDay ?? 1))
   const [creditLimit, setCreditLimit] = useState(profile?.creditLimit ?? '')
+  const [paymentAccountId, setPaymentAccountId] = useState(profile?.paymentAccountId ?? '')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const hydratedProfile = useRef<string | null>(null)
+  const accountsQuery = useQuery({
+    queryKey: queryKeys.accounts,
+    queryFn: accountsApi.accounts,
+  })
 
   /**
    * Hidrata quando o perfil chega depois da montagem (ex.: consulta do cartão em
@@ -40,7 +47,13 @@ export function CardCycleSettings({
     if (!profile) {
       return
     }
-    const key = [accountId, profile.closingDay, profile.dueDay, profile.creditLimit].join('|')
+    const key = [
+      accountId,
+      profile.closingDay,
+      profile.dueDay,
+      profile.creditLimit,
+      profile.paymentAccountId,
+    ].join('|')
     if (hydratedProfile.current === key) {
       return
     }
@@ -48,6 +61,7 @@ export function CardCycleSettings({
     setClosingDay(String(profile.closingDay))
     setDueDay(String(profile.dueDay))
     setCreditLimit(profile.creditLimit ?? '')
+    setPaymentAccountId(profile.paymentAccountId ?? '')
   }, [accountId, profile])
 
   const save = useMutation({
@@ -56,6 +70,7 @@ export function CardCycleSettings({
         closingDay: Number(closingDay),
         dueDay: Number(dueDay),
         creditLimit: creditLimit.trim() ? normalizeMoneyInput(creditLimit) : undefined,
+        paymentAccountId: paymentAccountId || null,
       }),
     onSuccess: async () => {
       setError(null)
@@ -168,6 +183,32 @@ export function CardCycleSettings({
             />
           </Field>
         </div>
+
+        <Field
+          id="card-payment-account"
+          label="Conta padrão para pagar faturas"
+          hint="Pré-seleciona a conta no pagamento e serve apenas como desempate na classificação de pagamentos importados."
+        >
+          <Select
+            id="card-payment-account"
+            value={paymentAccountId}
+            onChange={(event) => setPaymentAccountId(event.target.value)}
+          >
+            <option value="">Nenhuma</option>
+            {(accountsQuery.data?.items ?? [])
+              .filter(
+                (account) =>
+                  account.type !== 'CREDIT' &&
+                  account.status === 'ACTIVE' &&
+                  account.currency === currency,
+              )
+              .map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.alias ?? account.institutionName ?? account.id}
+                </option>
+              ))}
+          </Select>
+        </Field>
 
         <Button type="submit" loading={save.isPending} loadingLabel="Salvando…">
           Salvar ciclo

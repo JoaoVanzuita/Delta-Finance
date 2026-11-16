@@ -80,6 +80,16 @@ export function AccountDetailPage() {
     },
   })
 
+  const inclusionFlag = useMutation({
+    mutationFn: (includeInTotal: boolean) =>
+      accountsApi.updateAccountInclusion(accountId, includeInTotal),
+    onSuccess: async (updated) => {
+      queryClient.setQueryData(queryKeys.account(accountId), updated)
+      await invalidateAccountViews(queryClient)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.wealth })
+    },
+  })
+
   const reservedBalancesQuery = useQuery({
     queryKey: queryKeys.accountReservedBalances(accountId),
     queryFn: () => accountsApi.reservedBalances(accountId),
@@ -391,6 +401,38 @@ export function AccountDetailPage() {
                   </Link>
                 </div>
               )}
+            </Card>
+
+            <Card className="p-5">
+              <div className="flex items-center gap-2">
+                <Wallet aria-hidden="true" className="size-4 text-ink-muted" />
+                <h2 className="text-section-title font-semibold text-ink">Saldo consolidado</h2>
+              </div>
+              <p className="mt-2 text-body-sm text-ink-muted">
+                Desmarque para manter a conta visível, com histórico e relatórios próprios, sem
+                somá-la ao saldo consolidado. Afeta dashboard, patrimônio e resumo de contas — não
+                afeta relatórios por conta nem filtros.
+              </p>
+              <label className="mt-3 flex items-start gap-2 rounded-card border border-line bg-surface-muted p-3 text-body-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={Boolean(account.includeInTotal)}
+                  disabled={inclusionFlag.isPending}
+                  onChange={(event) => inclusionFlag.mutate(event.target.checked)}
+                  className="mt-1 size-4 accent-[var(--df-primary)]"
+                />
+                <span>
+                  Esta conta soma no saldo consolidado.
+                  {inclusionFlag.isPending ? ' Salvando…' : ''}
+                </span>
+              </label>
+              {inclusionFlag.isError ? (
+                <p role="alert" className="mt-2 text-body-sm text-expense">
+                  {inclusionFlag.error instanceof ApiError
+                    ? inclusionFlag.error.message
+                    : 'Não foi possível atualizar a inclusão.'}
+                </p>
+              ) : null}
             </Card>
 
             {account.origin === 'IMPORTED' ? (

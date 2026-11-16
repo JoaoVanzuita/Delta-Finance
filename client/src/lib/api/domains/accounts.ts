@@ -24,6 +24,8 @@ export const accountsApi = {
   resetAccountName: (id: string) => api.delete<Account>(`/accounts/${id}/display-name`),
   updateAccountInvestment: (id: string, investmentAccount: boolean) =>
     api.put<Account>(`/accounts/${id}/investment`, { investmentAccount }),
+  updateAccountInclusion: (id: string, includeInTotal: boolean) =>
+    api.put<Account>(`/accounts/${id}/inclusion`, { includeInTotal }),
   reservedBalances: (accountId: string) =>
     api.get<ReservedBalanceList>(`/accounts/${accountId}/reserved-balances`),
   renameReservedBalance: (id: string, displayName: string) =>

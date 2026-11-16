@@ -1,7 +1,7 @@
 import { accountsApi, categoriesApi, transactionsApi, type Transaction } from '@/lib/api/finance'
 import { useMemo, useState } from 'react'
 
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MoreHorizontal, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 
@@ -27,6 +27,7 @@ import { CorrectionDialog } from '@/features/transactions/components/CorrectionD
 import { TransactionDetailDrawer } from '@/features/transactions/components/TransactionDetailDrawer'
 import { TransactionFiltersDrawer } from '@/features/transactions/components/TransactionFiltersDrawer'
 import { formatDate, formatMoney, formatRelativeDate } from '@/lib/format'
+import { invalidateTransactionViews } from '@/lib/invalidation'
 import {
   TRANSACTION_ORIGIN_LABELS,
   TRANSACTION_STATUS_LABELS,
@@ -44,6 +45,8 @@ export function TransactionsPage() {
   const [search, setSearch] = useState('')
   const [detail, setDetail] = useState<Transaction | null>(null)
   const [correcting, setCorrecting] = useState<Transaction | null>(null)
+  const [settleError, setSettleError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   const accountsQuery = useQuery({ queryKey: queryKeys.accounts, queryFn: accountsApi.accounts })
   const categoriesQuery = useQuery({
@@ -123,6 +126,19 @@ export function TransactionsPage() {
     setCorrecting(transaction)
   }
 
+  async function settle(transaction: Transaction) {
+    try {
+      await transactionsApi.settleTransaction(transaction.id)
+      await invalidateTransactionViews(queryClient)
+    } catch (settleError) {
+      setSettleError(
+        settleError instanceof ApiError
+          ? settleError.message
+          : 'Não foi possível efetivar o lançamento.',
+      )
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -138,6 +154,11 @@ export function TransactionsPage() {
       />
 
       <div className="space-y-3 rounded-panel border border-line bg-surface p-3 shadow-[var(--shadow-card)] sm:p-4">
+        {settleError ? (
+          <Alert variant="danger" role="alert" title="Não foi possível efetivar">
+            {settleError}
+          </Alert>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <label className="min-w-0 flex-1 text-body-sm">
             <span className="sr-only">Buscar nas transações carregadas</span>
@@ -328,6 +349,11 @@ export function TransactionsPage() {
                       }
                       onDetails={() => setDetail(transaction)}
                       onCorrect={() => openCorrection(transaction)}
+                      onSettle={
+                        transaction.status === 'PENDING'
+                          ? () => void settle(transaction)
+                          : undefined
+                      }
                     />
                   ))}
                 </ul>
@@ -386,12 +412,14 @@ function TransactionRow({
   categoryName,
   onDetails,
   onCorrect,
+  onSettle,
 }: {
   readonly transaction: Transaction
   readonly accountName: string
   readonly categoryName: string
   readonly onDetails: () => void
   readonly onCorrect: () => void
+  readonly onSettle?: () => void
 }) {
   return (
     <li className="flex items-center gap-2 px-2 py-1.5 sm:px-3">
@@ -473,6 +501,20 @@ function TransactionRow({
                 Corrigir transação
               </button>
             </li>
+            {onSettle ? (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close()
+                    onSettle()
+                  }}
+                  className="flex min-h-11 w-full items-center rounded-control px-3 text-left text-body-sm text-ink hover:bg-surface-muted"
+                >
+                  Efetivar lançamento
+                </button>
+              </li>
+            ) : null}
           </ul>
         )}
       </Popover>
