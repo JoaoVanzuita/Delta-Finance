@@ -11,6 +11,8 @@ import com.deltafinance.support.PluggyStub;
 import com.deltafinance.support.PluggyStub.AccountFixture;
 import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
@@ -34,6 +36,7 @@ class ManualEntriesIT extends PostgresTestBase {
   private static final String PASSWORD = "cavalo correto bateria grampo";
   private static final String ALICE_CLIENT = "client-alice-manual";
   private static final String BOB_CLIENT = "client-bob-manual";
+  private static final ZoneId ZONE = ZoneId.of("America/Sao_Paulo");
 
   @DynamicPropertySource
   static void pluggyProperties(DynamicPropertyRegistry registry) {
@@ -409,6 +412,33 @@ class ManualEntriesIT extends PostgresTestBase {
     JsonNode bankLeg = transactionsForAccount(bank).path("items").get(0);
     assertThat(bankLeg.path("amount").asString()).isEqualTo("30.00");
     assertThat(bankLeg.path("postedOn").asString()).isEqualTo("2026-10-24");
+  }
+
+  @Test
+  void lancamentoFuturoNaoAlteraSaldoAtualDaContaManual() throws Exception {
+    String cash = createAccount("CASH", "Carteira", "100.00");
+    String tomorrow = LocalDate.now(ZONE).plusDays(1).toString();
+
+    createTransactionOn("DEBIT", cash, "20.00", "Feira de hoje", "2026-10-24", null);
+    createTransactionOn("CREDIT", cash, "50.00", "Salário futuro", tomorrow, null);
+
+    // O saldo atual considera apenas o que já ocorreu; o lançamento futuro fica de fora.
+    assertThat(account(cash).path("currentBalance").asString()).isEqualTo("80.00");
+    assertThat(account(cash).path("referenceBalance").asString()).isEqualTo("100.00");
+
+    // O lançamento futuro aparece na visão do período em que ocorrerá.
+    String periodTo = LocalDate.now(ZONE).plusDays(30).toString();
+    JsonNode summary =
+        json(
+            alice
+                .get("/api/v1/dashboard/summary?from=" + tomorrow + "&to=" + periodTo)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(summary.path("income").asString()).isEqualTo("50.00");
+    // Conta importada (1000.00) + carteira manual (80.00); o futuro não entra.
+    assertThat(summary.path("currentBalance").asString()).isEqualTo("1080.00");
   }
 
   private String createAccount(String type, String alias, String balance) throws Exception {

@@ -53,7 +53,9 @@ public class AccountBalanceService {
    * Devolve o saldo atual para exibição, mantendo o saldo de referência intacto para edição.
    *
    * <p>O filtro de data usa o dia local da referência e inclui lançamentos do mesmo dia, porque a
-   * transação guarda apenas a data e não o instante em que ocorreu.
+   * transação guarda apenas a data e não o instante em que ocorreu. Lançamentos com data futura
+   * ficam de fora: eles pertencem ao período em que ocorrerão (visões de período e pendentes), não
+   * ao saldo de hoje.
    */
   public String effectiveBalance(FinancialAccount account, String referenceBalance) {
     if (account.getOrigin() != AccountOrigin.MANUAL
@@ -69,16 +71,18 @@ public class AccountBalanceService {
             : LocalDate.ofInstant(account.getBalanceReferenceAt(), clock.zone());
     UUID userId = account.getUserId();
     UUID accountId = account.getId();
+    LocalDate today = clock.today();
 
     String transactionSql =
         "select id, amount_effective_enc from transaction"
             + " where user_id = ? and account_id = ? and currency = ?"
             + " and status in ('POSTED', 'RECONCILED')"
-            + (referenceDate == null ? "" : " and posted_on >= ?");
+            + (referenceDate == null ? "" : " and posted_on >= ?")
+            + " and posted_on <= ?";
     List<Object> transactionArgs =
         referenceDate == null
-            ? List.of(userId, accountId, account.getCurrency())
-            : List.of(userId, accountId, account.getCurrency(), referenceDate);
+            ? List.of(userId, accountId, account.getCurrency(), today)
+            : List.of(userId, accountId, account.getCurrency(), referenceDate, today);
     for (TransactionAmount row :
         jdbcTemplate.query(
             transactionSql,
@@ -93,11 +97,12 @@ public class AccountBalanceService {
         "select id, amount_enc from invoice_payment"
             + " where user_id = ? and payment_account_id = ? and status = 'CONFIRMED'"
             + " and source_transaction_id is null"
-            + (referenceDate == null ? "" : " and paid_on >= ?");
+            + (referenceDate == null ? "" : " and paid_on >= ?")
+            + " and paid_on <= ?";
     List<Object> paymentArgs =
         referenceDate == null
-            ? List.of(userId, accountId)
-            : List.of(userId, accountId, referenceDate);
+            ? List.of(userId, accountId, today)
+            : List.of(userId, accountId, referenceDate, today);
     for (TransactionAmount row :
         jdbcTemplate.query(
             paymentSql,
