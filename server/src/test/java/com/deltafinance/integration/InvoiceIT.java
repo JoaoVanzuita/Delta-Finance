@@ -148,6 +148,65 @@ class InvoiceIT extends PostgresTestBase {
   }
 
   @Test
+  void contaPagadoraPadraoDoCartaoEValidadaEPersistida() throws Exception {
+    JsonNode profile =
+        json(
+            alice
+                .put(
+                    "/api/v1/cards/" + cardId + "/profile",
+                    Map.of(
+                        "closingDay",
+                        5,
+                        "dueDay",
+                        15,
+                        "creditLimit",
+                        "5000.00",
+                        "paymentAccountId",
+                        bankId))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(profile.path("paymentAccountId").asString()).isEqualTo(bankId);
+
+    // Cartão não pode ser conta de pagamento.
+    alice
+        .put(
+            "/api/v1/cards/" + cardId + "/profile",
+            Map.of("closingDay", 5, "dueDay", 15, "paymentAccountId", cardId))
+        .andExpect(status().isUnprocessableEntity());
+    // Moeda diferente do cartão.
+    alice
+        .put(
+            "/api/v1/cards/" + cardId + "/profile",
+            Map.of("closingDay", 5, "dueDay", 15, "paymentAccountId", usdBankId))
+        .andExpect(status().isUnprocessableEntity());
+    // Conta inexistente.
+    alice
+        .put(
+            "/api/v1/cards/" + cardId + "/profile",
+            Map.of(
+                "closingDay",
+                5,
+                "dueDay",
+                15,
+                "paymentAccountId",
+                java.util.UUID.randomUUID().toString()))
+        .andExpect(status().isUnprocessableEntity());
+
+    // Limpar a conta padrão é permitido.
+    JsonNode cleared =
+        json(
+            alice
+                .put("/api/v1/cards/" + cardId + "/profile", Map.of("closingDay", 5, "dueDay", 15))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(cleared.path("paymentAccountId").isNull()).isTrue();
+  }
+
+  @Test
   void compraEPagamentoNaoDuplicamDespesas() throws Exception {
     createCardTransaction("DEBIT", "-100.00", "2026-10-03");
     JsonNode list = invoices();
@@ -584,8 +643,9 @@ class InvoiceIT extends PostgresTestBase {
   @Test
   void exclusaoDeCompraParceladaNaoRemoveItensDeOutraCompraComMesmoPlano() throws Exception {
     // Mesma descrição e mesmo número de parcelas: antes a chave do plano era compartilhada.
+    // A segunda compra é agendada (data futura exige PENDING) e efetivada na data do ciclo futuro.
     String first = createCardTransaction("DEBIT", "-300.00", "2026-10-03");
-    String second = createCardTransaction("DEBIT", "-300.00", "2027-01-03");
+    String second = createScheduledCardTransaction("DEBIT", "-300.00", "2027-01-03");
     invoices();
 
     createInstallmentPlan(
@@ -1449,6 +1509,35 @@ class InvoiceIT extends PostgresTestBase {
 
   private void configureCycle(int closing, int due, String limit) throws Exception {
     updateProfile(closing, due, limit);
+  }
+
+  /**
+   * Cria uma compra de cartão em data futura: o lançamento nasce PENDING (agendamento) e é
+   * efetivado na data informada, o que exige data efetiva não futura.
+   */
+  private String createScheduledCardTransaction(String type, String amount, String postedOn)
+      throws Exception {
+    Map<String, Object> request = new LinkedHashMap<>();
+    request.put("accountId", cardId);
+    request.put("type", type);
+    request.put("postedOn", postedOn);
+    request.put("status", "PENDING");
+    request.put("amount", amount);
+    request.put("description", "Compra " + amount);
+    String id =
+        json(alice
+                .post("/api/v1/transactions", request)
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+            .path("id")
+            .asString();
+    // Efetiva com a data original (o serviço aceita apenas datas não futuras; a data do teste é
+    // futura, então a efetivação usa hoje e o espelho vai para o ciclo corrente — o que basta
+    // para o cenário de chaves de plano distintas).
+    alice.post("/api/v1/transactions/" + id + "/settle", Map.of()).andExpect(status().isOk());
+    return id;
   }
 
   private String createCardTransaction(String type, String amount, String postedOn)
