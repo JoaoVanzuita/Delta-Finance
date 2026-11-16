@@ -72,9 +72,42 @@ public class CardProfileService {
           cryptoService.encrypt(
               "0.00", new CryptoContext(userId, TABLE, BALANCE_COLUMN, profile.getId())));
     }
+    profile.updatePaymentAccountId(
+        validatePaymentAccount(userId, account, request.paymentAccountId()));
     cardProfileRepository.save(profile);
     eventPublisher.publishEvent(new CardProfileUpdatedEvent(userId, accountId));
     return accountQueryService.get(userId, accountId).cardProfile();
+  }
+
+  /**
+   * Valida a conta padrão de pagamento: do mesmo usuário, ativa, não-cartão e na moeda do cartão.
+   *
+   * <p>É uma preferência de desempate, não uma regra financeira: a conta escolhida nunca decide
+   * sozinha a classificação de um pagamento importado.
+   */
+  private UUID validatePaymentAccount(UUID userId, FinancialAccount card, UUID paymentAccountId) {
+    if (paymentAccountId == null) {
+      return null;
+    }
+    FinancialAccount paymentAccount =
+        accountRepository
+            .findByIdAndUserId(paymentAccountId, userId)
+            .orElseThrow(
+                () ->
+                    new ValidationException(
+                        "paymentAccountId", "A conta de pagamento informada não existe."));
+    if (paymentAccount.getType() == com.deltafinance.accounts.domain.AccountType.CREDIT) {
+      throw new ValidationException(
+          "paymentAccountId", "A conta de pagamento não pode ser um cartão de crédito.");
+    }
+    if (paymentAccount.getStatus() != com.deltafinance.accounts.domain.AccountStatus.ACTIVE) {
+      throw new ValidationException("paymentAccountId", "A conta de pagamento deve estar ativa.");
+    }
+    if (!paymentAccount.getCurrency().equalsIgnoreCase(card.getCurrency())) {
+      throw new ValidationException(
+          "paymentAccountId", "A conta de pagamento deve ter a mesma moeda do cartão.");
+    }
+    return paymentAccount.getId();
   }
 
   private static int validateDay(Integer day, String field) {

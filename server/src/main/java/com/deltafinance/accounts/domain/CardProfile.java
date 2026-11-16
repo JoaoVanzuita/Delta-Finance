@@ -48,6 +48,16 @@ public class CardProfile extends BaseEntity {
   @Column(name = "source", nullable = false, length = 16)
   private CardProfileSource source;
 
+  /**
+   * Conta bancária padrão para pagar as faturas deste cartão.
+   *
+   * <p>Usada para pré-selecionar a conta no pagamento e como desempate na classificação de
+   * pagamentos importados. Sem FK: a remoção da conta não deve impedir a limpeza do perfil; a posse
+   * e o tipo são validados no serviço.
+   */
+  @Column(name = "payment_account_id")
+  private UUID paymentAccountId;
+
   protected CardProfile() {
     // Hibernate
   }
@@ -120,6 +130,15 @@ public class CardProfile extends BaseEntity {
 
   public void updateCreditLimit(byte[] creditLimitEnc) {
     this.creditLimitEnc = creditLimitEnc;
+  }
+
+  public UUID getPaymentAccountId() {
+    return paymentAccountId;
+  }
+
+  /** Define ou limpa (nulo) a conta padrão de pagamento; validação de posse é do serviço. */
+  public void updatePaymentAccountId(UUID paymentAccountId) {
+    this.paymentAccountId = paymentAccountId;
   }
 
   public void updateCreditBalance(byte[] creditBalanceEnc) {

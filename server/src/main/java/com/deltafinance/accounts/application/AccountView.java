@@ -14,6 +14,7 @@ public record AccountView(
     String providerName,
     boolean nameCustomized,
     boolean investmentAccount,
+    boolean includeInTotal,
     boolean hasReservedBalance,
     String reservedBalanceTotal,
     String reservedBalanceTreatment,

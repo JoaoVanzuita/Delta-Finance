@@ -192,6 +192,20 @@ public class WealthService {
               false));
       return;
     }
+    if (!account.includeInTotal()) {
+      accumulator.exclude(
+          item(
+              WealthSourceType.ACCOUNT,
+              account.id(),
+              description,
+              displayedValue,
+              false,
+              "Conta excluída do saldo consolidado pelo usuário.",
+              account.origin(),
+              null,
+              false));
+      return;
+    }
     if (!Money.BRL.equals(account.currency())) {
       accumulator.exclude(
           item(

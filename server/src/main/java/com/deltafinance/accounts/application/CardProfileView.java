@@ -7,6 +7,7 @@ public record CardProfileView(
     UUID accountId,
     int closingDay,
     int dueDay,
+    UUID paymentAccountId,
     String creditLimit,
     String creditBalance,
     String brand,

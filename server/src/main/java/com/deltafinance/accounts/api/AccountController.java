@@ -1,6 +1,7 @@
 package com.deltafinance.accounts.api;
 
 import com.deltafinance.accounts.application.AccountDisplayNameService;
+import com.deltafinance.accounts.application.AccountInclusionService;
 import com.deltafinance.accounts.application.AccountInvestmentService;
 import com.deltafinance.accounts.application.AccountQueryService;
 import com.deltafinance.accounts.application.AccountView;
@@ -23,6 +24,7 @@ public class AccountController {
   private final AccountQueryService accountQueryService;
   private final AccountDisplayNameService accountDisplayNameService;
   private final AccountInvestmentService accountInvestmentService;
+  private final AccountInclusionService accountInclusionService;
   private final ReservedBalanceTreatmentService reservedBalanceTreatmentService;
   private final AuthenticatedUser authenticatedUser;
 
@@ -30,11 +32,13 @@ public class AccountController {
       AccountQueryService accountQueryService,
       AccountDisplayNameService accountDisplayNameService,
       AccountInvestmentService accountInvestmentService,
+      AccountInclusionService accountInclusionService,
       ReservedBalanceTreatmentService reservedBalanceTreatmentService,
       AuthenticatedUser authenticatedUser) {
     this.accountQueryService = accountQueryService;
     this.accountDisplayNameService = accountDisplayNameService;
     this.accountInvestmentService = accountInvestmentService;
+    this.accountInclusionService = accountInclusionService;
     this.reservedBalanceTreatmentService = reservedBalanceTreatmentService;
     this.authenticatedUser = authenticatedUser;
   }
@@ -67,6 +71,13 @@ public class AccountController {
       @PathVariable UUID id, @Valid @RequestBody AccountInvestmentRequest request) {
     return accountInvestmentService.update(
         authenticatedUser.requireId(), id, request.investmentAccount());
+  }
+
+  @PutMapping("/{id}/inclusion")
+  public AccountView updateInclusion(
+      @PathVariable UUID id, @Valid @RequestBody AccountInclusionRequest request) {
+    return accountInclusionService.update(
+        authenticatedUser.requireId(), id, request.includeInTotal());
   }
 
   @PutMapping("/{id}/reserved-balance-treatment")

@@ -137,6 +137,7 @@ class CardDebtServiceTest {
         false,
         false,
         false,
+        false,
         "0.00",
         "UNKNOWN",
         "UNKNOWN",

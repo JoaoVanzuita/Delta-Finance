@@ -69,6 +69,13 @@ public class FinancialAccount extends BaseEntity {
   @Column(name = "investment_account", nullable = false)
   private boolean investmentAccount;
 
+  /**
+   * Inclusão no saldo consolidado. Falso mantém a conta visível, com histórico e relatórios
+   * próprios, sem somar no consolidado (dashboard, patrimônio e resumo de contas).
+   */
+  @Column(name = "include_in_total", nullable = false)
+  private boolean includeInTotal = true;
+
   @Column(name = "has_reserved_balance", nullable = false)
   private boolean hasReservedBalance;
 
@@ -93,6 +100,7 @@ public class FinancialAccount extends BaseEntity {
     account.subtype = subtype;
     account.currency = currency == null || currency.isBlank() ? "BRL" : currency;
     account.status = AccountStatus.ACTIVE;
+    account.applyDefaultIncludeInTotal();
     return account;
   }
 
@@ -104,6 +112,7 @@ public class FinancialAccount extends BaseEntity {
     account.type = Objects.requireNonNull(type, "type");
     account.currency = currency == null || currency.isBlank() ? "BRL" : currency;
     account.status = AccountStatus.ACTIVE;
+    account.applyDefaultIncludeInTotal();
     return account;
   }
 
@@ -192,6 +201,31 @@ public class FinancialAccount extends BaseEntity {
 
   public void updateInvestmentAccount(boolean investmentAccount) {
     this.investmentAccount = investmentAccount;
+  }
+
+  public boolean isIncludeInTotal() {
+    return includeInTotal;
+  }
+
+  public void updateIncludeInTotal(boolean includeInTotal) {
+    this.includeInTotal = includeInTotal;
+  }
+
+  /**
+   * Regra padrão de inclusão no consolidado, aplicada na criação e na importação.
+   *
+   * <p>Reproduz a regra histórica (conta ativa de dinheiro em BRL). O usuário pode sobrepor pela
+   * configuração explícita; a importação não reescreve a escolha do usuário.
+   */
+  public void applyDefaultIncludeInTotal() {
+    this.includeInTotal = isConsolidationCandidate();
+  }
+
+  /** Conta que participa do consolidado por natureza: ativa, de dinheiro e em BRL. */
+  public boolean isConsolidationCandidate() {
+    return status == AccountStatus.ACTIVE
+        && (type == AccountType.BANK || type == AccountType.CASH || type == AccountType.WALLET)
+        && "BRL".equalsIgnoreCase(currency);
   }
 
   public boolean hasReservedBalance() {

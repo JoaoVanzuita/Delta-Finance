@@ -249,6 +249,11 @@ public class ReportingService {
       if (!BALANCE_TYPES.contains(account.type()) || !"ACTIVE".equals(account.status())) {
         continue;
       }
+      if (!account.includeInTotal()) {
+        // Exclusão explícita do usuário: a conta continua visível e nos relatórios por conta,
+        // mas não soma no consolidado.
+        continue;
+      }
       if (!"BRL".equalsIgnoreCase(account.currency())) {
         continue;
       }

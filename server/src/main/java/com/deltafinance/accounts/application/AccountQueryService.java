@@ -112,6 +112,7 @@ public class AccountQueryService {
         providerName,
         nameCustomized,
         account.isInvestmentAccount(),
+        account.isIncludeInTotal(),
         account.hasReservedBalance(),
         reservedBalanceTotal(account),
         treatment.name(),
@@ -201,6 +202,7 @@ public class AccountQueryService {
         profile.getAccountId(),
         profile.getClosingDay(),
         profile.getDueDay(),
+        profile.getPaymentAccountId(),
         decrypt(
             profile.getUserId(),
             "card_profile",

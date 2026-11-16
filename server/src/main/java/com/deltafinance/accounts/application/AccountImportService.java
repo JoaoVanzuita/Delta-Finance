@@ -152,17 +152,20 @@ public class AccountImportService {
       boolean complete,
       boolean openFinance) {
     byte[] externalHash = hmacService.externalIdHash("pluggy", imported.externalId());
-    FinancialAccount account =
+    FinancialAccount existing =
         accountRepository
             .findByConnectionIdAndExternalAccountIdHash(connectionId, externalHash)
-            .orElseGet(
-                () ->
-                    FinancialAccount.imported(
-                        userId,
-                        connectionId,
-                        mapType(imported.type()),
-                        imported.subtype(),
-                        imported.currency()));
+            .orElse(null);
+    boolean created = existing == null;
+    FinancialAccount account =
+        created
+            ? FinancialAccount.imported(
+                userId,
+                connectionId,
+                mapType(imported.type()),
+                imported.subtype(),
+                imported.currency())
+            : existing;
 
     account.updateSubtype(imported.subtype());
     byte[] externalEnc =
@@ -190,6 +193,11 @@ public class AccountImportService {
 
     account.applyImported(
         externalEnc, externalHash, institutionEnc, aliasEnc, balanceEnc, now, AccountStatus.ACTIVE);
+    // Conta nova nasce com a regra padrão de inclusão no consolidado; a escolha explícita do
+    // usuário nunca é reescrita pela sincronização.
+    if (created) {
+      account.applyDefaultIncludeInTotal();
+    }
     if (imported.hasReservedBalance() != null) {
       account.applyReservedBalanceMetadata(imported.hasReservedBalance(), now);
     } else {
