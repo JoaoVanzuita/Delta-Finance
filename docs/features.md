@@ -144,11 +144,16 @@ transações.
   completa ficam `UNAVAILABLE`; infere ciclo do cartão a partir das Bills quando o
   provedor não informa `balanceCloseDate`/`balanceDueDate`.
 - **`TransactionImportService`**: importação idempotente; deduplicação por HMAC
-  (provedor+conexão+conta+id externo); reconciliação por `fingerprint` quando o id
-  externo muda; `PENDING→POSTED` atualiza o mesmo registro; leitura conclusiva não
-  vazia marca ausentes como `SOURCE_REMOVED` (e restaura ao reaparecer); normaliza
-  sinal de cartão de crédito e categoria de transferência; preserva campos
-  corrigidos pelo usuário.
+  (provedor+conexão+conta+id externo); reconciliação de identidade em cadeia de
+  âncoras quando o id externo muda — `providerId`, `providerCode` e
+  `fingerprint` (este somente quando o id externo do candidato deixou de estar
+  na leitura atual, preservando compras idênticas como linhas distintas);
+  transação recriada pelo provedor atualiza o registro existente (sem duplicar,
+  preservando correções e vínculos) e registra
+  `TRANSACTION_IDENTITY_REPLACED`; `PENDING→POSTED` atualiza o mesmo registro;
+  leitura conclusiva não vazia marca ausentes como `SOURCE_REMOVED` (e restaura
+  ao reaparecer); normaliza sinal de cartão de crédito e categoria de
+  transferência; preserva campos corrigidos pelo usuário.
 - **`ItemReconciliationService`**: troca de itemId sem perder histórico local.
 - **Limites e tolerância a falhas**: falha de um usuário/conexão não bloqueia os
   demais; resposta vazia é `EMPTY` (nunca exclusão).
@@ -264,6 +269,8 @@ Movimentos financeiros de contas e cartões, importados ou manuais.
 - **Lançamento manual** (`POST /api/v1/transactions`): receita, despesa,
   transferência, estorno/reembolso, chargeback e ajuste, com sinal normalizado por
   tipo. Transferência cria duas pernas vinculadas + `internal_match` já confirmado.
+  Lançamento com data futura é aceito e aparece na visão do período em que
+  ocorrerá; o saldo atual de contas manuais considera apenas lançamentos até hoje.
 - **Correção** (`PATCH /api/v1/transactions/{id}`): descrição, data, valor,
   categoria, observações e transação relacionada; valores originais da origem
   preservados em auditoria; campos corrigidos prevalecem sobre sincronizações.
@@ -529,6 +536,13 @@ mensais imutáveis.
   excluída com motivo e `hasReservedBalance` sem detalhe vira lacuna explícita.
   O item é gravado no snapshot patrimonial e alimenta a evolução mensal da
   reserva, sem estimativa de rendimento.
+- **Guarda de dupla contagem**: posição importada de renda fixa
+  (`FIXED_INCOME`) com valor e data de referência idênticos aos de uma reserva
+  ativa contabilizada em separado (cofrinho/caixinha que a instituição também
+  reporta como CDB) é excluída do somatório com motivo explícito, permanecendo
+  visível na composição. Limitação conhecida: quando o saldo da conta já inclui
+  o cofrinho e não há reserva detalhada, a sobreposição com a posição não é
+  detectável (não há vínculo posição↔conta no provedor).
 - **Retenção:** snapshots expiram após 60 meses (configurável) e são removidos
   pelo job diário; exportação e exclusão de conta incluem snapshots e itens.
 
