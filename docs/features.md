@@ -204,6 +204,11 @@ Contas bancárias, dinheiro e carteira, importadas ou manuais.
   conta desativada não recebe novos lançamentos mas preserva histórico.
 - **Nome de exibição** (`PUT/DELETE /api/v1/accounts/{id}/display-name`): renome
   local de contas importadas sem sobrescrever o nome original do provedor.
+- **Inclusão no consolidado** (`PUT /api/v1/accounts/{id}/inclusion`): o campo
+  `includeInTotal` (padrão derivado da regra histórica: conta ativa de dinheiro em
+  BRL) permite excluir uma conta do saldo consolidado sem perder histórico,
+  relatórios por conta nem filtros. Afeta dashboard, patrimônio e resumo de contas
+  num único ponto de decisão; a sincronização nunca reescreve a escolha do usuário.
 - **`AccountBalanceService`**: saldo efetivo da conta manual = saldo de referência
   - transações `POSTED`/`RECONCILED` posteriores + pagamentos de fatura
     confirmados sem transação de origem (evita dupla contagem). Contas importadas
@@ -247,7 +252,10 @@ Contas bancárias, dinheiro e carteira, importadas ou manuais.
 Painel de cartões separado das contas.
 
 - **Perfil do cartão** (`PUT /api/v1/cards/{accountId}/profile`): dia de
-  fechamento, dia de vencimento (1–31) e limite de crédito.
+  fechamento, dia de vencimento (1–31), limite de crédito e conta padrão de
+  pagamento (`paymentAccountId`: mesmo usuário, ativa, não-cartão e mesma moeda).
+  A conta padrão pré-seleciona o pagamento de fatura na UI e serve apenas como
+  desempate na classificação de pagamentos importados — nunca decide sozinha.
 - **Visão geral** (`GET /api/v1/cards/overview`): total devido, limite, utilizado,
   utilização percentual, próximo vencimento e itens por cartão.
 - Cartões sem ciclo configurado exibem transações não alocadas, sem faturas
@@ -269,8 +277,14 @@ Movimentos financeiros de contas e cartões, importados ou manuais.
 - **Lançamento manual** (`POST /api/v1/transactions`): receita, despesa,
   transferência, estorno/reembolso, chargeback e ajuste, com sinal normalizado por
   tipo. Transferência cria duas pernas vinculadas + `internal_match` já confirmado.
-  Lançamento com data futura é aceito e aparece na visão do período em que
-  ocorrerá; o saldo atual de contas manuais considera apenas lançamentos até hoje.
+  `status` (`POSTED` padrão ou `PENDING`) permite agendar: pendente não compõe
+  saldo nem relatórios e aceita `dueDate`. Data futura exige `PENDING`; data
+  efetivada futura é rejeitada (`422`).
+- **Efetivação** (`POST /api/v1/transactions/{id}/settle`): move `PENDING` para
+  `POSTED` uma única vez (idempotente), com data efetiva opcional (padrão hoje,
+  nunca futura). Transferência pendente efetiva as duas pernas juntas e dispara os
+  mesmos eventos de mudança financeira da importação. UI: ação "Efetivar
+  lançamento" na lista.
 - **Correção** (`PATCH /api/v1/transactions/{id}`): descrição, data, valor,
   categoria, observações e transação relacionada; valores originais da origem
   preservados em auditoria; campos corrigidos prevalecem sobre sincronizações.
