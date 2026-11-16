@@ -58,6 +58,7 @@ public final class PluggyModels {
       String currency,
       String operationType,
       String providerId,
+      String providerCode,
       String providerBillId,
       LocalDate providerBillClosingDate,
       JsonNode creditCardMetadata) {}

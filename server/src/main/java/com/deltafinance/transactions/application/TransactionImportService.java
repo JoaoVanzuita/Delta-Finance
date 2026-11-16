@@ -76,6 +76,7 @@ public class TransactionImportService {
 
   private final FinancialAccountRepository accountRepository;
   private final ImportCategoryResolver categoryResolver;
+  private final TransactionIdentityResolver identityResolver;
   private final ExternalIdentityHistoryRepository identityRepository;
   private final RefundMatcher refundMatcher;
   private final PluggyAuthClient authClient;
@@ -92,6 +93,7 @@ public class TransactionImportService {
       TransactionRepository transactionRepository,
       FinancialAccountRepository accountRepository,
       ImportCategoryResolver categoryResolver,
+      TransactionIdentityResolver identityResolver,
       ExternalIdentityHistoryRepository identityRepository,
       RefundMatcher refundMatcher,
       PluggyAuthClient authClient,
@@ -106,6 +108,7 @@ public class TransactionImportService {
     this.transactionRepository = transactionRepository;
     this.accountRepository = accountRepository;
     this.categoryResolver = categoryResolver;
+    this.identityResolver = identityResolver;
     this.identityRepository = identityRepository;
     this.refundMatcher = refundMatcher;
     this.authClient = authClient;
@@ -238,6 +241,17 @@ public class TransactionImportService {
       int skipped = 0;
       int failed = 0;
       Set<byte[]> seenHashes = new HashSet<>();
+      // Pré-escaneia os ids externos da leitura inteira antes de processar as linhas: a adoção por
+      // fingerprint precisa saber se o id externo do candidato ainda está na origem nesta leitura,
+      // inclusive para itens que vêm depois na página.
+      for (PluggyModels.PluggyTransaction imported : page.items()) {
+        if (imported.externalId() == null || imported.externalId().isBlank()) {
+          continue;
+        }
+        seenHashes.add(hmacService.externalIdHash(SOURCE, imported.externalId()));
+      }
+      // Transações já reivindicadas por outra linha deste lote: as âncoras não devem reusá-las.
+      Set<UUID> claimedIds = new HashSet<>();
       // A taxonomia tem poucas chaves distintas; resolver uma vez por lote evita 16 consultas por
       // linha importada.
       Map<String, UUID> categoryCache = new HashMap<>();
@@ -248,7 +262,6 @@ public class TransactionImportService {
           skipped++;
           continue;
         }
-        seenHashes.add(hmacService.externalIdHash(SOURCE, imported.externalId()));
         Outcome outcome =
             upsert(
                 integration.getUserId(),
@@ -257,6 +270,8 @@ public class TransactionImportService {
                 externalAccountId,
                 imported,
                 reconcileIdentity,
+                seenHashes,
+                claimedIds,
                 categoryCache);
         switch (outcome) {
           case CREATED -> created++;
@@ -365,6 +380,8 @@ public class TransactionImportService {
       String externalAccountId,
       PluggyModels.PluggyTransaction imported,
       boolean reconcileIdentity,
+      Set<byte[]> seenHashes,
+      Set<UUID> claimedIds,
       Map<String, UUID> categoryCache) {
     if (imported.amount() == null || imported.date() == null) {
       // Sem valor/data não invente 0,00 nem "hoje": registre a falha e siga.
@@ -398,13 +415,48 @@ public class TransactionImportService {
 
     Transaction transaction =
         transactionRepository.findByUserIdAndDedupKey(userId, dedupKey).orElse(null);
+    String identityAnchor = null;
+    if (transaction == null) {
+      // Âncoras determinísticas do provedor: reconhecem a transação recriada com novo id externo.
+      var anchored =
+          identityResolver.resolveByProviderAnchor(
+              userId, account.getId(), imported.providerId(), imported.providerCode(), claimedIds);
+      if (anchored.isPresent()) {
+        transaction = anchored.get();
+        identityAnchor =
+            imported.providerId() != null && !imported.providerId().isBlank()
+                ? "PROVIDER_ID"
+                : "PROVIDER_CODE";
+      }
+    }
     if (transaction == null && reconcileIdentity) {
-      // O fingerprint só entra na reconciliação explícita de itemId. No fluxo normal, duas
-      // compras legítimas idênticas com IDs externos diferentes continuam sendo duas transações.
+      // Troca de itemId: o fingerprint é o único vínculo com o registro local (a leitura nova
+      // nunca contém os ids externos antigos). No fluxo normal, duas compras legítimas idênticas
+      // com IDs externos diferentes continuam sendo duas transações.
       transaction =
-          transactionRepository
-              .findFirstByUserIdAndAccountIdAndFingerprint(userId, account.getId(), fingerprint)
+          identityResolver
+              .resolveByFingerprint(
+                  userId, account.getId(), fingerprint, false, hash -> false, claimedIds)
               .orElse(null);
+    }
+    if (transaction == null) {
+      // Recriação com o mesmo itemId e atributos inalterados: o candidato só é adotado quando o
+      // id externo dele deixou de estar na leitura atual.
+      var replaced =
+          identityResolver.resolveByFingerprint(
+              userId,
+              account.getId(),
+              fingerprint,
+              true,
+              incoming -> seenInCurrentRead(seenHashes, incoming),
+              claimedIds);
+      if (replaced.isPresent()) {
+        transaction = replaced.get();
+        identityAnchor = "FINGERPRINT";
+      }
+    }
+    if (transaction != null) {
+      claimedIds.add(transaction.getId());
     }
     if (transaction == null
         && status == TransactionStatus.PENDING
@@ -506,6 +558,7 @@ public class TransactionImportService {
       transaction.applyProviderMetadata(
           imported.operationType(),
           imported.providerId(),
+          imported.providerCode(),
           imported.providerBillId(),
           imported.providerBillClosingDate());
       transaction = transactionRepository.save(transaction);
@@ -663,9 +716,20 @@ public class TransactionImportService {
     transaction.applyProviderMetadata(
         imported.operationType(),
         imported.providerId(),
+        imported.providerCode(),
         imported.providerBillId(),
         imported.providerBillClosingDate());
     transactionRepository.save(transaction);
+    if (identityAnchor != null && !reconcileIdentity) {
+      // A origem recriou a transação e o registro local foi mantido: o fato é auditável sem
+      // expor valores nem identificadores externos.
+      auditService.record(
+          userId,
+          AuditEventType.TRANSACTION_IDENTITY_REPLACED,
+          "transaction",
+          transaction.getId(),
+          java.util.Map.of("anchor", identityAnchor));
+    }
     upsertIdentityHistory(
         userId, account.getId(), transaction.getId(), imported.externalId(), externalIdEnc);
     if (financialChange) {
@@ -673,6 +737,14 @@ public class TransactionImportService {
           new TransactionFinancialChangedEvent(userId, transaction.getId()));
     }
     return Outcome.UPDATED;
+  }
+
+  /**
+   * Informa se o hash de um id externo está presente na leitura atual (comparação em tempo
+   * constante).
+   */
+  private boolean seenInCurrentRead(Set<byte[]> seenHashes, byte[] candidateHash) {
+    return seenHashes.stream().anyMatch(hash -> hmacService.matches(hash, candidateHash));
   }
 
   private boolean sameAmount(String previousAmount, BigDecimal amount) {

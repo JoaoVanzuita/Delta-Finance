@@ -65,7 +65,21 @@ public final class PluggyStub {
       String amount,
       String date,
       String status,
-      String category) {}
+      String category,
+      String providerId,
+      String providerCode) {
+
+    public TransactionFixture(
+        String externalId,
+        String accountId,
+        String description,
+        String amount,
+        String date,
+        String status,
+        String category) {
+      this(externalId, accountId, description, amount, date, status, category, null, null);
+    }
+  }
 
   public record BillFixture(
       String externalId,
@@ -694,6 +708,12 @@ public final class PluggyStub {
         body.put("status", transaction.status());
         body.put("category", transaction.category());
         body.put("currencyCode", "BRL");
+        if (transaction.providerId() != null) {
+          body.put("providerId", transaction.providerId());
+        }
+        if (transaction.providerCode() != null) {
+          body.put("providerCode", transaction.providerCode());
+        }
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("totalInstallments", 1);
         metadata.put("installmentNumber", 1);

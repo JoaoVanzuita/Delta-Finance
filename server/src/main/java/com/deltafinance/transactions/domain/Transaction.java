@@ -120,6 +120,13 @@ public class Transaction extends BaseEntity {
   @Column(name = "provider_id", length = 128)
   private String providerId;
 
+  /**
+   * Código da transação na instituição de origem, quando o conector informa; âncora alternativa ao
+   * {@code providerId} na reconciliação de identidade (transação recriada com novo id externo).
+   */
+  @Column(name = "provider_code", length = 128)
+  private String providerCode;
+
   /** Bill oficial à qual a transação pertence, segundo o provedor. */
   @Column(name = "provider_bill_id", length = 128)
   private String providerBillId;
@@ -368,6 +375,10 @@ public class Transaction extends BaseEntity {
     return providerId;
   }
 
+  public String getProviderCode() {
+    return providerCode;
+  }
+
   public String getProviderBillId() {
     return providerBillId;
   }
@@ -376,10 +387,17 @@ public class Transaction extends BaseEntity {
     return providerBillClosingDate;
   }
 
-  /** Metadados do provedor para alocação determinística; valores ausentes não apagam os atuais. */
+  /**
+   * Metadados do provedor para alocação determinística; valores ausentes não apagam os atuais.
+   *
+   * <p>{@code providerId} e {@code providerCode} são âncoras de identidade: reconhecem uma
+   * transação recriada pelo provedor com novo id externo. Um valor em branco não apaga a âncora
+   * anterior (leituras parciais não podem desfazer o vínculo).
+   */
   public void applyProviderMetadata(
       String operationType,
       String providerId,
+      String providerCode,
       String providerBillId,
       LocalDate providerBillClosingDate) {
     if (operationType != null && !operationType.isBlank()) {
@@ -387,6 +405,9 @@ public class Transaction extends BaseEntity {
     }
     if (providerId != null && !providerId.isBlank()) {
       this.providerId = providerId;
+    }
+    if (providerCode != null && !providerCode.isBlank()) {
+      this.providerCode = providerCode;
     }
     if (providerBillId != null && !providerBillId.isBlank()) {
       this.providerBillId = providerBillId;

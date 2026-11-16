@@ -433,6 +433,7 @@ public class PluggyDataClient {
                 node.path("currencyCode").asString("BRL"),
                 node.path("operationType").asString(null),
                 node.path("providerId").asString(null),
+                node.path("providerCode").asString(null),
                 cardMetadata.path("billId").asString(null),
                 PluggyModels.civilDate(cardMetadata, "billClosingDate"),
                 cardMetadata));

@@ -27,7 +27,7 @@ class CardPaymentClassifierTest {
   @Test
   void operationTypeDoProvedorTemPrecedenciaSobreADescricao() {
     Transaction transaction = transaction(TransactionType.DEBIT);
-    transaction.applyProviderMetadata("PAGAMENTO_FATURA", null, null, null);
+    transaction.applyProviderMetadata("PAGAMENTO_FATURA", null, null, null, null);
 
     assertThat(classifier().isCardPayment(transaction, Set.of())).isTrue();
   }

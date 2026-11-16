@@ -16,8 +16,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
   Optional<Transaction> findByIdAndUserId(UUID id, UUID userId);
 
-  Optional<Transaction> findFirstByUserIdAndAccountIdAndFingerprint(
+  List<Transaction> findByUserIdAndAccountIdAndFingerprint(
       UUID userId, UUID accountId, byte[] fingerprint);
+
+  List<Transaction> findByUserIdAndAccountIdAndProviderId(
+      UUID userId, UUID accountId, String providerId);
+
+  List<Transaction> findByUserIdAndAccountIdAndProviderCode(
+      UUID userId, UUID accountId, String providerCode);
 
   boolean existsByUserIdAndRelatedTransactionId(UUID userId, UUID relatedTransactionId);
 
