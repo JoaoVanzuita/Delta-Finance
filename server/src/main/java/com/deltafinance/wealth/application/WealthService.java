@@ -86,6 +86,7 @@ public class WealthService {
   public WealthOverviewView overview(UUID userId) {
     LocalDate today = clock.today();
     Accumulator accumulator = new Accumulator();
+    List<ReserveSignature> reserveSignatures = new ArrayList<>();
 
     List<AccountView> accounts = accountQueryService.list(userId);
     Map<UUID, CardDebtService.CardDebt> cardOutstanding = cardDebtService.byCard(userId);
@@ -95,14 +96,14 @@ public class WealthService {
         addCard(accumulator, account, cardOutstanding, today);
       } else {
         addAccount(accumulator, account, today);
-        addReservedBalances(accumulator, userId, account, today);
+        addReservedBalances(accumulator, userId, account, today, reserveSignatures);
       }
     }
 
     // A leitura inclui também posições fora do filtro BRL para que moeda estrangeira apareça como
     // exclusão explícita, em vez de desaparecer silenciosamente do patrimônio.
     for (InvestmentHoldingView holding : investmentQueryService.holdings(userId, "ALL", null)) {
-      addProviderInvestment(accumulator, holding, today);
+      addProviderInvestment(accumulator, holding, today, reserveSignatures);
     }
 
     for (ManualAssetLiability item :
@@ -239,7 +240,11 @@ public class WealthService {
   }
 
   private void addReservedBalances(
-      Accumulator accumulator, UUID userId, AccountView account, LocalDate today) {
+      Accumulator accumulator,
+      UUID userId,
+      AccountView account,
+      LocalDate today,
+      List<ReserveSignature> reserveSignatures) {
     if (!account.hasReservedBalance()
         || !"SEPARATE_ASSET".equals(account.reservedBalanceTreatment())
         || !"ACTIVE".equals(account.status())
@@ -288,6 +293,9 @@ public class WealthService {
               reserved.referenceDate(),
               reserved.stale()),
           false);
+      // Assinatura usada pela guarda de dupla contagem: cofrinhos/caixinhas podem chegar também
+      // como posição de renda fixa do provedor; o mesmo dinheiro não pode entrar duas vezes.
+      reserveSignatures.add(new ReserveSignature(reserved.amount(), reserved.referenceDate()));
     }
   }
 
@@ -356,7 +364,10 @@ public class WealthService {
   }
 
   private void addProviderInvestment(
-      Accumulator accumulator, InvestmentHoldingView holding, LocalDate today) {
+      Accumulator accumulator,
+      InvestmentHoldingView holding,
+      LocalDate today,
+      List<ReserveSignature> reserveSignatures) {
     // Posições encerradas ou indisponíveis continuam fora do consolidado, como antes. A moeda é
     // tratada separadamente para permanecer observável na lista de exclusões.
     if (holding.unavailableAt() != null || "CLOSED".equals(holding.status())) {
@@ -399,6 +410,24 @@ public class WealthService {
               stale));
       return;
     }
+    if ("FIXED_INCOME".equals(holding.type())
+        && matchesReservedBalance(reserveSignatures, holding)) {
+      // Cofrinho/caixinha importado como posição de renda fixa quando o mesmo valor já entra como
+      // saldo reservado da conta: exclui a posição com motivo explícito, mantendo-a visível.
+      accumulator.exclude(
+          item(
+              WealthSourceType.INVESTMENT,
+              holding.id(),
+              description,
+              format(new BigDecimal(holding.balance())),
+              false,
+              "Valor também contabilizado como saldo reservado da conta; posição excluída para"
+                  + " não duplicar o patrimônio.",
+              "PROVIDER",
+              holding.referenceDate(),
+              stale));
+      return;
+    }
     accumulator.include(
         item(
             WealthSourceType.INVESTMENT,
@@ -412,6 +441,30 @@ public class WealthService {
             stale),
         false);
   }
+
+  /**
+   * Reconhece uma posição de renda fixa que representa o mesmo dinheiro de um saldo reservado
+   * contabilizado em separado: mesmo valor e mesma data de referência. O pareamento é
+   * deliberadamente estrito; sem data em uma das pontas, não há exclusão (a dupla contagem
+   * potencial permanece visível em vez de excluir uma posição legítima).
+   */
+  private static boolean matchesReservedBalance(
+      List<ReserveSignature> reserveSignatures, InvestmentHoldingView holding) {
+    if (holding.referenceDate() == null) {
+      return false;
+    }
+    BigDecimal balance = new BigDecimal(holding.balance());
+    for (ReserveSignature reserve : reserveSignatures) {
+      if (reserve.referenceDate() != null
+          && reserve.referenceDate().equals(holding.referenceDate())
+          && new BigDecimal(reserve.amount()).compareTo(balance) == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private record ReserveSignature(String amount, LocalDate referenceDate) {}
 
   private void addManualItem(
       Accumulator accumulator, ManualAssetLiability entity, LocalDate today) {

@@ -261,14 +261,49 @@ class WealthIT extends PostgresTestBase {
     assertThat(usdFound).isTrue();
   }
 
+  private static Map<String, Object> bankData(boolean hasReservedBalance) {
+    return Map.of(
+        "hasReservedBalance",
+        hasReservedBalance,
+        "reservedBalances",
+        hasReservedBalance
+            ? List.of(
+                Map.of(
+                    "name",
+                    "Cofrinho",
+                    "identification",
+                    "rb-cofrinho",
+                    "availableAmounts",
+                    List.of(
+                        Map.of(
+                            "amount",
+                            9000.00,
+                            "currencyCode",
+                            "BRL",
+                            "remuneration",
+                            Map.of("indexer", "CDI", "rateType", "EXPONENCIAL")))))
+            : List.of());
+  }
+
   private static Map<String, Object> investment(
       String id, String name, String code, String status, String balance) {
+    return investment(id, name, code, status, balance, "EQUITY", "STOCK");
+  }
+
+  private static Map<String, Object> investment(
+      String id,
+      String name,
+      String code,
+      String status,
+      String balance,
+      String type,
+      String subtype) {
     Map<String, Object> value = new LinkedHashMap<>();
     value.put("id", id);
     value.put("name", name);
     value.put("code", code);
-    value.put("type", "EQUITY");
-    value.put("subtype", "STOCK");
+    value.put("type", type);
+    value.put("subtype", subtype);
     value.put("status", status);
     value.put("currencyCode", "BRL");
     value.put("balance", balance);
@@ -278,6 +313,65 @@ class WealthIT extends PostgresTestBase {
     value.put("date", today().toString());
     value.put("updatedAt", "2026-10-27T12:00:00Z");
     return value;
+  }
+
+  @Test
+  void investimentoQueRepresentaSaldoReservadoNaoDuplicaOPatrimonio() throws Exception {
+    // Cofrinho importado como posição de renda fixa e, ao mesmo tempo, como saldo reservado da
+    // conta (tratamento SEPARATE_ASSET): o mesmo dinheiro deve entrar uma única vez.
+    PLUGGY.addItem("item-reserve-inv", "Banco Cofrinho", "UPDATED");
+    PLUGGY.setAccounts(
+        "item-reserve-inv",
+        List.of(
+            new AccountFixture(
+                "acc-cofrinho",
+                "BANK",
+                "CHECKING_ACCOUNT",
+                "Banco Cofrinho",
+                "759.81",
+                null,
+                "BRL",
+                bankData(true))));
+    PLUGGY.setInvestmentResources(
+        "item-reserve-inv",
+        List.of(
+            Map.of(
+                "resourceId", "r-cofrinho", "type", "BANK_FIXED_INCOME", "status", "AVAILABLE")));
+    PLUGGY.addInvestment(
+        "item-reserve-inv",
+        investment(
+            "inv-cofrinho", "Cofrinho", "NUCOF", "ACTIVE", "9000.00", "FIXED_INCOME", "CDB"));
+    String connectionId =
+        json(alice
+                .post("/api/v1/connections", Map.of("itemId", "item-reserve-inv"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString())
+            .path("id")
+            .asString();
+    alice
+        .put(
+            "/api/v1/connections/" + connectionId + "/reserved-balance-treatment",
+            Map.of("treatment", "SEPARATE_ASSET"))
+        .andExpect(status().isOk());
+
+    JsonNode overview = overview(alice);
+    // 1000.00 (Conta Alfa) + 759.81 (Banco Cofrinho) + 9000.00 (reserva) − 100.00 (cartão).
+    // A posição de 9000.00 é excluída por representar a própria reserva.
+    assertThat(overview.path("grossAssets").asString()).isEqualTo("10759.81");
+    assertThat(overview.path("liabilities").asString()).isEqualTo("100.00");
+    assertThat(overview.path("netWorth").asString()).isEqualTo("10659.81");
+
+    boolean excludedFound = false;
+    for (JsonNode item : overview.path("items")) {
+      if ("Cofrinho (NUCOF)".equals(item.path("description").asString())) {
+        excludedFound = true;
+        assertThat(item.path("included").asBoolean()).isFalse();
+        assertThat(item.path("exclusionReason").asString()).contains("saldo reservado");
+      }
+    }
+    assertThat(excludedFound).isTrue();
   }
 
   @Test
