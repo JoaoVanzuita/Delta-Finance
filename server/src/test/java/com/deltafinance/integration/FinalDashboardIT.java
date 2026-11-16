@@ -122,9 +122,11 @@ class FinalDashboardIT extends PostgresTestBase {
             Map.of("closingDay", 5, "dueDay", 15, "creditLimit", "5000.00"))
         .andExpect(status().isOk());
 
-    createTransaction("CREDIT", bankId, "1000.00", "Salário dezembro", "2026-12-28", false);
-    createTransaction("DEBIT", bankId, "100.00", "Feira dezembro", "2026-12-31", false);
-    createTransaction("DEBIT", bankId, "50.00", "Feira janeiro", "2027-01-01", false);
+    // Lançamentos de períodos futuros: agendamento (PENDING). O teste lê o período em que
+    // ocorrem; os efetivados usariam data futura, que agora exige PENDING.
+    createTransaction("CREDIT", bankId, "1000.00", "Salário dezembro", "2026-12-28", true);
+    createTransaction("DEBIT", bankId, "100.00", "Feira dezembro", "2026-12-31", true);
+    createTransaction("DEBIT", bankId, "50.00", "Feira janeiro", "2027-01-01", true);
     createTransaction("DEBIT", bankId, "25.00", "Pendente janeiro", "2027-01-02", true);
 
     String invoiceId =
@@ -152,29 +154,32 @@ class FinalDashboardIT extends PostgresTestBase {
 
   @Test
   void viradasDePeriodoPendentesEDrilldownBatemComOsTotais() throws Exception {
+    // Lançamentos em períodos futuros são agendamentos (PENDING): compõem a previsão do período,
+    // nunca receitas/despesas realizadas.
     JsonNode week = summary("from=2026-12-28&to=2027-01-03");
     assertThat(week.path("periodStart").asString()).isEqualTo("2026-12-28");
     assertThat(week.path("periodEnd").asString()).isEqualTo("2027-01-03");
-    assertThat(week.path("income").asString()).isEqualTo("1000.00");
-    assertThat(week.path("expenses").asString()).isEqualTo("370.00");
-    assertThat(week.path("periodResult").asString()).isEqualTo("630.00");
-    assertThat(week.path("pendingCount").asInt()).isEqualTo(1);
-    assertThat(week.path("pendingExpenses").asString()).isEqualTo("25.00");
+    assertThat(week.path("income").asString()).isEqualTo("0.00");
+    assertThat(week.path("expenses").asString()).isEqualTo("220.00");
+    assertThat(week.path("periodResult").asString()).isEqualTo("-220.00");
+    assertThat(week.path("pendingCount").asInt()).isEqualTo(4);
+    assertThat(week.path("pendingIncome").asString()).isEqualTo("1000.00");
+    assertThat(week.path("pendingExpenses").asString()).isEqualTo("175.00");
     assertThat(week.has("cashFlow")).isFalse();
     assertThat(week.path("currentBalance").asString()).isEqualTo("1000.00");
     assertThat(week.path("cardOutstandingBalance").asString()).isEqualTo("220.00");
 
     JsonNode year = summary("from=2026-01-01&to=2026-12-31");
-    assertThat(year.path("income").asString()).isEqualTo("1000.00");
-    assertThat(year.path("expenses").asString()).isEqualTo("320.00");
-    assertThat(year.path("pendingCount").asInt()).isZero();
+    assertThat(year.path("income").asString()).isEqualTo("0.00");
+    assertThat(year.path("expenses").asString()).isEqualTo("220.00");
+    assertThat(year.path("pendingCount").asInt()).isEqualTo(2);
 
     JsonNode categories = categories("from=2026-01-01&to=2026-12-31");
     BigDecimal categoryTotal = BigDecimal.ZERO;
     for (JsonNode category : categories) {
       categoryTotal = categoryTotal.add(new BigDecimal(category.path("amount").asString()));
     }
-    assertThat(categoryTotal.setScale(2)).isEqualByComparingTo("320.00");
+    assertThat(categoryTotal.setScale(2)).isEqualByComparingTo("220.00");
 
     JsonNode entries = entries("from=2026-01-01&to=2026-12-31");
     BigDecimal entrySum = BigDecimal.ZERO;
@@ -187,11 +192,13 @@ class FinalDashboardIT extends PostgresTestBase {
         assertThat(entry.path("transactionId").isNull()).isTrue();
       }
     }
-    assertThat(entrySum.setScale(2)).isEqualByComparingTo("680.00");
+    assertThat(entrySum.setScale(2)).isEqualByComparingTo("-220.00");
     assertThat(interestWithoutTransaction).isTrue();
 
     JsonNode singleDay = summary("from=2026-12-31&to=2026-12-31");
-    assertThat(singleDay.path("expenses").asString()).isEqualTo("100.00");
+    // O único lançamento do dia é o agendamento de 100,00: entra na previsão, não na despesa.
+    assertThat(singleDay.path("expenses").asString()).isEqualTo("0.00");
+    assertThat(singleDay.path("pendingExpenses").asString()).isEqualTo("100.00");
   }
 
   private void createTransaction(
@@ -208,19 +215,17 @@ class FinalDashboardIT extends PostgresTestBase {
     request.put("amount", amount);
     request.put("description", description);
     request.put("postedOn", postedOn);
-    JsonNode created =
-        json(
-            alice
-                .post("/api/v1/transactions", request)
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString());
     if (pending) {
-      jdbcTemplate.update(
-          "update transaction set status = 'PENDING', updated_at = now() where id = ?",
-          java.util.UUID.fromString(created.path("id").asString()));
+      // Data futura só existe como previsão: o lançamento nasce PENDING.
+      request.put("status", "PENDING");
     }
+    json(
+        alice
+            .post("/api/v1/transactions", request)
+            .andExpect(status().isCreated())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
   private JsonNode summary(String query) throws Exception {

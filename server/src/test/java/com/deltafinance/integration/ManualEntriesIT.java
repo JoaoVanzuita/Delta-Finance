@@ -420,13 +420,17 @@ class ManualEntriesIT extends PostgresTestBase {
     String tomorrow = LocalDate.now(ZONE).plusDays(1).toString();
 
     createTransactionOn("DEBIT", cash, "20.00", "Feira de hoje", "2026-10-24", null);
-    createTransactionOn("CREDIT", cash, "50.00", "Salário futuro", tomorrow, null);
+    // Agendamento: data futura exige PENDING (F1).
+    Map<String, Object> future = request("CREDIT", cash, "50.00", "Salário futuro", null);
+    future.put("postedOn", tomorrow);
+    future.put("status", "PENDING");
+    create(future);
 
     // O saldo atual considera apenas o que já ocorreu; o lançamento futuro fica de fora.
     assertThat(account(cash).path("currentBalance").asString()).isEqualTo("80.00");
     assertThat(account(cash).path("referenceBalance").asString()).isEqualTo("100.00");
 
-    // O lançamento futuro aparece na visão do período em que ocorrerá.
+    // O lançamento agendado aparece como pendente do período em que ocorrerá, sem virar receita.
     String periodTo = LocalDate.now(ZONE).plusDays(30).toString();
     JsonNode summary =
         json(
@@ -436,9 +440,131 @@ class ManualEntriesIT extends PostgresTestBase {
                 .andReturn()
                 .getResponse()
                 .getContentAsString());
-    assertThat(summary.path("income").asString()).isEqualTo("50.00");
-    // Conta importada (1000.00) + carteira manual (80.00); o futuro não entra.
+    assertThat(summary.path("income").asString()).isEqualTo("0.00");
+    assertThat(summary.path("pendingCount").asInt()).isEqualTo(1);
+    // Conta importada (1000.00) + carteira manual (80.00); o agendamento não entra no saldo.
     assertThat(summary.path("currentBalance").asString()).isEqualTo("1080.00");
+  }
+
+  @Test
+  void lancamentoPendenteNaoAfetaSaldoEEfetivaUmaUnicaVez() throws Exception {
+    String cash = createAccount("CASH", "Carteira", "100.00");
+    String tomorrow = LocalDate.now(ZONE).plusDays(1).toString();
+
+    Map<String, Object> pending = request("CREDIT", cash, "50.00", "Salário previsto", null);
+    pending.put("postedOn", tomorrow);
+    pending.put("status", "PENDING");
+    pending.put("dueDate", tomorrow);
+    JsonNode created = create(pending);
+    assertThat(created.path("status").asString()).isEqualTo("PENDING");
+    String id = created.path("id").asString();
+
+    // Pendente não compõe saldo nem resultado.
+    assertThat(account(cash).path("currentBalance").asString()).isEqualTo("100.00");
+    JsonNode summaryBefore =
+        json(
+            alice
+                .get("/api/v1/dashboard/summary?from=" + tomorrow + "&to=" + tomorrow)
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(summaryBefore.path("income").asString()).isEqualTo("0.00");
+    assertThat(summaryBefore.path("pendingCount").asInt()).isEqualTo(1);
+
+    // Efetivação com data de hoje: uma única vez.
+    JsonNode settled =
+        json(
+            alice
+                .post("/api/v1/transactions/" + id + "/settle", Map.of())
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+    assertThat(settled.path("status").asString()).isEqualTo("POSTED");
+    assertThat(settled.path("postedOn").asString()).isEqualTo(LocalDate.now(ZONE).toString());
+    assertThat(account(cash).path("currentBalance").asString()).isEqualTo("150.00");
+
+    // Idempotente: efetivar de novo não duplica o efeito.
+    alice.post("/api/v1/transactions/" + id + "/settle", Map.of()).andExpect(status().isOk());
+    assertThat(account(cash).path("currentBalance").asString()).isEqualTo("150.00");
+  }
+
+  @Test
+  void dataFuturaExigeLancamentoPendenteEVencimentoSoEmPendente() throws Exception {
+    String cash = createAccount("CASH", "Carteira", "100.00");
+    String tomorrow = LocalDate.now(ZONE).plusDays(1).toString();
+
+    Map<String, Object> futurePosted = request("DEBIT", cash, "10.00", "Compra futura", null);
+    futurePosted.put("postedOn", tomorrow);
+    alice
+        .post("/api/v1/transactions", futurePosted)
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.errors[0].field").value("postedOn"));
+
+    Map<String, Object> futureTransfer =
+        request("TRANSFER", cash, "10.00", "Transferência futura", null);
+    futureTransfer.put("postedOn", tomorrow);
+    futureTransfer.put("transferAccountId", createAccount("BANK", "Destino", "0.00"));
+    alice
+        .post("/api/v1/transactions", futureTransfer)
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.errors[0].field").value("postedOn"));
+
+    Map<String, Object> postedWithDue = request("DEBIT", cash, "10.00", "Hoje", null);
+    postedWithDue.put("dueDate", tomorrow);
+    alice
+        .post("/api/v1/transactions", postedWithDue)
+        .andExpect(status().isUnprocessableEntity())
+        .andExpect(jsonPath("$.errors[0].field").value("dueDate"));
+
+    // Pendente com data futura é aceito (agendamento).
+    Map<String, Object> scheduled = request("DEBIT", cash, "10.00", "Boleto agendado", null);
+    scheduled.put("postedOn", tomorrow);
+    scheduled.put("status", "PENDING");
+    assertThat(create(scheduled).path("status").asString()).isEqualTo("PENDING");
+  }
+
+  @Test
+  void transferenciaPendenteEfetivaAsDuasPernasJuntas() throws Exception {
+    String cash = createAccount("CASH", "Carteira", "100.00");
+    String bank = createAccount("BANK", "Conta Casa", "0.00");
+    String tomorrow = LocalDate.now(ZONE).plusDays(1).toString();
+
+    Map<String, Object> pending = request("TRANSFER", cash, "30.00", "Para banco", null);
+    pending.put("postedOn", tomorrow);
+    pending.put("status", "PENDING");
+    pending.put("transferAccountId", bank);
+    JsonNode created = create(pending);
+    String debitId = created.path("id").asString();
+    String creditId = created.path("counterpartTransactionId").asString();
+
+    // Pendente não move saldo nem cria correspondência confirmada.
+    assertThat(account(cash).path("currentBalance").asString()).isEqualTo("100.00");
+    assertThat(account(bank).path("currentBalance").asString()).isEqualTo("0.00");
+    assertThat(internalMatches("PENDING").path("items")).isEmpty();
+
+    alice.post("/api/v1/transactions/" + debitId + "/settle", Map.of()).andExpect(status().isOk());
+
+    assertThat(account(cash).path("currentBalance").asString()).isEqualTo("70.00");
+    assertThat(account(bank).path("currentBalance").asString()).isEqualTo("30.00");
+    JsonNode credit = transactionsForAccount(bank).path("items").get(0);
+    assertThat(credit.path("id").asString()).isEqualTo(creditId);
+    assertThat(credit.path("status").asString()).isEqualTo("POSTED");
+  }
+
+  @Test
+  void efetivarLancamentoJaEfetivadoOuRemovidoNaOrigemFalha() throws Exception {
+    String cash = createAccount("CASH", "Carteira", "100.00");
+    JsonNode posted = createTransaction("DEBIT", cash, "10.00", "Feira", null, null, null);
+    alice
+        .post("/api/v1/transactions/" + posted.path("id").asString() + "/settle", Map.of())
+        .andExpect(status().isOk());
+
+    // Transação importada efetivada: nada a efetivar.
+    alice
+        .post("/api/v1/transactions/" + importedTransactionId + "/settle", Map.of())
+        .andExpect(status().isOk());
   }
 
   private String createAccount(String type, String alias, String balance) throws Exception {

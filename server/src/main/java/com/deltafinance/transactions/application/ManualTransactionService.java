@@ -85,10 +85,13 @@ public class ManualTransactionService {
     String description = requireDescription(request.description());
     BigDecimal amount = parseAmount(request.amount());
     LocalDate postedOn = request.postedOn() == null ? clock.today() : request.postedOn();
+    TransactionStatus status = parseStatus(request.status());
+    requireDatePolicy(postedOn, status, request.dueDate());
     UUID categoryId = validateCategory(userId, request.categoryId(), type, account);
 
     if (type == TransactionType.TRANSFER) {
-      return createTransfer(userId, request, account, description, amount, postedOn, categoryId);
+      return createTransfer(
+          userId, request, account, description, amount, postedOn, categoryId, status);
     }
 
     UUID relatedTransactionId = null;
@@ -125,18 +128,28 @@ public class ManualTransactionService {
             description,
             categoryId,
             request.notes(),
-            adjustmentReason);
+            adjustmentReason,
+            status);
     if (relatedTransactionId != null) {
       transaction.linkRelatedTransaction(relatedTransactionId);
       transactionRepository.save(transaction);
     }
-    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, transaction.getId()));
+    if (status == TransactionStatus.POSTED) {
+      eventPublisher.publishEvent(
+          new TransactionFinancialChangedEvent(userId, transaction.getId()));
+    }
     auditService.record(
         userId,
         AuditEventType.TRANSACTION_CREATED,
         "transaction",
         transaction.getId(),
-        Map.of("type", type.name(), "source", TransactionSource.MANUAL.name()));
+        Map.of(
+            "type",
+            type.name(),
+            "source",
+            TransactionSource.MANUAL.name(),
+            "status",
+            status.name()));
     return queryService.get(userId, transaction.getId());
   }
 
@@ -199,7 +212,8 @@ public class ManualTransactionService {
       String description,
       BigDecimal amount,
       LocalDate postedOn,
-      UUID categoryId) {
+      UUID categoryId,
+      TransactionStatus status) {
     if (request.transferAccountId() == null) {
       throw new ValidationException("transferAccountId", "Informe a conta de destino.");
     }
@@ -227,7 +241,8 @@ public class ManualTransactionService {
             description,
             categoryId,
             request.notes(),
-            null);
+            null,
+            status);
     Transaction credit =
         createLeg(
             userId,
@@ -238,22 +253,25 @@ public class ManualTransactionService {
             description,
             categoryId,
             request.notes(),
-            null);
+            null,
+            status);
     debit.linkRelatedTransaction(credit.getId());
     credit.linkRelatedTransaction(debit.getId());
     transactionRepository.save(debit);
     transactionRepository.save(credit);
 
-    internalMatchPort.confirmManualTransfer(userId, debit.getId(), credit.getId());
-    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, debit.getId()));
-    eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, credit.getId()));
+    if (status == TransactionStatus.POSTED) {
+      internalMatchPort.confirmManualTransfer(userId, debit.getId(), credit.getId());
+      eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, debit.getId()));
+      eventPublisher.publishEvent(new TransactionFinancialChangedEvent(userId, credit.getId()));
+    }
 
     auditService.record(
         userId,
         AuditEventType.TRANSACTION_CREATED,
         "transaction",
         debit.getId(),
-        Map.of("type", TransactionType.TRANSFER.name(), "legs", 2));
+        Map.of("type", TransactionType.TRANSFER.name(), "legs", 2, "status", status.name()));
     return queryService.get(userId, debit.getId());
   }
 
@@ -266,7 +284,8 @@ public class ManualTransactionService {
       String description,
       UUID categoryId,
       String notes,
-      String adjustmentReason) {
+      String adjustmentReason,
+      TransactionStatus status) {
     UUID id = UUID.randomUUID();
     BigDecimal scaled = Money.scaled(amount);
     byte[] amountEnc =
@@ -289,7 +308,7 @@ public class ManualTransactionService {
             account.getId(),
             TransactionSource.MANUAL,
             type,
-            TransactionStatus.POSTED,
+            status,
             postedOn,
             postedOn,
             account.getCurrency(),
@@ -365,6 +384,39 @@ public class ManualTransactionService {
       return categoryService.canonicalCategoryId(userId, CategoryTaxonomy.OUTROS);
     }
     return category.getId();
+  }
+
+  private static TransactionStatus parseStatus(String value) {
+    if (value == null || value.isBlank()) {
+      return TransactionStatus.POSTED;
+    }
+    try {
+      TransactionStatus status = TransactionStatus.valueOf(value.trim().toUpperCase(Locale.ROOT));
+      if (status != TransactionStatus.PENDING && status != TransactionStatus.POSTED) {
+        throw new ValidationException("status", "Use PENDING ou POSTED.");
+      }
+      return status;
+    } catch (IllegalArgumentException exception) {
+      throw new ValidationException("status", "Use PENDING ou POSTED.");
+    }
+  }
+
+  /**
+   * Política de data do lançamento manual.
+   *
+   * <p>Um lançamento efetivado com data futura afirmaria um fato que ainda não ocorreu; data futura
+   * só é aceita como previsão ({@code PENDING}), com vencimento opcional. O vencimento pertence
+   * apenas a lançamentos pendentes.
+   */
+  private void requireDatePolicy(LocalDate postedOn, TransactionStatus status, LocalDate dueDate) {
+    if (dueDate != null && status != TransactionStatus.PENDING) {
+      throw new ValidationException(
+          "dueDate", "A data de vencimento só se aplica a lançamentos pendentes.");
+    }
+    if (status == TransactionStatus.POSTED && postedOn.isAfter(clock.today())) {
+      throw new ValidationException(
+          "postedOn", "Data futura exige lançamento pendente (agendamento).");
+    }
   }
 
   private static TransactionType parseType(String value) {

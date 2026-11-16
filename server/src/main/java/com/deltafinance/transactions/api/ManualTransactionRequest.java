@@ -16,4 +16,6 @@ public record ManualTransactionRequest(
     UUID relatedTransactionId,
     @Size(max = 2000, message = "As observações devem ter no máximo 2000 caracteres.") String notes,
     @Size(max = 500, message = "O motivo deve ter no máximo 500 caracteres.") String adjustmentReason,
-    UUID transferAccountId) {}
+    UUID transferAccountId,
+    String status,
+    LocalDate dueDate) {}

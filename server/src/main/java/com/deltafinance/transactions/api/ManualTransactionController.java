@@ -3,6 +3,7 @@ package com.deltafinance.transactions.api;
 import com.deltafinance.security.AuthenticatedUser;
 import com.deltafinance.transactions.application.ManualTransactionService;
 import com.deltafinance.transactions.application.TransactionCorrectionService;
+import com.deltafinance.transactions.application.TransactionSettlementService;
 import com.deltafinance.transactions.application.TransactionView;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -23,14 +24,17 @@ public class ManualTransactionController {
 
   private final ManualTransactionService manualTransactionService;
   private final TransactionCorrectionService correctionService;
+  private final TransactionSettlementService settlementService;
   private final AuthenticatedUser authenticatedUser;
 
   public ManualTransactionController(
       ManualTransactionService manualTransactionService,
       TransactionCorrectionService correctionService,
+      TransactionSettlementService settlementService,
       AuthenticatedUser authenticatedUser) {
     this.manualTransactionService = manualTransactionService;
     this.correctionService = correctionService;
+    this.settlementService = settlementService;
     this.authenticatedUser = authenticatedUser;
   }
 
@@ -44,6 +48,13 @@ public class ManualTransactionController {
   public TransactionView correct(
       @PathVariable UUID id, @Valid @RequestBody TransactionCorrectionRequest request) {
     return correctionService.correct(authenticatedUser.requireId(), id, request);
+  }
+
+  @PostMapping("/{id}/settle")
+  public TransactionView settle(
+      @PathVariable UUID id, @RequestBody(required = false) SettleTransactionRequest request) {
+    return settlementService.settle(
+        authenticatedUser.requireId(), id, request == null ? null : request.postedOn());
   }
 
   @DeleteMapping("/{id}")
