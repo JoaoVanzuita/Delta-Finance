@@ -14,6 +14,8 @@ import com.deltafinance.support.PluggyStub.BillPaymentFixture;
 import com.deltafinance.support.PluggyStub.TransactionFixture;
 import com.deltafinance.support.PostgresTestBase;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,11 @@ class InvoiceIT extends PostgresTestBase {
   private static final String ALICE = "alice.faturas";
   private static final String PASSWORD = "cavalo correto bateria grampo";
   private static final String CLIENT = "client-alice-faturas";
+  private static final ZoneId ZONE = ZoneId.of("America/Sao_Paulo");
+
+  private static LocalDate today() {
+    return LocalDate.now(ZONE);
+  }
 
   @DynamicPropertySource
   static void pluggyProperties(DynamicPropertyRegistry registry) {
@@ -207,8 +214,11 @@ class InvoiceIT extends PostgresTestBase {
 
   @Test
   void estornoAutomaticoViraEspelhoSemEfeitoDeRelatorio() throws Exception {
-    createCardTransaction("DEBIT", "-100.00", "2026-10-20");
-    createCardTransaction("REFUND", "20.00", "2026-10-21");
+    // Datas no ciclo corrente: a fatura da compra precisa continuar aberta quando o estorno
+    // chegar (com data fixa antiga, a fatura fecha e o espelho avança de ciclo).
+    String purchaseDate = today().toString();
+    createCardTransaction("DEBIT", "-100.00", purchaseDate);
+    createCardTransaction("REFUND", "20.00", purchaseDate);
 
     JsonNode invoice = invoices().path("items").get(0);
     JsonNode detail = invoiceDetail(invoice.path("id").asString());
@@ -605,13 +615,17 @@ class InvoiceIT extends PostgresTestBase {
 
   @Test
   void transacaoPendenteSuspendeEEspelhoEReativaAoTornarEfetiva() throws Exception {
+    // A compra pendente precisa estar no ciclo corrente para que a fatura aberta seja criada.
+    String purchaseDate = today().toString();
+    String monthFrom = today().withDayOfMonth(1).toString();
+    String monthTo = today().withDayOfMonth(1).plusMonths(1).toString();
     PLUGGY.addTransaction(
         "acc-card",
         new TransactionFixture(
-            "tx-pendente", "acc-card", "Compra pendente", "100.00", "2026-10-20", "PENDING", null));
+            "tx-pendente", "acc-card", "Compra pendente", "100.00", purchaseDate, "PENDING", null));
     sync();
 
-    assertThat(summary("from=2026-10-01&to=2026-10-31").path("expenses").asString())
+    assertThat(summary("from=" + monthFrom + "&to=" + monthTo).path("expenses").asString())
         .isEqualTo("0.00");
     JsonNode pendingInvoice = invoices().path("items");
     assertThat(pendingInvoice).hasSize(1);
@@ -626,7 +640,7 @@ class InvoiceIT extends PostgresTestBase {
                 "acc-card",
                 "Compra pendente",
                 "100.00",
-                "2026-10-20",
+                purchaseDate,
                 "POSTED",
                 null)));
     sync();
@@ -644,7 +658,7 @@ class InvoiceIT extends PostgresTestBase {
                 "acc-card",
                 "Compra pendente",
                 "100.00",
-                "2026-10-20",
+                purchaseDate,
                 "PENDING",
                 null)));
     sync();
@@ -661,7 +675,7 @@ class InvoiceIT extends PostgresTestBase {
                 "acc-card",
                 "Compra pendente",
                 "100.00",
-                "2026-10-20",
+                purchaseDate,
                 "POSTED",
                 null)));
     sync();
